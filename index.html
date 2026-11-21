@@ -54,6 +54,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
 const fmt=n=>Number(n).toLocaleString("en-US",{maximumFractionDigits:4});
+function safeText(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
 function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
 function rsi(values,p=14){let gains=0,losses=0;for(let i=values.length-p;i<values.length;i++){let d=values[i]-values[i-1];if(d>0)gains+=d;else losses-=d}if(losses===0)return 100;let rs=(gains/p)/(losses/p);return 100-100/(1+rs)}
 function analyse(candles,price){
@@ -108,7 +109,7 @@ async function fetchWithRetry(symbol){
  let lastError;
  for(let attempt=0;attempt<2;attempt++){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
-  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});if(!response.ok)throw new Error("API "+response.status);const data=await response.json();if(!data.ticker||!data.candles)throw new Error("অসম্পূর্ণ ডেটা");return data}
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles)throw new Error("অসম্পূর্ণ ডেটা");return data}
   catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
   finally{clearTimeout(timer)}
  }
@@ -122,7 +123,7 @@ async function refreshAll(){
   const settled=await Promise.allSettled(symbols.map(fetchWithRetry));let ok=0;
   document.getElementById("markets").innerHTML=settled.map((item,i)=>{
    if(item.status==="fulfilled"){ok++;return card(symbols[i],item.value)}
-   return '<section class="card"><h2>'+symbols[i]+' / USDT</h2><p class="status">WAIT — ডেটা পাওয়া যায়নি</p><p class="muted">এই কয়েনের ডেটা সাময়িকভাবে আসেনি। আবার চেষ্টা করুন।</p></section>';
+   return '<section class="card"><h2>'+symbols[i]+' / USDT</h2><p class="status">WAIT — ডেটা পাওয়া যায়নি</p><p class="muted">'+safeText(item.reason?.message||"ডেটা সাময়িকভাবে আসেনি")+'</p><p class="muted">আবার স্বয়ংক্রিয়ভাবে চেষ্টা করা হবে।</p></section>';
   }).join("");
   document.getElementById("connection").textContent=ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
   document.getElementById("connection").className=ok?"tag good":"tag";
