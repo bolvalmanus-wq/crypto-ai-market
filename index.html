@@ -344,7 +344,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>.12?"BULLISH":score<-.12?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div><button type="button" class="retry-ai" id="retry-'+symbol+'-'+tf+'" onclick="retryAi(\''+symbol+\' ,\''+tf+\' )">আবার বিশ্লেষণ</button></div>';
+   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div><button type="button" class="retry-ai" id="retry-'+symbol+'-'+tf+'" onclick="retryAi(&quot;'+symbol+'&quot;,&quot;'+tf+'&quot;)">আবার বিশ্লেষণ</button></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
