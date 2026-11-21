@@ -173,8 +173,9 @@ function showAi(symbol,tf,result){
 async function loadAiForSymbol(symbol,data){
  for(const tf of ["30m","1h"]){
   const key="gemini_"+symbol+"_"+tf;
-  let cached=null;try{cached=JSON.parse(localStorage.getItem(key)||"null")}catch(e){}
+  let cached=null,failedAt=0;try{cached=JSON.parse(localStorage.getItem(key)||"null");failedAt=Number(localStorage.getItem(key+"_failed")||0)}catch(e){}
   if(cached&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]){showAi(symbol,tf,cached);continue;}
+  if(failedAt&&Date.now()-failedAt<300000){const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>AI-তে সাময়িক সমস্যা। কিছুক্ষণ পরে আবার চেষ্টা হবে।</div>';continue;}
   const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
   const interval=tf==="30m"?1800000:3600000;
   const a=analyse(data.candles[tf],data.ticker.last,tf==="30m"?2700000:5400000,interval,data.derivatives,tf);
@@ -185,6 +186,7 @@ async function loadAiForSymbol(symbol,data){
    if(!response.ok||!result.analysis)throw new Error(result.error||"AI API "+response.status);
    localStorage.setItem(key,JSON.stringify(result));showAi(symbol,tf,result);
   }catch(error){
+   try{localStorage.setItem(key+"_failed",String(Date.now()))}catch(e){}
    const panel=aiPanel(symbol,tf);if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">এখন অনুপলব্ধ</span></div><div>AI বিশ্লেষণ পাওয়া যায়নি। সূচকভিত্তিক হিসাব আলাদা—এটিকে AI মতামত ভাববেন না।</div>';
   }
  }
