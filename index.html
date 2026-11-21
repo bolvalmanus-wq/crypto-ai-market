@@ -30,12 +30,12 @@ button:disabled{opacity:.6}
 .status{font-weight:800;color:var(--amber)}
 .signal{font-size:19px;font-weight:850;letter-spacing:.5px;margin:9px 0}
 .good{color:var(--green)}.bad{color:var(--red)}
-.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.decision{margin-top:6px;padding:7px;border-radius:8px;background:#202d42;text-align:center;font-size:11px;font-weight:800}.decision.long-on{background:#123d36;color:#7df0c1}.decision.short-on{background:#492532;color:#ff9eaa}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}
+.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.decision{margin-top:6px;padding:7px;border-radius:8px;background:#202d42;text-align:center;font-size:11px;font-weight:800}.decision.long-on{background:#123d36;color:#7df0c1}.decision.short-on{background:#492532;color:#ff9eaa}.fresh{font-size:10px;color:#72dcb1;margin:2px 0 8px}.indicator-line{font-size:10px;color:#b6c6dc;margin-top:4px;overflow-wrap:anywhere}.analysis-note{font-size:10px;line-height:1.55;color:#d2ddef;background:#101b2b;border-left:2px solid #4d91ff;padding:7px 9px;margin-top:7px;border-radius:5px}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}
 .metric b{color:#dce9ff}
 footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
 @media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:10px}#markets>.card{margin:0;padding:12px}.status-card{padding:22px}}
-@media(max-width:480px){body{padding:5px 6px 8px}header{padding:3px 1px 5px;gap:8px}.logo{width:34px;height:34px;border-radius:10px;font-size:19px}h1{font-size:17px}.card{padding:7px;border-radius:10px;margin:4px 0}.price{font-size:20px}h2{font-size:13px}.tag{font-size:8px;padding:3px 5px}.sub,.note,#source,#updated,.muted{font-size:9px}.status-card p{margin:4px 0}.status-card button{padding:7px 10px;font-size:11px}.metric{padding:6px;font-size:9px}.signal{font-size:15px;margin:4px 0}#historyCard,#warningCard,footer{display:none}}
+@media(max-width:480px){body{padding:8px 7px 12px}header{padding:5px 2px 9px;gap:9px}.logo{width:34px;height:34px;border-radius:10px;font-size:19px}h1{font-size:17px}.card{padding:10px;border-radius:11px;margin:6px 0}.price{font-size:23px}h2{font-size:14px}.tag{font-size:8px;padding:3px 5px}.sub,.note,#source,#updated,.muted{font-size:9px}.status-card p{margin:4px 0}.status-card button{padding:7px 10px;font-size:11px}.metric{padding:8px;font-size:10px}.signal{font-size:16px;margin:5px 0}.fresh,.indicator-line,.analysis-note{font-size:10px}#historyCard,#warningCard,footer{display:none}}
 </style>
 </head>
 <body>
@@ -52,7 +52,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 </div>
 <div class="card" id="historyCard"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card" id="warningCard"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.5</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.6</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
@@ -82,7 +82,8 @@ function analyse(candles,price,maxAgeMs,intervalMs){
 }
 function card(symbol,data){
  const price=data.ticker.last,change=(price/data.ticker.open24h-1)*100,age=data.ageSeconds;
- let html='<section class="card"><div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row"><div class="price">$'+fmt(price)+'</div><div class="muted">'+(change>=0?"+":"")+change.toFixed(2)+'% · 24h</div></div>';
+ const updated=new Date().toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+ let html='<section class="card"><div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row"><div class="price">$'+fmt(price)+'</div><div class="muted">'+(change>=0?"+":"")+change.toFixed(2)+'% · 24h</div></div><div class="fresh">● লাইভ ডেটা যাচাই: '+updated+' · প্রতি ৩০ সেকেন্ডে আপডেট</div>';
  if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
   html+='<div class="timeframe-grid">';
@@ -90,16 +91,18 @@ function card(symbol,data){
    const interval=tf==="30m"?30*60*1000:60*60*1000;
    const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000,interval);
    const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
-   const score=Number.isFinite(a.score)?Math.round(50+a.score*12.5):null;
-   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG</div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT</div></div><div class="signal '+cls+'">'+a.signal+'</div><div class="muted">'+safeText(a.reason)+'</div><div class="muted">সিগন্যাল স্কোর (সম্ভাবনা নয়): '+(score===null?"—":score+"%")+'</div>';
-   if(a.signal!=="WAIT")html+='<div class="muted">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
+   const score=Number.isFinite(a.score)?Math.abs(a.score):null;
+   const trend=Number.isFinite(a.score)?(a.score>0?"ঊর্ধ্বমুখী পক্ষ":a.score<0?"নিম্নমুখী পক্ষ":"নিরপেক্ষ"):"তথ্য অপর্যাপ্ত";
+   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG</div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT</div></div><div class="signal '+cls+'">'+a.signal+'</div><div class="muted"><b>সিদ্ধান্ত:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">দিকের স্কোর: '+(score===null?"—":score+"/4")+' · '+trend+'</div>';
+   if(a.signal!=="WAIT")html+='<div class="indicator-line">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
    html+='</div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
   const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
-  const decision=a60.signal==="LONG"?"১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"এখন স্পষ্ট দিক নেই — অপেক্ষা করুন";
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
   html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
  }
  html+='</section>';return html;
 }
@@ -145,13 +148,13 @@ async function refreshAll(){
    done++;
    document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
    document.getElementById("connection").className=ok?"tag good":"tag";
-   if(done===2){document.getElementById("updated").textContent="সর্বশেষ চেষ্টা: "+new Date().toLocaleString();renderHistory();}
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
   }
  });
  await Promise.all(jobs);
  refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
 }
-refreshAll();setInterval(refreshAll,60000);renderHistory();
+refreshAll();setInterval(refreshAll,30000);renderHistory();
 </script>
 <script>
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
