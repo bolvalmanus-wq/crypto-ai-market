@@ -204,6 +204,28 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
   .indicator-line{font-size:12px!important;color:#eaf3ff!important}
 }
 
+
+
+/* Readable AI panel: keep card dimensions, scroll long AI text inside its own box */
+@media(max-width:480px){
+  #markets>.card h2,.price,.time-label,.choice,.trade-action,.ai-head,.ai-decision,.ai-reason,.ai-risk{
+    text-shadow:none!important;
+  }
+  .metric{box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important}
+  .time-label{color:#ffe6a3!important;background:#3b321f!important;border-color:#806b3d!important;box-shadow:none!important}
+  .choice{ text-shadow:none!important; animation:none!important; box-shadow:none!important; }
+  .trade-action{ text-shadow:none!important; box-shadow:none!important; }
+  .ai-box{
+    height:78px!important;min-height:78px!important;max-height:78px!important;
+    flex:0 0 78px!important;overflow-y:auto!important;overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+    scrollbar-width:thin;text-shadow:none!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+  }
+  .ai-head,.ai-decision,.ai-reason,.ai-risk{text-shadow:none!important}
+  .ai-reason,.ai-risk{overflow-wrap:anywhere;white-space:normal}
+}
+
 </style>
 </head>
 <body>
@@ -320,7 +342,9 @@ async function loadAiForSymbol(symbol,data){
  for(const tf of ["30m","1h"]){
   const key="gemini_v2_"+symbol+"_"+tf;
   let cached=null,failedAt=0;try{cached=JSON.parse(localStorage.getItem(key)||"null");failedAt=Number(localStorage.getItem(key+"_failed")||0)}catch(e){}
-  if(cached&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]){showAi(symbol,tf,cached);continue;}
+  const lastClosedCandle=(data.candles[tf]||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
+  const candleKey=lastClosedCandle?Number(lastClosedCandle.time):null;
+  if(cached&&((candleKey!==null&&cached._candleTime===candleKey)||(candleKey===null&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]))){showAi(symbol,tf,cached);continue;}
   if(failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>'+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল")+'</div>';const d=document.getElementById("decision-"+symbol+"-"+tf);if(d){d.textContent="AI অনুপলব্ধ";d.className="trade-action wait-on";}continue;}
   const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
   const interval=tf==="30m"?1800000:3600000;
@@ -330,6 +354,7 @@ async function loadAiForSymbol(symbol,data){
    const response=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf,market}),cache:"no-store"});
    const result=await response.json().catch(()=>({}));
    if(!response.ok||!result.analysis)throw new Error(result.error||"AI API "+response.status);
+   if(candleKey!==null)result._candleTime=candleKey;
    localStorage.setItem(key,JSON.stringify(result));showAi(symbol,tf,result);
   }catch(error){
    try{localStorage.setItem(key+"_failed",String(Date.now()));localStorage.setItem(key+"_error",String(error?.message||"অজানা সার্ভার সমস্যা"))}catch(e){}
@@ -371,6 +396,8 @@ async function refreshAll(){
  const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
  document.getElementById("connection").textContent="সংযোগ হচ্ছে";
  const markets=document.getElementById("markets");
+ const previousScrollLeft=markets.scrollLeft;
+ const previousScrollTop=markets.querySelector(".card")?.scrollTop||0;
  markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
  let ok=0,done=0;
  const jobs=symbols.map(async symbol=>{
@@ -390,6 +417,9 @@ async function refreshAll(){
   }
  });
  await Promise.all(jobs);
+ markets.scrollLeft=previousScrollLeft;
+ const visibleCard=markets.querySelectorAll(":scope > .card")[Math.round(previousScrollLeft/Math.max(1,markets.clientWidth))];
+ if(visibleCard)visibleCard.scrollTop=previousScrollTop;
  refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
 }
 refreshAll();setInterval(refreshAll,60000);renderHistory();
