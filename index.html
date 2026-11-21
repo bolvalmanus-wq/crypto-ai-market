@@ -91,7 +91,7 @@ function card(symbol,data){
    const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000,interval);
    const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
    const score=Number.isFinite(a.score)?Math.round(50+a.score*12.5):null;
-   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG</div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT</div></div><div class="signal '+cls+'">'+a.signal+'</div><div class="muted">'+safeText(a.reason)+'</div><div class="muted">ইন্ডিকেটর সমর্থন: '+(score===null?"—":score+"%")+'</div>';
+   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG</div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT</div></div><div class="signal '+cls+'">'+a.signal+'</div><div class="muted">'+safeText(a.reason)+'</div><div class="muted">সিগন্যাল স্কোর (সম্ভাবনা নয়): '+(score===null?"—":score+"%")+'</div>';
    if(a.signal!=="WAIT")html+='<div class="muted">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
    html+='</div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
