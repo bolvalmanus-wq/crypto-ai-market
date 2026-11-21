@@ -52,7 +52,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 </div>
 <div class="card" id="historyCard"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card" id="warningCard"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। এটি নিয়মভিত্তিক প্রযুক্তিগত বিশ্লেষণ; AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা নয়।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.7</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.8</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
@@ -127,7 +127,1031 @@ function card(symbol,data){
   const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
   const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
   html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
-  html+='<div class="analysis-note"><b>পরবর্তী '+labels["30m"]+'-এর দিক:</b> '+safeText(a30.outlook)+'. '+safeText(a30.reason)+'.<br><b>করণীয়:</b> '+safeText(a30.plan)+'.<br><b>পরবর্তী '+labels["1h"]+':</b> '+safeText(a60.outlook)+'. '+safeText(a60.reason)+'.<br><b>সূচক:</b> RSI '+(Number.isFinite(a30.rsi)?a30.rsi.toFixed(1):"—")+' · EMA50 '+fmt(a30.ema50)+' · ভলিউম/গড় '+(Number.isFinite(a30.volRatio)?a30.volRatio.toFixed(2)+"x":"—")+'.<br><b>ঝুঁকির রেঞ্জ:</b> ATR '+fmt(a30.atr)+'. এই বিশ্লেষণ সম্ভাব্য দিক ও শর্ত দেখায়, নিশ্চিত ভবিষ্যদ্বাণী বা জয়ের সম্ভাবনা নয়।</div>';
+  html+='<div class="analysis-note"><b>পরবর্তী '+labels["30m"]+'-এর দিক:</b> '+safeText(a30.outlook)+'. '+safeText(a30.reason)+'.<br><b>করণীয়:</b> '+safeText(a30.plan)+'.<br><b>৩০ মিনিট নজরদারি অঞ্চল:</b> EMA9–EMA21 
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.entry)+' · SL 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.stop)+' · TP 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.target)+'</div>';
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a30.longZone?.[0])+' – 
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.entry)+' · SL 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.stop)+' · TP 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.target)+'</div>';
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a30.longZone?.[1])+'.<br><b>নিশ্চিতকরণ:</b> LONG ভাবার আগে সম্পূর্ণ ক্যান্ডেল 
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.entry)+' · SL 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.stop)+' · TP 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.target)+'</div>';
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a30.lastHigh)+'-এর ওপরে ক্লোজ; SHORT ভাবার আগে 
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.entry)+' · SL 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.stop)+' · TP 
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a.target)+'</div>';
+   html+='</div>';
+   saveSignal(symbol,tf,a.signal,price,a.reason);
+  }
+  html+='</div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
+  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+ }
+ html+='</section>';return html;
+}
+function saveSignal(s,tf,signal,price,reason){
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
+}
+function renderHistory(){
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
+}
+refreshAll();setInterval(refreshAll,30000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>
++fmt(a30.lastLow)+'-এর নিচে ক্লোজ দরকার।<br><b>ATR ঝুঁকি-পরিমাপ:</b> '+fmt(a30.atr)+'; সম্ভাব্য দূরত্ব SL 1.5×ATR, লক্ষ্য 2×ATR (গ্যারান্টি নয়)।<br><b>পরবর্তী '+labels["1h"]+':</b> '+safeText(a60.outlook)+'. '+safeText(a60.reason)+'.<br><b>সূচক:</b> RSI '+(Number.isFinite(a30.rsi)?a30.rsi.toFixed(1):"—")+' · EMA50 '+fmt(a30.ema50)+' · ভলিউম/গড় '+(Number.isFinite(a30.volRatio)?a30.volRatio.toFixed(2)+"x":"—")+'. এই বিশ্লেষণ সম্ভাব্য দিক ও শর্ত দেখায়, নিশ্চিত ভবিষ্যদ্বাণী বা জয়ের সম্ভাবনা নয়।</div>';
  }
  html+='</section>';return html;
 }
