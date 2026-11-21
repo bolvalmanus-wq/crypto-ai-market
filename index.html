@@ -258,13 +258,20 @@ body{box-sizing:border-box}
  .price-live-row .fresh{display:block!important;flex:0 1 auto!important;max-width:100%!important;font-size:9px!important;white-space:normal!important;overflow-wrap:anywhere!important}
 }
 
+
+/* Live title emphasis and gentle price-tick animation */
+.status-card h2{font-size:16px;letter-spacing:.2px;color:#e6f2ff;text-shadow:0 0 7px #398bff88;animation:marketTitleGlow 2.6s ease-in-out infinite alternate}
+@keyframes marketTitleGlow{from{text-shadow:0 0 3px #398bff55}to{text-shadow:0 0 11px #55a4ffcc}}
+.price.price-tick{animation:priceTick .32s ease-out}
+@keyframes priceTick{0%{transform:scale(1);filter:brightness(1)}45%{transform:scale(1.045);filter:brightness(1.5)}100%{transform:scale(1);filter:brightness(1)}}
+@media(max-width:480px){.status-card h2{font-size:15px!important}}
 </style>
 </head>
 <body>
 <div class="splash" id="splash"><div class="splash-inner"><div class="splash-mark">₿</div><div class="splash-title">Crypto AI Market</div><div class="splash-sub">SMART MARKET ANALYTICS</div></div></div>
 <header><div class="logo">₿</div><div><div class="eyebrow">SMART MARKET ANALYTICS</div><h1>Crypto AI Market</h1><div class="sub">BTC ও SOL · Perpetual Futures</div></div></header>
 <div class="card status-card">
- <div class="row"><h2>লাইভ মার্কেট সংযোগ</h2><span class="tag" id="connection">সংযোগ পরীক্ষা হচ্ছে</span></div>
+ <div class="row"><h2>লাইভ মার্কেট ডেটা বিশ্লেষণ</h2><span class="tag" id="connection">সংযোগ পরীক্ষা হচ্ছে</span></div>
  <div class="live-clock" id="liveClock"><span class="clock-dot"></span><span>LIVE · সময় লোড হচ্ছে</span></div>
  <p class="muted" id="source">তথ্য উৎস: Bybit USDT Perpetual; Bybit ডেটা না এলে OKX বিকল্প হিসেবে ব্যবহৃত হতে পারে।</p>
  <p class="muted" id="updated" hidden>সর্বশেষ মার্কেট ডেটা: অপেক্ষমাণ</p>
@@ -454,7 +461,35 @@ async function refreshAll(){
  if(visibleCard)visibleCard.scrollTop=previousScrollTop;
  refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
 }
-refreshAll();setInterval(refreshAll,60000);renderHistory();
+let livePriceBusy=false;
+const previousLivePrices={};
+async function refreshLivePrices(){
+ if(livePriceBusy)return;livePriceBusy=true;
+ try{
+  await Promise.all(symbols.map(async symbol=>{
+   const priceEl=document.getElementById("live-price-"+symbol);
+   if(!priceEl)return;
+   try{
+    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),2800);
+    let response;
+    try{response=await fetch("/api/price?symbol="+symbol,{cache:"no-store",signal:controller.signal})}
+    finally{clearTimeout(timer)}
+    if(!response.ok)return;
+    const data=await response.json();const next=Number(data.last);
+    if(!Number.isFinite(next)||next<=0)return;
+    const previous=previousLivePrices[symbol];
+    priceEl.textContent="$ "+fmt(next);
+    if(Number.isFinite(previous)&&next!==previous){
+     priceEl.classList.remove("price-tick","price-up","price-down");
+     priceEl.classList.add(next>previous?"price-up":"price-down");
+     void priceEl.offsetWidth;priceEl.classList.add("price-tick");
+    }
+    previousLivePrices[symbol]=next;
+   }catch(e){}
+  }));
+ }finally{livePriceBusy=false}
+}
+refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval(refreshAll,60000);renderHistory();
 </script>
 <script>
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
