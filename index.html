@@ -49,17 +49,19 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 <div id="markets"></div>
 <div class="card"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 0.4</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 0.5</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
 const fmt=n=>Number(n).toLocaleString("en-US",{maximumFractionDigits:4});
 function safeText(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
 function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
-function rsi(values,p=14){let gains=0,losses=0;for(let i=values.length-p;i<values.length;i++){let d=values[i]-values[i-1];if(d>0)gains+=d;else losses-=d}if(losses===0)return 100;let rs=(gains/p)/(losses/p);return 100-100/(1+rs)}
-function analyse(candles,price){
- const bars=candles.filter(c=>c.confirmed);
+function rsi(values,p=14){let gains=0,losses=0;for(let i=values.length-p;i<values.length;i++){let d=values[i]-values[i-1];if(d>0)gains+=d;else losses-=d}if(gains===0&&losses===0)return 50;if(losses===0)return 100;if(gains===0)return 0;let rs=gains/losses;return 100-100/(1+rs)}
+function analyse(candles,price,maxAgeMs){
+ const bars=candles.filter(c=>c.confirmed&&[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.high>=c.low&&c.close>0);
  if(bars.length<30)return {signal:"WAIT",reason:"পর্যাপ্ত সম্পূর্ণ ক্যান্ডেল নেই"};
+ const candleAge=Date.now()-bars[bars.length-1].time;
+ if(candleAge<0||candleAge>maxAgeMs)return {signal:"WAIT",reason:"সর্বশেষ সম্পূর্ণ ক্যান্ডেল পুরোনো; নতুন ডেটার অপেক্ষা"};
  const close=bars.map(c=>c.close),last=bars[bars.length-1],prev=bars[bars.length-2];
  const e9=ema(close.slice(-40),9),e21=ema(close.slice(-60),21),rv=rsi(close);
  const ranges=bars.slice(-15).map((c,i)=>{const p=bars[bars.length-16+i];return Math.max(c.high-c.low,Math.abs(c.high-p.close),Math.abs(c.low-p.close))});
@@ -82,7 +84,7 @@ function card(symbol,data){
  else{
   const signals={};
   for(const tf of ["30m","1h"]){
-   const a=analyse(data.candles[tf],price);signals[tf]=a;const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
+   const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000);signals[tf]=a;const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
    html+='<div class="metric"><b>'+labels[tf]+' বিশ্লেষণ</b><div class="signal '+cls+'">'+a.signal+'</div><div>'+a.reason+'</div>';
    if(a.signal!=="WAIT")html+='<div>সম্ভাব্য এন্ট্রি: $'+fmt(a.entry)+'</div><div>প্রস্তাবিত স্টপ: $'+fmt(a.stop)+'</div><div>সম্ভাব্য লক্ষ্য: $'+fmt(a.target)+'</div><div class="muted">ATR-ভিত্তিক আনুমানিক স্তর; নিশ্চিত নয়</div>';
    else html+='<div>এন্ট্রি / স্টপ / লক্ষ্য: সংকেত নিশ্চিত না হওয়া পর্যন্ত দেখানো হবে না</div>';
@@ -95,14 +97,48 @@ function card(symbol,data){
  html+='<p class="muted">দ্রষ্টব্য: এই মূল্য OKX-এর; Bybit-এর মূল্য নয়।</p></section>';return html;
 }
 function saveSignal(s,tf,signal,price,reason){
- let h=[];try{h=JSON.parse(localStorage.getItem("signals")||"[]")}catch(e){}
- const key=s+tf+signal;if(h[0]&&h[0].key===key)return;
- h.unshift({key,s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,20);
- try{localStorage.setItem("signals",JSON.stringify(h))}catch(e){}
+ let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
+ const series=s+"_"+tf;if(latest[series]===signal)return;
+ latest[series]=signal;h.unshift({key:series+"_"+Date.now(),s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,30);
+ try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
 }
 function renderHistory(){
  let h=[];try{h=JSON.parse(localStorage.getItem("signals")||"[]")}catch(e){}
- document.getElementById("history").innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+x.time+' · '+x.s+' · '+labels[x.tf]+' · <b>'+x.signal+'</b> · $'+fmt(x.price)+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+ document.getElementById("history").innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b> · ).join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+let refreshing=false;
+async function fetchWithRetry(symbol){
+ let lastError;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles)throw new Error("অসম্পূর্ণ ডেটা");return data}
+  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
+  finally{clearTimeout(timer)}
+ }
+ throw lastError||new Error("ডেটা পাওয়া যায়নি");
+}
+async function refreshAll(){
+ if(refreshing)return;refreshing=true;
+ const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
+ try{
+  const settled=await Promise.allSettled(symbols.map(fetchWithRetry));let ok=0;
+  document.getElementById("markets").innerHTML=settled.map((item,i)=>{
+   if(item.status==="fulfilled"){ok++;return card(symbols[i],item.value)}
+   return '<section class="card"><h2>'+symbols[i]+' / USDT</h2><p class="status">WAIT — ডেটা পাওয়া যায়নি</p><p class="muted">'+safeText(item.reason?.message||"ডেটা সাময়িকভাবে আসেনি")+'</p><p class="muted">আবার স্বয়ংক্রিয়ভাবে চেষ্টা করা হবে।</p></section>';
+  }).join("");
+  document.getElementById("connection").textContent=ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+  document.getElementById("connection").className=ok?"tag good":"tag";
+  document.getElementById("updated").textContent="সর্বশেষ চেষ্টা: "+new Date().toLocaleString();renderHistory();
+ }catch(e){document.getElementById("connection").textContent="সংযোগ ব্যর্থ";document.getElementById("updated").textContent="আপডেট ব্যর্থ; আবার চেষ্টা করুন"}
+ finally{refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}}
+}
+refreshAll();setInterval(refreshAll,60000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+</body></html>+fmt(x.price)+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
 }
 let refreshing=false;
 async function fetchWithRetry(symbol){
