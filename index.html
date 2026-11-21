@@ -103,8 +103,10 @@ function saveSignal(s,tf,signal,price,reason){
  try{localStorage.setItem("signals",JSON.stringify(h));localStorage.setItem("latestSignals",JSON.stringify(latest))}catch(e){}
 }
 function renderHistory(){
- let h=[];try{h=JSON.parse(localStorage.getItem("signals")||"[]")}catch(e){}
- document.getElementById("history").innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b> · ).join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+ let h=[];
+ try{h=JSON.parse(localStorage.getItem("signals")||"[]");if(!Array.isArray(h))h=[]}catch(e){h=[]}
+ const el=document.getElementById("history");
+ el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
 }
 let refreshing=false;
 async function fetchWithRetry(symbol){
