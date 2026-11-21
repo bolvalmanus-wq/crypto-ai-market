@@ -178,6 +178,32 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
  #historyCard,#warningCard,footer{display:none!important}
 }
 
+
+/* Readable full-screen mobile layout: larger panels and high-contrast glowing text */
+@media(max-width:480px){
+  body{height:100dvh!important;min-height:0!important;overflow:hidden!important;padding:5px 7px!important;gap:4px!important}
+  .status-card{padding:5px 8px!important;margin:1px 0 3px!important;flex:0 0 auto!important}
+  #coinNav{flex:0 0 auto!important;margin:2px auto 5px!important}
+  #markets{flex:1 1 0!important;min-height:0!important;overflow:hidden!important}
+  #markets>.card{height:100%!important;min-height:0!important;padding:9px!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+  #markets>.card h2{font-size:20px!important;color:#f4f8ff!important;text-shadow:0 0 7px #62baff88}
+  .price{font-size:29px!important;font-weight:900!important;color:#fff!important;text-shadow:0 0 9px #48aaff99}
+  .fresh{font-size:12px!important;line-height:1.4!important}
+  .timeframe-grid{display:grid!important;grid-template-columns:1fr!important;grid-template-rows:1fr 1fr!important;gap:7px!important;flex:1 1 0!important;min-height:0!important}
+  .metric{display:flex!important;flex-direction:column!important;justify-content:space-evenly!important;min-height:0!important;overflow:hidden!important;padding:8px!important;border-radius:10px!important;font-size:15px!important;line-height:1.4!important;border-color:#5484b7!important;box-shadow:0 0 9px #398bff33,inset 0 0 10px #398bff12!important}
+  .time-label{font-size:20px!important;padding:5px!important;margin:0 0 4px!important;color:#fff0a8!important;text-shadow:0 0 5px #ffd45c,0 0 11px #ffb52c!important}
+  .choices{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important;margin:4px 0!important}
+  .choice{font-size:14px!important;padding:6px 3px!important;color:#fff!important;text-shadow:0 0 6px currentColor!important}
+  .choice small{font-size:12px!important;font-weight:800!important}
+  .trade-action{font-size:16px!important;padding:8px 5px!important;margin:5px 0!important;text-shadow:0 0 7px currentColor!important}
+  .ai-box{font-size:14px!important;line-height:1.4!important;padding:8px!important;margin-top:5px!important;border-color:#5793c8!important;box-shadow:0 0 9px #398bff33!important}
+  .ai-head{font-size:12px!important;color:#9ed6ff!important;text-shadow:0 0 7px #398bff99!important;line-height:1.35!important}
+  .ai-decision{font-size:17px!important;text-shadow:0 0 8px currentColor!important}
+  .ai-reason,.ai-risk{font-size:14px!important;line-height:1.4!important;color:#f5f8ff!important;text-shadow:0 0 5px #91caff55!important;margin-top:4px!important}
+  .muted,.sub,.note,#source,#updated{font-size:12px!important;color:#e2edff!important}
+  .indicator-line{font-size:12px!important;color:#eaf3ff!important}
+}
+
 </style>
 </head>
 <body>
