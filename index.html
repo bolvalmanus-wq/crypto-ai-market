@@ -37,6 +37,29 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
 @media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:10px}#markets>.card{margin:0;padding:12px}.status-card{padding:22px}}
 @media(max-width:480px){html,body{height:100%;min-height:100%;overflow:hidden}body{padding:5px 7px 7px;display:flex;flex-direction:column;max-width:100vw}header{display:none}#markets{flex:1;min-height:0;display:grid;grid-template-columns:1fr;grid-template-rows:1fr 1fr;gap:5px;overflow:hidden}.status-card{padding:7px 9px;margin:3px 0 5px;flex:0 0 auto}.status-card h2{font-size:12px;margin:0}.status-card p{margin:2px 0;font-size:8px;line-height:1.2}.status-card .row{gap:4px}.status-card .tag{font-size:8px;padding:3px 5px}.status-card button{padding:10px 22px;font-size:13px;margin:5px auto 0;min-width:160px}.card{padding:7px 8px;border-radius:10px;margin:0;min-height:0;overflow:hidden}.price{font-size:21px;margin:3px 0 1px}h2{font-size:13px;margin:0 0 4px}.tag{font-size:8px;padding:3px 5px}.sub,.note,#source,#updated,.muted{font-size:8px;line-height:1.25}.metric{padding:6px;font-size:9px}.timeframe-grid{gap:5px}.time-label{font-size:19px;padding:5px 3px;margin-bottom:5px}.live-clock{font-size:13px;margin:4px auto;padding:5px 8px;letter-spacing:.2px}.choices{gap:4px;margin:3px 0}.choice{padding:4px 2px;font-size:10px}.choice small{font-size:9px}.outlook{padding:5px 3px;margin:4px 0}.outlook small{font-size:8px;margin-bottom:1px}.outlook strong{font-size:21px}.trade-action{font-size:10px;padding:5px;margin:4px 0}.signal{font-size:12px;margin:3px 0}.fresh,.indicator-line,.analysis-note{font-size:8px;margin-top:2px;line-height:1.2}.indicator-line:nth-last-child(1){display:none}#historyCard,#warningCard,footer{display:none}}
+/* Simplified mobile dashboard */
+@media(max-width:480px){
+ body{overflow:hidden;height:100dvh;min-height:0;padding:4px 6px;gap:3px}
+ .status-card{padding:5px 8px;margin:2px 0 3px}.status-card p,.status-card button{display:none}
+ .status-card .live-clock{margin:2px auto;padding:3px 7px;font-size:11px}
+ #markets{grid-template-columns:1fr;grid-template-rows:1fr 1fr;gap:4px;flex:1;min-height:0}
+ #markets>.card{padding:5px 6px;display:flex;flex-direction:column}
+ .price{font-size:18px;margin:1px 0}.fresh{font-size:8px;margin:1px 0 3px}
+ .timeframe-grid{grid-template-columns:1fr 1fr;gap:4px;flex:1;min-height:0}
+ .metric{padding:4px;border-radius:7px}.time-label{font-size:13px;padding:3px;margin:0 0 3px}
+ .choices{gap:3px;margin:2px 0}.choice{font-size:9px;padding:3px 1px}.choice small{font-size:8px}
+ .outlook{padding:3px 2px;margin:3px 0}.outlook small{font-size:7px}.outlook strong{font-size:16px}
+ .trade-action{font-size:9px;padding:4px;margin:3px 0}.muted{font-size:8px;line-height:1.25}
+ .indicator-line{display:none}.analysis-note{font-size:8px;line-height:1.2;padding:4px;margin-top:3px}
+ .ai-box{margin-top:4px;padding:4px;border:1px solid #3c5271;border-radius:6px;background:#111f32;font-size:8px;line-height:1.25}
+ .ai-head{display:flex;justify-content:space-between;gap:3px;font-weight:800;color:#b9d8ff;margin-bottom:2px}
+ .ai-decision{font-size:10px;font-weight:900}.ai-reason,.ai-risk{margin-top:2px;color:#d4dfef;overflow-wrap:anywhere}
+ #historyCard,#warningCard,footer{display:none}
+}
+.ai-box{margin-top:6px;padding:7px;border:1px solid #344c6c;border-radius:8px;background:#111f32;font-size:11px;line-height:1.35}
+.ai-head{display:flex;justify-content:space-between;gap:6px;font-weight:800;color:#b9d8ff;margin-bottom:3px}
+.ai-decision{font-size:13px;font-weight:900}.ai-reason,.ai-risk{margin-top:3px;color:#d4dfef}
+.ai-long{color:#55e3ae}.ai-short{color:#ff8798}.ai-wait{color:#ffd36e}
 </style>
 </head>
 <body>
@@ -116,7 +139,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>.12?"BULLISH":score<-.12?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="outlook '+(score===null?"":score>0?"bull":score<0?"bear":"neutral")+'"><small>'+(tf==="30m"?"30-MIN DIRECTION":"1-HOUR DIRECTION")+'</small><strong>'+(score===null?"NO DATA":score>.12?"UPWARD":score<-.12?"DOWNWARD":"SIDEWAYS")+'</strong></div><div class="trade-action '+(a.signal==="LONG"?"long-on":a.signal==="SHORT"?"short-on":"wait-on")+'">TRADE ACTION: '+a.signal+'</div><div class="muted"><b>সিদ্ধান্তের কারণ:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+Math.round(score*100)+" / 100")+'</div><div class="indicator-line">লাইভ দরের EMA/RSI, মোমেন্টাম ও উপলভ্য ডেরিভেটিভ ডেটার সমন্বিত শক্তি; জয়ের সম্ভাবনা নয়</div><div class="indicator-line">'+safeText((a.extras||[]).join(" · ")||"অতিরিক্ত ডেরিভেটিভ ডেটা পাওয়া যায়নি")+'</div>';
+   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="outlook '+(score===null?"":score>0?"bull":score<0?"bear":"neutral")+'"><small>'+(tf==="30m"?"30-MIN DIRECTION":"1-HOUR DIRECTION")+'</small><strong>'+(score===null?"NO DATA":score>.12?"UPWARD":score<-.12?"DOWNWARD":"SIDEWAYS")+'</strong></div><div class="trade-action '+(a.signal==="LONG"?"long-on":a.signal==="SHORT"?"short-on":"wait-on")+'">TRADE ACTION: '+a.signal+'</div><div class="muted"><b>সিদ্ধান্তের কারণ:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+Math.round(score*100)+" / 100")+'</div><div class="indicator-line">লাইভ দরের EMA/RSI, মোমেন্টাম ও উপলভ্য ডেরিভেটিভ ডেটার সমন্বিত শক্তি; জয়ের সম্ভাবনা নয়</div><div class="indicator-line">'+safeText((a.extras||[]).join(" · ")||"অতিরিক্ত ডেরিভেটিভ ডেটা পাওয়া যায়নি")+'</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div>';
    if(a.signal!=="WAIT")html+='<div class="indicator-line">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
    html+='</div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
@@ -138,6 +161,35 @@ function renderHistory(){
  const el=document.getElementById("history");
  el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
 }
+
+const aiCacheTtl={"30m":1800000,"1h":3600000};
+function aiPanel(symbol,tf){return document.getElementById("ai-"+symbol+"-"+tf)}
+function showAi(symbol,tf,result){
+ const el=aiPanel(symbol,tf);if(!el)return;
+ const a=result.analysis,cls=a.decision==="LONG"?"ai-long":a.decision==="SHORT"?"ai-short":"ai-wait";
+ const dir=a.direction==="UPWARD"?"ঊর্ধ্বমুখী":a.direction==="DOWNWARD"?"নিম্নমুখী":"সমতল";
+ el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div><div class="ai-decision '+cls+'">AI মতামত: '+safeText(a.decision)+'</div><div class="ai-reason">'+safeText(a.reason)+'</div><div class="ai-risk">ঝুঁকি: '+safeText(a.risk)+'</div>';
+}
+async function loadAiForSymbol(symbol,data){
+ for(const tf of ["30m","1h"]){
+  const key="gemini_"+symbol+"_"+tf;
+  let cached=null;try{cached=JSON.parse(localStorage.getItem(key)||"null")}catch(e){}
+  if(cached&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]){showAi(symbol,tf,cached);continue;}
+  const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
+  const interval=tf==="30m"?1800000:3600000;
+  const a=analyse(data.candles[tf],data.ticker.last,tf==="30m"?2700000:5400000,interval,data.derivatives,tf);
+  const market={source:data.source,ticker:data.ticker,indicators:{rsi:a.rsi,ema9:a.ema9,ema21:a.ema21,atr:a.atr,technicalScore:a.score,technicalSignal:a.signal},candles:(data.candles[tf]||[]).filter(x=>x.confirmed).slice(-24),derivatives:data.derivatives?{openInterest:tf==="30m"?data.derivatives.openInterest30m:data.derivatives.openInterest1h,longShort:tf==="30m"?data.derivatives.longShort30m:data.derivatives.longShort1h,orderbook:data.derivatives.orderbook,fundingHistory:data.derivatives.fundingHistory}:null};
+  try{
+   const response=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf,market}),cache:"no-store"});
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok||!result.analysis)throw new Error(result.error||"AI API "+response.status);
+   localStorage.setItem(key,JSON.stringify(result));showAi(symbol,tf,result);
+  }catch(error){
+   const panel=aiPanel(symbol,tf);if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">এখন অনুপলব্ধ</span></div><div>AI বিশ্লেষণ পাওয়া যায়নি। সূচকভিত্তিক হিসাব আলাদা—এটিকে AI মতামত ভাববেন না।</div>';
+  }
+ }
+}
+
 let refreshing=false;
 async function fetchWithRetry(symbol){
  let lastError;
@@ -161,6 +213,7 @@ async function refreshAll(){
   try{
    const data=await fetchWithRetry(symbol);
    const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   loadAiForSymbol(symbol,data);
    ok++;
   }catch(e){
    const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="fresh offline"><span class="live-dot"></span>নেটওয়ার্ক/ডেটা সংযোগ নেই</p><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
