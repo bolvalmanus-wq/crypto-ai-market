@@ -49,7 +49,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 <div id="markets"></div>
 <div class="card"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 0.5</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 0.6</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
@@ -67,12 +67,12 @@ function analyse(candles,price,maxAgeMs){
  const ranges=bars.slice(-15).map((c,i)=>{const p=bars[bars.length-16+i];return Math.max(c.high-c.low,Math.abs(c.high-p.close),Math.abs(c.low-p.close))});
  const atr=ranges.reduce((a,b)=>a+b,0)/ranges.length,momentum=last.close-prev.close;
  let score=0;if(e9>e21)score++;else score--;if(last.close>e9)score++;else score--;if(momentum>0)score++;else if(momentum<0)score--;
- if(rv>=52&&rv<=68)score++;if(rv<=48&&rv>=32)score--;
+ if(rv>=52&&rv<=68)score++;else if(rv>=32&&rv<=48)score--;
  let signal="WAIT",reason="ট্রেন্ড ও মোমেন্টাম পুরোপুরি একমত নয়";
  if(rv>70)reason="RSI বেশি — এখন LONG নেওয়া ঝুঁকিপূর্ণ";
  else if(rv<30)reason="RSI খুব কম — এখন SHORT নেওয়া ঝুঁকিপূর্ণ";
- else if(score>=4&&rv>=50&&rv<=68){signal="LONG";reason="EMA, ক্যান্ডেল মোমেন্টাম ও RSI ঊর্ধ্বমুখী";}
- else if(score<=-4&&rv>=32&&rv<=50){signal="SHORT";reason="EMA, ক্যান্ডেল মোমেন্টাম ও RSI নিম্নমুখী";}
+ else if(score>=3&&rv>=50&&rv<=68){signal="LONG";reason="EMA, ক্যান্ডেল মোমেন্টাম ও RSI ঊর্ধ্বমুখী";}
+ else if(score<=-3&&rv>=32&&rv<=50){signal="SHORT";reason="EMA, ক্যান্ডেল মোমেন্টাম ও RSI নিম্নমুখী";}
  const result={signal,reason,rsi:rv,ema9:e9,ema21:e21,atr,score};
  if(signal!=="WAIT"){result.entry=price;result.stop=signal==="LONG"?price-1.5*atr:price+1.5*atr;result.target=signal==="LONG"?price+2*atr:price-2*atr}
  return result;
@@ -88,7 +88,7 @@ function card(symbol,data){
    html+='<div class="metric"><b>'+labels[tf]+' বিশ্লেষণ</b><div class="signal '+cls+'">'+a.signal+'</div><div>'+a.reason+'</div>';
    if(a.signal!=="WAIT")html+='<div>সম্ভাব্য এন্ট্রি: $'+fmt(a.entry)+'</div><div>প্রস্তাবিত স্টপ: $'+fmt(a.stop)+'</div><div>সম্ভাব্য লক্ষ্য: $'+fmt(a.target)+'</div><div class="muted">ATR-ভিত্তিক আনুমানিক স্তর; নিশ্চিত নয়</div>';
    else html+='<div>এন্ট্রি / স্টপ / লক্ষ্য: সংকেত নিশ্চিত না হওয়া পর্যন্ত দেখানো হবে না</div>';
-   html+='<div>RSI: '+a.rsi.toFixed(1)+' · EMA9: '+fmt(a.ema9)+' · EMA21: '+fmt(a.ema21)+'</div></div><div style="height:8px"></div>';
+   html+='<div>RSI: '+a.rsi.toFixed(1)+' · EMA9: '+fmt(a.ema9)+' · EMA21: '+fmt(a.ema21)+'</div><div>ট্রেন্ড স্কোর: '+a.score+' / ৪</div></div><div style="height:8px"></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   const aligned=signals["30m"].signal===signals["1h"].signal&&signals["30m"].signal!=="WAIT";
