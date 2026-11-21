@@ -20,6 +20,7 @@ export async function onRequestGet({ request }) {
   const requestJson = async (host, path) => {
     const response = await fetch(host + path, {
       headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(4500),
       cf: { cacheTtl: 0, cacheEverything: false },
     });
     if (!response.ok) {
@@ -35,18 +36,8 @@ export async function onRequestGet({ request }) {
   let lastError = "No OKX API host responded";
   for (const host of hosts) {
     try {
-      // Retry once on transient network/server errors before trying another host.
-      let payloads;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          payloads = await Promise.all(paths.map(path => requestJson(host, path)));
-          break;
-        } catch (error) {
-          lastError = error instanceof Error ? error.message : "Unknown provider error";
-          if (attempt === 1) throw error;
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
+      // Bound each regional host attempt so a stalled provider cannot leave the app loading indefinitely.
+      const payloads = await Promise.all(paths.map(path => requestJson(host, path)));
 
       const ticker = payloads[0].data[0];
       const candles30m = payloads[1].data;
