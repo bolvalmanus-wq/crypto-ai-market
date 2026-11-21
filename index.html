@@ -265,7 +265,7 @@ body{box-sizing:border-box}
 .price.price-tick{animation:priceTick .32s ease-out}
 @keyframes priceTick{0%{transform:scale(1);filter:brightness(1)}45%{transform:scale(1.045);filter:brightness(1.5)}100%{transform:scale(1);filter:brightness(1)}}
 @media(max-width:480px){.status-card h2{font-size:15px!important}}
-</style>
+\n.retry-ai{display:block;width:100%;margin:5px auto 0;padding:6px 10px;font-size:11px;border:1px solid #4d86bd;background:linear-gradient(110deg,#183e65,#294b83);box-shadow:0 0 7px #398bff33;border-radius:8px}.retry-ai:disabled{opacity:.55}\n@media(max-width:480px){.retry-ai{padding:5px 8px;font-size:10px;margin-top:4px}}\n</style>
 </head>
 <body>
 <div class="splash" id="splash"><div class="splash-inner"><div class="splash-mark">₿</div><div class="splash-title">Crypto AI Market</div><div class="splash-sub">SMART MARKET ANALYTICS</div></div></div>
@@ -344,7 +344,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>.12?"BULLISH":score<-.12?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div></div>';
+   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div><button type="button" class="retry-ai" id="retry-'+symbol+'-'+tf+'" onclick="retryAi(\''+symbol+\' ,\''+tf+\' )">আবার বিশ্লেষণ</button></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
@@ -377,14 +377,15 @@ function showAi(symbol,tf,result){
  el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div><div class="ai-reason">'+safeText(a.reason)+'</div><div class="ai-risk">ঝুঁকি: '+safeText(a.risk)+'</div>';
 }
 
-async function loadAiForSymbol(symbol,data){
+async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
  for(const tf of ["30m","1h"]){
+  if(onlyTf&&tf!==onlyTf)continue;
   const key="gemini_v2_"+symbol+"_"+tf;
   let cached=null,failedAt=0;try{cached=JSON.parse(localStorage.getItem(key)||"null");failedAt=Number(localStorage.getItem(key+"_failed")||0)}catch(e){}
   const lastClosedCandle=(data.candles[tf]||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
   const candleKey=lastClosedCandle?Number(lastClosedCandle.time):null;
-  if(cached&&candleKey!==null&&cached._candleTime===candleKey&&Date.now()-Date.parse(cached.generatedAt)<300000){showAi(symbol,tf,cached);continue;}
-  if(failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>'+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল")+'</div>';const d=document.getElementById("decision-"+symbol+"-"+tf);if(d){d.textContent="AI অনুপলব্ধ";d.className="trade-action wait-on";}continue;}
+  if(!force&&cached&&candleKey!==null&&cached._candleTime===candleKey&&Date.now()-Date.parse(cached.generatedAt)<300000){showAi(symbol,tf,cached);continue;}
+  if(!force&&failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>'+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল")+'</div>';const d=document.getElementById("decision-"+symbol+"-"+tf);if(d){d.textContent="AI অনুপলব্ধ";d.className="trade-action wait-on";}continue;}
   const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
   const interval=tf==="30m"?1800000:3600000;
   const a=analyse(data.candles[tf],data.ticker.last,tf==="30m"?2700000:5400000,interval,data.derivatives,tf);
@@ -402,6 +403,25 @@ async function loadAiForSymbol(symbol,data){
  }
 }
 
+async function retryAi(symbol,tf){
+ const button=document.getElementById("retry-"+symbol+"-"+tf);
+ if(!button||button.disabled)return;
+ const original=button.textContent;button.disabled=true;button.textContent="নতুন ডেটা আনা হচ্ছে…";
+ try{
+  const data=await fetchWithRetry(symbol);
+  const priceEl=document.getElementById("live-price-"+symbol);
+  if(priceEl&&Number.isFinite(Number(data.ticker.last)))priceEl.textContent="$ "+fmt(data.ticker.last);
+  button.textContent="AI বিশ্লেষণ চলছে…";
+  await loadAiForSymbol(symbol,data,true,tf);
+  button.textContent="আবার বিশ্লেষণ";
+ }catch(error){
+  const panel=aiPanel(symbol,tf);
+  if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">নেটওয়ার্ক সমস্যা</span></div><div>'+safeText(error?.message||"মার্কেট ডেটা পাওয়া যায়নি")+'</div>';
+  button.textContent="আবার চেষ্টা করুন";
+ }finally{
+  button.disabled=false;
+ }
+}
 
 function showCoin(index){
  const el=document.getElementById("markets");if(!el)return;
