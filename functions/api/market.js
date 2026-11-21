@@ -33,7 +33,39 @@ export async function onRequestGet({ request }) {
     return payload;
   };
 
-  let lastError = "No OKX API host responded";
+  let lastError = "Bybit API not available; trying OKX fallback";
+  try {
+    const base = "https://api.bybit.com";
+    const bybitGet = async (path) => {
+      const response = await fetch(base + path, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error("Bybit HTTP " + response.status);
+      const payload = await response.json();
+      if (payload.retCode !== 0 || !payload.result) throw new Error("Bybit API: " + (payload.retMsg || "invalid response"));
+      return payload.result;
+    };
+    const symbolCode = symbol + "USDT";
+    const [tickerResult, k30, k60] = await Promise.all([
+      bybitGet("/v5/market/tickers?category=linear&symbol=" + symbolCode),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=30&limit=100"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=100")
+    ]);
+    const ticker = tickerResult.list?.[0];
+    if (!ticker || !k30.list?.length || !k60.list?.length) throw new Error("Bybit returned incomplete market data");
+    const mapBars = (rows, intervalMs) => rows.map(row => {
+      const start = Number(row[0]);
+      return { time:start, open:Number(row[1]), high:Number(row[2]), low:Number(row[3]), close:Number(row[4]), volume:Number(row[5]), confirmed:Date.now() >= start + intervalMs };
+    }).reverse();
+    const timestamp = Date.now();
+    const prev = Number(ticker.prevPrice24h);
+    return Response.json({
+      symbol, instrument:symbolCode, source:"Bybit USDT perpetual",
+      fetchedAt:new Date().toISOString(), marketTimestamp:new Date(timestamp).toISOString(), ageSeconds:0,
+      ticker:{last:Number(ticker.lastPrice),open24h:prev,bid:Number(ticker.bid1Price),ask:Number(ticker.ask1Price),volume24h:Number(ticker.turnover24h)},
+      candles:{"30m":mapBars(k30.list,30*60*1000),"1h":mapBars(k60.list,60*60*1000)}
+    },{headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
+  } catch(error) {
+    lastError = error instanceof Error ? error.message : "Bybit API unavailable";
+  }
   for (const host of hosts) {
     try {
       // Bound each regional host attempt so a stalled provider cannot leave the app loading indefinitely.
