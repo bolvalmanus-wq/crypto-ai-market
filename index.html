@@ -178,18 +178,19 @@ function showAi(symbol,tf,result){
  const el=aiPanel(symbol,tf);if(!el)return;
  const a=result.analysis,cls=a.decision==="LONG"?"ai-long":a.decision==="SHORT"?"ai-short":"ai-wait";
  const dir=a.direction==="UPWARD"?"ঊর্ধ্বমুখী":a.direction==="DOWNWARD"?"নিম্নমুখী":"সমতল";
- el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div><div class="ai-decision '+cls+'">AI মতামত: '+safeText(a.decision)+'</div><div class="ai-reason">'+safeText(a.reason)+'</div><div class="ai-risk">ঝুঁকি: '+safeText(a.risk)+'</div>';
+ const model=safeText(result.model||"Gemini");
+ el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div><div class="ai-decision '+cls+'">AI মতামত: '+safeText(a.decision)+'</div><div class="ai-reason">'+safeText(a.reason)+'</div><div class="ai-risk">ঝুঁকি: '+safeText(a.risk)+'</div><div class="muted">ডেটার মান: '+(a.dataQuality==="GOOD"?"ভালো":"সীমিত")+' · এটি সম্ভাব্যতা নয়</div>';
 }
 async function loadAiForSymbol(symbol,data){
  for(const tf of ["30m","1h"]){
-  const key="gemini_"+symbol+"_"+tf;
+  const key="gemini_v2_"+symbol+"_"+tf;
   let cached=null,failedAt=0;try{cached=JSON.parse(localStorage.getItem(key)||"null");failedAt=Number(localStorage.getItem(key+"_failed")||0)}catch(e){}
   if(cached&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]){showAi(symbol,tf,cached);continue;}
-  if(failedAt&&Date.now()-failedAt<300000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>সমস্যার কারণ: '+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল") +'</div>';continue;}
+  if(failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>সমস্যার কারণ: '+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল") +'</div>';continue;}
   const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
   const interval=tf==="30m"?1800000:3600000;
   const a=analyse(data.candles[tf],data.ticker.last,tf==="30m"?2700000:5400000,interval,data.derivatives,tf);
-  const market={source:data.source,ticker:data.ticker,indicators:{rsi:a.rsi,ema9:a.ema9,ema21:a.ema21,atr:a.atr,technicalScore:a.score,technicalSignal:a.signal},candles:(data.candles[tf]||[]).filter(x=>x.confirmed).slice(-24),derivatives:data.derivatives?{openInterest:tf==="30m"?data.derivatives.openInterest30m:data.derivatives.openInterest1h,longShort:tf==="30m"?data.derivatives.longShort30m:data.derivatives.longShort1h,orderbook:data.derivatives.orderbook,fundingHistory:data.derivatives.fundingHistory}:null};
+  const market={source:data.source,ticker:data.ticker,indicators:{rsi:a.rsi,ema9:a.ema9,ema21:a.ema21,atr:a.atr,technicalScore:a.score,technicalSignal:a.signal},candles:(data.candles[tf]||[]).filter(x=>x.confirmed).slice(-48),higherTimeframe:(()=>{const other=tf==="30m"?"1h":"30m";const h=analyse(data.candles[other],data.ticker.last,other==="30m"?2700000:5400000,other==="30m"?1800000:3600000,data.derivatives,other);return {timeframe:other,signal:h.signal,score:h.score,rsi:h.rsi,ema9:h.ema9,ema21:h.ema21,reason:h.reason}})(),derivatives:data.derivatives?{openInterest:tf==="30m"?data.derivatives.openInterest30m:data.derivatives.openInterest1h,longShort:tf==="30m"?data.derivatives.longShort30m:data.derivatives.longShort1h,orderbook:data.derivatives.orderbook,fundingHistory:data.derivatives.fundingHistory}:null};
   try{
    const response=await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf,market}),cache:"no-store"});
    const result=await response.json().catch(()=>({}));
