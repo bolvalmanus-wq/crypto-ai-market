@@ -231,6 +231,19 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
 @media(max-width:480px){.ai-box{height:112px!important;min-height:112px!important;max-height:112px!important;flex:0 0 112px!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y!important;padding:9px!important;font-size:12px!important;line-height:1.5!important}.ai-reason,.ai-risk{font-size:12px!important;line-height:1.5!important}.price-change{font-size:9px!important}.price{font-size:26px!important}}
 
 @media(max-width:480px){#markets>.card{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important}.timeframe-grid{flex:none!important;min-height:auto!important}.metric{overflow:visible!important;flex:none!important;justify-content:flex-start!important}.ai-box{height:112px!important;min-height:112px!important;max-height:112px!important;flex:0 0 112px!important;overflow-y:auto!important;overflow-x:hidden!important}}
+
+/* Prevent horizontal overflow on narrow phone screens */
+html,body{width:100%;max-width:100%;min-width:0;overflow-x:hidden!important}
+body{box-sizing:border-box}
+#coinNav{width:100%;max-width:100%;min-width:0;padding-inline:2px}
+#coinNav .coin-tab{min-width:0!important;width:44%;max-width:150px;padding-inline:8px!important}
+#markets{width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:hidden!important}
+#markets>.card{width:100%!important;max-width:100%!important;min-width:0!important;flex:0 0 100%!important}
+#markets>.card *{min-width:0;max-width:100%}
+.row,.timeframe-grid,.metric,.ai-box,.ai-head{min-width:0;max-width:100%}
+.price{font-size:clamp(16px,6vw,26px)!important;overflow-wrap:anywhere}
+.metric,.ai-box,.ai-reason,.ai-risk,.indicator-line{overflow-wrap:anywhere;word-break:normal}
+
 </style>
 </head>
 <body>
