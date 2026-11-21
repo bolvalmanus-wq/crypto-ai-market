@@ -99,10 +99,7 @@ function card(symbol,data){
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
-  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
-  const decision=a60.signal==="LONG"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"পরিকল্পনা: ১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"পরিকল্পনা: এখনই ট্রেড নয় — নিশ্চিত দিকের অপেক্ষা";
-  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
-  html+='<div class="analysis-note"><b>সংক্ষিপ্ত বাজার বিশ্লেষণ:</b> ৩০ মিনিটে '+safeText(a30.reason)+'. ১ ঘণ্টায় '+safeText(a60.reason)+'. RSI, EMA ও সর্বশেষ সম্পূর্ণ ক্যান্ডেলের মোমেন্টাম মিলিয়ে এই সিদ্ধান্ত তৈরি হয়েছে। এটি নিশ্চিত পূর্বাভাস নয়।</div>';
+  // Direction and WAIT explanation are shown inside each timeframe panel.
  }
  html+='</section>';return html;
 }
