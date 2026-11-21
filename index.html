@@ -71,6 +71,19 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
 .outlook,.trade-action,.decision{box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
 .ai-box{background:linear-gradient(145deg,#10243a,#0d192a);border-color:#3a5d83;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
 @media(max-width:480px){.status-card .live-clock{margin:2px auto;padding:4px 9px;font-size:12px}.status-card{border-radius:12px}.card{border-radius:11px}#markets>.card{border-color:rgba(105,151,204,.32)}}
+
+/* Compact phone layout: remove redundant outlook tile, enlarge key market figures */
+@media(max-width:480px){
+ .price{font-size:23px!important;letter-spacing:-.5px;margin:3px 0 2px!important}
+ .fresh{font-size:10px!important;line-height:1.35!important;margin:3px 0 5px!important}
+ .trade-action{font-size:10px!important;padding:5px 3px!important;margin:4px 0!important}
+ .ai-box{font-size:9px!important;line-height:1.3!important}
+ .ai-decision{font-size:11px!important}
+ .ai-reason,.ai-risk{font-size:9px!important}
+ #markets>.card{padding:6px 7px!important}
+ .metric{padding:5px!important}
+ .time-label{font-size:14px!important}
+}
 </style>
 </head>
 <body>
@@ -149,7 +162,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>.12?"BULLISH":score<-.12?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="outlook '+(score===null?"":score>0?"bull":score<0?"bear":"neutral")+'"><small>'+(tf==="30m"?"30-MIN DIRECTION":"1-HOUR DIRECTION")+'</small><strong>'+(score===null?"NO DATA":score>.12?"UPWARD":score<-.12?"DOWNWARD":"SIDEWAYS")+'</strong></div><div class="trade-action '+(a.signal==="LONG"?"long-on":a.signal==="SHORT"?"short-on":"wait-on")+'">TRADE ACTION: '+a.signal+'</div><div class="muted"><b>সিদ্ধান্তের কারণ:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+Math.round(score*100)+" / 100")+'</div><div class="indicator-line">লাইভ দরের EMA/RSI, মোমেন্টাম ও উপলভ্য ডেরিভেটিভ ডেটার সমন্বিত শক্তি; জয়ের সম্ভাবনা নয়</div><div class="indicator-line">'+safeText((a.extras||[]).join(" · ")||"অতিরিক্ত ডেরিভেটিভ ডেটা পাওয়া যায়নি")+'</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div>';
+   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action '+(a.signal==="LONG"?"long-on":a.signal==="SHORT"?"short-on":"wait-on")+'">TRADE ACTION: '+a.signal+'</div><div class="muted"><b>সিদ্ধান্তের কারণ:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+Math.round(score*100)+" / 100")+'</div><div class="indicator-line">লাইভ দরের EMA/RSI, মোমেন্টাম ও উপলভ্য ডেরিভেটিভ ডেটার সমন্বিত শক্তি; জয়ের সম্ভাবনা নয়</div><div class="indicator-line">'+safeText((a.extras||[]).join(" · ")||"অতিরিক্ত ডেরিভেটিভ ডেটা পাওয়া যায়নি")+'</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div>';
    if(a.signal!=="WAIT")html+='<div class="indicator-line">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
    html+='</div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
