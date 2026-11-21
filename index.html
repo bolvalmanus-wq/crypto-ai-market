@@ -24,8 +24,8 @@ h2{font-size:17px;letter-spacing:-.2px;margin:0 0 12px}
 #source,#updated,.muted{color:var(--muted);font-size:12px;line-height:1.65}
 button{background:linear-gradient(110deg,#398bff,#5869f5);color:white;border:0;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:750;box-shadow:0 7px 20px #347bdf38}
 button:disabled{opacity:.6}
-#markets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-#markets>.card{padding:8px;min-width:0}
+#markets{display:grid;grid-template-columns:1fr;gap:5px}
+#markets>.card{padding:8px;min-width:0;margin:4px 0}
 .price{font-size:27px;letter-spacing:-1px;font-weight:850;margin:8px 0 2px;font-variant-numeric:tabular-nums}
 .status{font-weight:800;color:var(--amber)}
 .signal{font-size:19px;font-weight:850;letter-spacing:.5px;margin:9px 0}
@@ -35,7 +35,7 @@ button:disabled{opacity:.6}
 footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
 @media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:10px}#markets>.card{margin:0;padding:12px}.status-card{padding:22px}}
-@media(max-width:380px){body{padding:7px 6px 14px}.card{padding:8px;border-radius:12px}.price{font-size:20px}h2{font-size:13px}.tag{font-size:9px;padding:4px 6px}.sub,.note,#source,#updated,.muted{font-size:10px}}
+@media(max-width:480px){body{padding:5px 6px 8px}header{padding:3px 1px 5px;gap:8px}.logo{width:34px;height:34px;border-radius:10px;font-size:19px}h1{font-size:17px}.card{padding:7px;border-radius:10px;margin:4px 0}.price{font-size:20px}h2{font-size:13px}.tag{font-size:8px;padding:3px 5px}.sub,.note,#source,#updated,.muted{font-size:9px}.status-card p{margin:4px 0}.status-card button{padding:7px 10px;font-size:11px}.metric{padding:6px;font-size:9px}.signal{font-size:15px;margin:4px 0}#historyCard,#warningCard,footer{display:none}}
 </style>
 </head>
 <body>
@@ -50,8 +50,8 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 <section class="card"><div class="row"><h2>BTC / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
 <section class="card"><div class="row"><h2>SOL / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
 </div>
-<div class="card"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
-<div class="card"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
+<div class="card" id="historyCard"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
+<div class="card" id="warningCard"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
 <footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.5</footer>
 <script>
 const symbols=["BTC","SOL"];
