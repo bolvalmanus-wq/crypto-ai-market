@@ -140,38 +140,4 @@ refreshAll();setInterval(refreshAll,60000);renderHistory();
 <script>
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
 </script>
-</body></html>+fmt(x.price)+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
-}
-let refreshing=false;
-async function fetchWithRetry(symbol){
- let lastError;
- for(let attempt=0;attempt<2;attempt++){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
-  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles)throw new Error("অসম্পূর্ণ ডেটা");return data}
-  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
-  finally{clearTimeout(timer)}
- }
- throw lastError||new Error("ডেটা পাওয়া যায়নি");
-}
-async function refreshAll(){
- if(refreshing)return;refreshing=true;
- const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
- document.getElementById("connection").textContent="সংযোগ হচ্ছে";
- try{
-  const settled=await Promise.allSettled(symbols.map(fetchWithRetry));let ok=0;
-  document.getElementById("markets").innerHTML=settled.map((item,i)=>{
-   if(item.status==="fulfilled"){ok++;return card(symbols[i],item.value)}
-   return '<section class="card"><h2>'+symbols[i]+' / USDT</h2><p class="status">WAIT — ডেটা পাওয়া যায়নি</p><p class="muted">'+safeText(item.reason?.message||"ডেটা সাময়িকভাবে আসেনি")+'</p><p class="muted">আবার স্বয়ংক্রিয়ভাবে চেষ্টা করা হবে।</p></section>';
-  }).join("");
-  document.getElementById("connection").textContent=ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
-  document.getElementById("connection").className=ok?"tag good":"tag";
-  document.getElementById("updated").textContent="সর্বশেষ চেষ্টা: "+new Date().toLocaleString();renderHistory();
- }catch(e){document.getElementById("connection").textContent="সংযোগ ব্যর্থ";document.getElementById("updated").textContent="আপডেট ব্যর্থ; আবার চেষ্টা করুন"}
- finally{refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}}
-}
-refreshAll();setInterval(refreshAll,60000);renderHistory();
-</script>
-<script>
-if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
-</script>
 </body></html>
