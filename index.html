@@ -24,18 +24,18 @@ h2{font-size:17px;letter-spacing:-.2px;margin:0 0 12px}
 #source,#updated,.muted{color:var(--muted);font-size:12px;line-height:1.65}
 button{background:linear-gradient(110deg,#398bff,#5869f5);color:white;border:0;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:750;box-shadow:0 7px 20px #347bdf38}
 button:disabled{opacity:.6}
-#markets{display:grid;grid-template-columns:1fr;gap:2px}
-#markets>.card{padding:12px}
+#markets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#markets>.card{padding:8px;min-width:0}
 .price{font-size:27px;letter-spacing:-1px;font-weight:850;margin:8px 0 2px;font-variant-numeric:tabular-nums}
 .status{font-weight:800;color:var(--amber)}
 .signal{font-size:19px;font-weight:850;letter-spacing:.5px;margin:9px 0}
 .good{color:var(--green)}.bad{color:var(--red)}
-.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:11px;padding:9px;font-size:12px;line-height:1.7}
+.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}
 .metric b{color:#dce9ff}
 footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
-@media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:10px}#markets>.card{margin:0}.status-card{padding:22px}}
-@media(max-width:380px){body{padding:14px 12px 28px}.card{padding:15px;border-radius:17px}.price{font-size:29px}}
+@media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:10px}#markets>.card{margin:0;padding:12px}.status-card{padding:22px}}
+@media(max-width:380px){body{padding:7px 6px 14px}.card{padding:8px;border-radius:12px}.price{font-size:20px}h2{font-size:13px}.tag{font-size:9px;padding:4px 6px}.sub,.note,#source,#updated,.muted{font-size:10px}}
 </style>
 </head>
 <body>
@@ -56,7 +56,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
-const fmt=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:4}):"—";
+const fmt=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:4}):"—";
 function safeText(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
 function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
 function rsi(values,p=14){let gains=0,losses=0;for(let i=values.length-p;i<values.length;i++){let d=values[i]-values[i-1];if(d>0)gains+=d;else losses-=d}if(gains===0&&losses===0)return 50;if(losses===0)return 100;if(gains===0)return 0;let rs=gains/losses;return 100-100/(1+rs)}
@@ -86,14 +86,16 @@ function card(symbol,data){
  if(age>180||!Number.isFinite(price)||price<=0)html+='<p class="status">WAIT — ডেটা পুরোনো বা অবৈধ</p>';
  else{
   const signals={};
+  html+='<div class="timeframe-grid">';
   for(const tf of ["30m","1h"]){
-   const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000);signals[tf]=a;const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
-   html+='<div class="metric"><b>'+labels[tf]+' বিশ্লেষণ</b><div class="signal '+cls+'">'+a.signal+'</div><div>'+a.reason+'</div>';
+   const a=analyse(data.candles[tf],price,tf==="30m"?75*60*1000:135*60*1000);signals[tf]=a;const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
+   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG<small>দাম উঠলে</small></div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT<small>দাম নামলে</small></div></div><div class="signal '+cls+'">'+a.signal+'</div><div>'+a.reason+'</div>';
    if(a.signal!=="WAIT")html+='<div>সম্ভাব্য এন্ট্রি: $'+fmt(a.entry)+'</div><div>প্রস্তাবিত স্টপ: $'+fmt(a.stop)+'</div><div>সম্ভাব্য লক্ষ্য: $'+fmt(a.target)+'</div><div class="muted">ATR-ভিত্তিক আনুমানিক স্তর; নিশ্চিত নয়</div>';
    else html+='<div>এন্ট্রি / স্টপ / লক্ষ্য: সংকেত নিশ্চিত না হওয়া পর্যন্ত দেখানো হবে না</div>';
    html+='<div>RSI: '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):'—')+' · EMA9: '+fmt(a.ema9)+' · EMA21: '+fmt(a.ema21)+'</div><div>ট্রেন্ড স্কোর: '+(Number.isFinite(a.score)?a.score:'—')+' / ৪</div></div><div style="height:8px"></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
+  html+='</div>';
   const aligned=signals["30m"].signal===signals["1h"].signal&&signals["30m"].signal!=="WAIT";
   html+='<div class="metric"><b>দুই টাইমফ্রেমের মিল</b><div class="signal '+(aligned?(signals["30m"].signal==="LONG"?"good":"bad"):"status")+'">'+(aligned?signals["30m"].signal+" — উভয় সময় একমত":"WAIT — দুই সময়ের সংকেত এক নয়")+'</div><div class="muted">দুটি সময় একমত না হলে অপেক্ষা করাই বেশি সতর্ক পদ্ধতি।</div></div>';
  }
