@@ -44,10 +44,16 @@ export async function onRequestGet({ request }) {
       return payload.result;
     };
     const symbolCode = symbol + "USDT";
-    const [tickerResult, k30, k60] = await Promise.all([
+    const [tickerResult, k30, k60, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
       bybitGet("/v5/market/tickers?category=linear&symbol=" + symbolCode),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=30&limit=100"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=100")
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=30&limit=200"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=200"),
+      bybitGet("/v5/market/open-interest?category=linear&symbol=" + symbolCode + "&intervalTime=30min&limit=2").catch(() => null),
+      bybitGet("/v5/market/open-interest?category=linear&symbol=" + symbolCode + "&intervalTime=1h&limit=2").catch(() => null),
+      bybitGet("/v5/market/account-ratio?category=linear&symbol=" + symbolCode + "&period=30min&limit=2").catch(() => null),
+      bybitGet("/v5/market/account-ratio?category=linear&symbol=" + symbolCode + "&period=1h&limit=2").catch(() => null),
+      bybitGet("/v5/market/orderbook?category=linear&symbol=" + symbolCode + "&limit=25").catch(() => null),
+      bybitGet("/v5/market/funding/history?category=linear&symbol=" + symbolCode + "&limit=2").catch(() => null)
     ]);
     const ticker = tickerResult.list?.[0];
     if (!ticker || !k30.list?.length || !k60.list?.length) throw new Error("Bybit returned incomplete market data");
@@ -60,7 +66,15 @@ export async function onRequestGet({ request }) {
     return Response.json({
       symbol, instrument:symbolCode, source:"Bybit USDT perpetual",
       fetchedAt:new Date().toISOString(), marketTimestamp:new Date(timestamp).toISOString(), ageSeconds:0,
-      ticker:{last:Number(ticker.lastPrice),open24h:prev,bid:Number(ticker.bid1Price),ask:Number(ticker.ask1Price),volume24h:Number(ticker.turnover24h)},
+      ticker:{last:Number(ticker.lastPrice),mark:Number(ticker.markPrice),index:Number(ticker.indexPrice),open24h:prev,bid:Number(ticker.bid1Price),ask:Number(ticker.ask1Price),volume24h:Number(ticker.turnover24h),openInterest:Number(ticker.openInterestValue),fundingRate:Number(ticker.fundingRate),nextFundingTime:Number(ticker.nextFundingTime)},
+      derivatives:{
+        openInterest30m:oi30?.list?.map(x=>({value:Number(x.openInterest),time:Number(x.timestamp)}))||[],
+        openInterest1h:oi60?.list?.map(x=>({value:Number(x.openInterest),time:Number(x.timestamp)}))||[],
+        longShort30m:ratio30?.list?.map(x=>({long:Number(x.buyRatio),short:Number(x.sellRatio),time:Number(x.timestamp)}))||[],
+        longShort1h:ratio60?.list?.map(x=>({long:Number(x.buyRatio),short:Number(x.sellRatio),time:Number(x.timestamp)}))||[],
+        orderbook:orderbook?.b&&orderbook?.a?{bids:orderbook.b.map(x=>[Number(x[0]),Number(x[1])]),asks:orderbook.a.map(x=>[Number(x[0]),Number(x[1])]),time:Number(orderbook.ts)}:null,
+        fundingHistory:funding?.list?.map(x=>({rate:Number(x.fundingRate),time:Number(x.fundingRateTimestamp)}))||[]
+      },
       candles:{"30m":mapBars(k30.list,30*60*1000),"1h":mapBars(k60.list,60*60*1000)}
     },{headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
   } catch(error) {
