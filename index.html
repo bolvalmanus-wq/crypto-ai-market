@@ -136,6 +136,48 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
  #historyCard,#warningCard,footer{display:none}
 }
 
+
+/* Compact one-screen BTC/SOL view with AI-driven decision */
+#coinNav{justify-content:center;gap:14px;margin:2px auto 6px;width:100%}
+#coinNav .coin-tab{position:relative;min-width:112px;padding:9px 24px;margin:0;background:#14263e;color:#c7d8ee;border:1px solid #395575;border-radius:12px;transition:background .28s ease,box-shadow .28s ease,transform .28s ease,color .28s ease}
+#coinNav .coin-tab.active{background:linear-gradient(115deg,#176bb1,#4856c7);color:#fff;border-color:#9bd1ff;box-shadow:0 0 0 2px #65b5ff33,0 0 15px #398bff88;transform:translateY(-2px)}
+#coinNav .coin-tab.active:after{content:"";position:absolute;left:25%;right:25%;bottom:3px;height:2px;border-radius:3px;background:#dff3ff;box-shadow:0 0 8px #fff}
+#markets{overflow-x:hidden!important;scroll-snap-type:none!important}
+#markets>.card{overflow:hidden!important}
+.timeframe-grid{display:grid!important;grid-template-columns:1fr!important;gap:6px!important}
+.metric{padding:7px!important;font-size:11px!important;line-height:1.35!important}
+.time-label{font-size:16px!important;padding:4px!important;margin:0 0 4px!important}
+.choices{margin:3px 0!important;gap:5px!important}
+.choice{padding:4px 3px!important;font-size:10px!important}
+.choice small{font-size:9px!important}
+.trade-action{margin:4px 0!important;padding:6px!important;font-size:13px!important}
+.ai-box{margin-top:4px!important;padding:6px!important;font-size:11px!important;line-height:1.35!important}
+.ai-head{font-size:10px!important;margin-bottom:2px!important}
+.ai-reason,.ai-risk{font-size:11px!important;line-height:1.4!important;margin-top:2px!important}
+@media(max-width:480px){
+ body{height:100dvh!important;overflow:hidden!important;gap:2px!important;padding:4px 7px!important}
+ .status-card{padding:4px 7px!important;margin:1px 0 2px!important}
+ .status-card .live-clock{font-size:11px!important;padding:3px 7px!important}
+ #coinNav{flex:0 0 auto;margin:1px auto 4px!important;gap:12px!important}
+ #coinNav .coin-tab{min-width:108px;padding:7px 20px!important;font-size:14px!important}
+ #markets{flex:1 1 0!important;min-height:0!important;overflow:hidden!important}
+ #markets>.card{height:100%!important;min-height:0!important;padding:7px!important;overflow:hidden!important}
+ #markets>.card h2{font-size:16px!important;margin-bottom:4px!important}
+ .price{font-size:24px!important;margin:2px 0!important}
+ .fresh{font-size:9px!important;margin:1px 0 3px!important}
+ .timeframe-grid{flex:1 1 auto!important;min-height:0!important;gap:5px!important}
+ .metric{padding:6px!important;font-size:10px!important;min-height:0!important}
+ .time-label{font-size:15px!important;padding:3px!important}
+ .choices{margin:2px 0!important}
+ .choice{font-size:9px!important;padding:3px!important}
+ .choice small{font-size:8px!important}
+ .trade-action{font-size:12px!important;padding:5px!important;margin:3px 0!important}
+ .ai-box{font-size:10px!important;padding:5px!important;line-height:1.3!important}
+ .ai-head{font-size:9px!important}
+ .ai-reason,.ai-risk{font-size:10px!important;line-height:1.3!important}
+ #historyCard,#warningCard,footer{display:none!important}
+}
+
 </style>
 </head>
 <body>
@@ -148,7 +190,7 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
  <p class="muted" id="updated" hidden>সর্বশেষ মার্কেট ডেটা: অপেক্ষমাণ</p>
  <button id="refreshButton" onclick="refreshAll()">এখনই আপডেট</button>
 </div>
-<nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button><span id="swipeHint">← স্লাইড করে SOL দেখুন →</span></nav>
+<nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button></nav>
 <div id="markets">
 <section class="card"><div class="row"><h2>BTC / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
 <section class="card"><div class="row"><h2>SOL / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
@@ -215,9 +257,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>.12?"BULLISH":score<-.12?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action '+(a.signal==="LONG"?"long-on":a.signal==="SHORT"?"short-on":"wait-on")+'">TRADE ACTION: '+a.signal+'</div><div class="muted"><b>সিদ্ধান্তের কারণ:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+Math.round(score*100)+" / 100")+'</div><div class="indicator-line">লাইভ দরের EMA/RSI, মোমেন্টাম ও উপলভ্য ডেরিভেটিভ ডেটার সমন্বিত শক্তি; জয়ের সম্ভাবনা নয়</div><div class="indicator-line">'+safeText((a.extras||[]).join(" · ")||"অতিরিক্ত ডেরিভেটিভ ডেটা পাওয়া যায়নি")+'</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div>';
-   if(a.signal!=="WAIT")html+='<div class="indicator-line">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
-   html+='</div>';
+   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
@@ -245,14 +285,17 @@ function showAi(symbol,tf,result){
  const a=result.analysis,cls=a.decision==="LONG"?"ai-long":a.decision==="SHORT"?"ai-short":"ai-wait";
  const dir=a.direction==="UPWARD"?"ঊর্ধ্বমুখী":a.direction==="DOWNWARD"?"নিম্নমুখী":"সমতল";
  const model=safeText(result.model||"Gemini");
- el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div><div class="ai-decision '+cls+'">AI মতামত: '+safeText(a.decision)+'</div><div class="ai-reason">'+safeText(a.reason)+'</div><div class="ai-risk">ঝুঁকি: '+safeText(a.risk)+'</div><div class="muted">ডেটার মান: '+(a.dataQuality==="GOOD"?"ভালো":"সীমিত")+' · এটি সম্ভাব্যতা নয়</div>';
+ const decision=document.getElementById("decision-"+symbol+"-"+tf);
+ if(decision){decision.textContent="সিদ্ধান্ত: "+a.decision;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
+ el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div><div class="ai-reason">'+safeText(a.reason)+'</div><div class="ai-risk">ঝুঁকি: '+safeText(a.risk)+'</div>';
 }
+
 async function loadAiForSymbol(symbol,data){
  for(const tf of ["30m","1h"]){
   const key="gemini_v2_"+symbol+"_"+tf;
   let cached=null,failedAt=0;try{cached=JSON.parse(localStorage.getItem(key)||"null");failedAt=Number(localStorage.getItem(key+"_failed")||0)}catch(e){}
   if(cached&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]){showAi(symbol,tf,cached);continue;}
-  if(failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>সমস্যার কারণ: '+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল") +'</div>';continue;}
+  if(failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>'+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল")+'</div>';const d=document.getElementById("decision-"+symbol+"-"+tf);if(d){d.textContent="AI অনুপলব্ধ";d.className="trade-action wait-on";}continue;}
   const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
   const interval=tf==="30m"?1800000:3600000;
   const a=analyse(data.candles[tf],data.ticker.last,tf==="30m"?2700000:5400000,interval,data.derivatives,tf);
@@ -264,7 +307,7 @@ async function loadAiForSymbol(symbol,data){
    localStorage.setItem(key,JSON.stringify(result));showAi(symbol,tf,result);
   }catch(error){
    try{localStorage.setItem(key+"_failed",String(Date.now()));localStorage.setItem(key+"_error",String(error?.message||"অজানা সার্ভার সমস্যা"))}catch(e){}
-   const panel=aiPanel(symbol,tf);if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">এখন অনুপলব্ধ</span></div><div>AI বিশ্লেষণ পাওয়া যায়নি। কারণ: '+safeText(error?.message||"অজানা সার্ভার সমস্যা")+'</div><div class="muted">সূচকভিত্তিক হিসাব আলাদা—এটিকে AI মতামত ভাববেন না।</div>';
+   const panel=aiPanel(symbol,tf);if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">এখন অনুপলব্ধ</span></div><div>'+safeText(error?.message||"অজানা সার্ভার সমস্যা")+'</div>';const d=document.getElementById("decision-"+symbol+"-"+tf);if(d){d.textContent="AI অনুপলব্ধ";d.className="trade-action wait-on";}
   }
  }
 }
@@ -276,10 +319,9 @@ function showCoin(index){
  updateCoinTab(index);
 }
 function updateCoinTab(index){
- const btc=document.getElementById("tabBTC"),sol=document.getElementById("tabSOL"),hint=document.getElementById("swipeHint");
+ const btc=document.getElementById("tabBTC"),sol=document.getElementById("tabSOL");
  if(btc)btc.classList.toggle("active",index===0);
  if(sol)sol.classList.toggle("active",index===1);
- if(hint)hint.textContent=index===0?"← স্লাইড করে SOL দেখুন →":"← স্লাইড করে BTC দেখুন →";
 }
 (function(){
  const el=document.getElementById("markets");if(!el)return;
