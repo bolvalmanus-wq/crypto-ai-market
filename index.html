@@ -10,12 +10,12 @@
 <style>
 :root{color-scheme:dark;--bg:#080e1b;--panel:#111c2e;--panel2:#17243a;--line:#263650;--muted:#94a5bf;--text:#f3f7ff;--blue:#4d91ff;--green:#31d69a;--red:#ff7185;--amber:#f5c768}
 *{box-sizing:border-box}
-body{margin:0;padding:20px 16px 34px;background:radial-gradient(ellipse at 50% -15%,#1d3c68 0%,#0b1425 42%,var(--bg) 78%);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;max-width:760px;margin-inline:auto}
-header{padding:16px 2px 24px;display:flex;align-items:center;gap:13px}
+body{margin:0;padding:10px 10px 18px;background:radial-gradient(ellipse at 50% -15%,#1d3c68 0%,#0b1425 42%,var(--bg) 78%);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;max-width:760px;margin-inline:auto}
+header{padding:8px 2px 12px;display:flex;align-items:center;gap:13px}
 .logo{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#398bff,#6557e8);box-shadow:0 8px 24px #286de855;font-size:25px;font-weight:900}
 h1{font-size:23px;letter-spacing:-.5px;margin:0 0 4px}.sub,.note{color:var(--muted);font-size:12px;line-height:1.55}
 .eyebrow{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#83b5ff;font-weight:800;margin-bottom:4px}
-.card{background:linear-gradient(145deg,#15243aee,#101a2bee);border:1px solid var(--line);border-radius:21px;padding:19px;margin:14px 0;box-shadow:0 12px 34px #0003}
+.card{background:linear-gradient(145deg,#15243aee,#101a2bee);border:1px solid var(--line);border-radius:15px;padding:12px;margin:8px 0;box-shadow:0 12px 34px #0003}
 .status-card{background:linear-gradient(120deg,#172b48,#142036 72%);border-color:#31517a}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
 h2{font-size:17px;letter-spacing:-.2px;margin:0 0 12px}
@@ -25,16 +25,16 @@ h2{font-size:17px;letter-spacing:-.2px;margin:0 0 12px}
 button{background:linear-gradient(110deg,#398bff,#5869f5);color:white;border:0;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:750;box-shadow:0 7px 20px #347bdf38}
 button:disabled{opacity:.6}
 #markets{display:grid;grid-template-columns:1fr;gap:2px}
-#markets>.card{padding:20px}
-.price{font-size:34px;letter-spacing:-1px;font-weight:850;margin:8px 0 2px;font-variant-numeric:tabular-nums}
+#markets>.card{padding:12px}
+.price{font-size:27px;letter-spacing:-1px;font-weight:850;margin:8px 0 2px;font-variant-numeric:tabular-nums}
 .status{font-weight:800;color:var(--amber)}
-.signal{font-size:23px;font-weight:850;letter-spacing:.5px;margin:9px 0}
+.signal{font-size:19px;font-weight:850;letter-spacing:.5px;margin:9px 0}
 .good{color:var(--green)}.bad{color:var(--red)}
-.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:15px;padding:14px;font-size:13px;line-height:1.7}
+.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:11px;padding:9px;font-size:12px;line-height:1.7}
 .metric b{color:#dce9ff}
 footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
-@media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:12px}#markets>.card{margin:0}.status-card{padding:22px}}
+@media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:10px}#markets>.card{margin:0}.status-card{padding:22px}}
 @media(max-width:380px){body{padding:14px 12px 28px}.card{padding:15px;border-radius:17px}.price{font-size:29px}}
 </style>
 </head>
@@ -52,7 +52,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 </div>
 <div class="card"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 0.9</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.0</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
@@ -126,17 +126,26 @@ async function refreshAll(){
  if(refreshing)return;refreshing=true;
  const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
  document.getElementById("connection").textContent="সংযোগ হচ্ছে";
- try{
-  const settled=await Promise.allSettled(symbols.map(fetchWithRetry));let ok=0;
-  document.getElementById("markets").innerHTML=settled.map((item,i)=>{
-   if(item.status==="fulfilled"){ok++;return card(symbols[i],item.value)}
-   return '<section class="card"><h2>'+symbols[i]+' / USDT</h2><p class="status">WAIT — ডেটা পাওয়া যায়নি</p><p class="muted">'+safeText(item.reason?.message||"ডেটা সাময়িকভাবে আসেনি")+'</p><p class="muted">আবার স্বয়ংক্রিয়ভাবে চেষ্টা করা হবে।</p></section>';
-  }).join("");
-  document.getElementById("connection").textContent=ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
-  document.getElementById("connection").className=ok?"tag good":"tag";
-  document.getElementById("updated").textContent="সর্বশেষ চেষ্টা: "+new Date().toLocaleString();renderHistory();
- }catch(e){document.getElementById("connection").textContent="সংযোগ ব্যর্থ";document.getElementById("updated").textContent="আপডেট ব্যর্থ; আবার চেষ্টা করুন"}
- finally{refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}}
+ const markets=document.getElementById("markets");
+ markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
+ let ok=0,done=0;
+ const jobs=symbols.map(async symbol=>{
+  const target=()=>document.getElementById("market-"+symbol);
+  try{
+   const data=await fetchWithRetry(symbol);
+   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
+   ok++;
+  }catch(e){
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+  }finally{
+   done++;
+   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
+   document.getElementById("connection").className=ok?"tag good":"tag";
+   if(done===2){document.getElementById("updated").textContent="সর্বশেষ চেষ্টা: "+new Date().toLocaleString();renderHistory();}
+  }
+ });
+ await Promise.all(jobs);
+ refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
 }
 refreshAll();setInterval(refreshAll,60000);renderHistory();
 </script>
