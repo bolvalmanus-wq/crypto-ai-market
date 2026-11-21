@@ -84,6 +84,58 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
  .metric{padding:5px!important}
  .time-label{font-size:14px!important}
 }
+
+/* Full-screen swipe pages: BTC and SOL are separate readable screens */
+#coinNav{display:flex;align-items:center;justify-content:center;gap:9px;margin:3px 0 7px;flex:0 0 auto}
+#coinNav .coin-tab{margin:0;padding:8px 24px;min-width:90px;border:1px solid #52749b;background:#142944;color:#eaf3ff;font-size:14px;box-shadow:0 0 8px #398bff22}
+#coinNav .coin-tab.active{background:linear-gradient(110deg,#1766a9,#384fba);border-color:#8bc5ff;box-shadow:0 0 10px #398bff77;color:#fff}
+#swipeHint{font-size:11px;color:#d7e8ff;text-shadow:0 0 7px #66aaff;letter-spacing:.2px}
+#markets{display:flex!important;flex:1 1 auto;min-height:0;width:100%;gap:0;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-behavior:smooth;overscroll-behavior-x:contain;scrollbar-width:none}
+#markets::-webkit-scrollbar{display:none}
+#markets>.card{flex:0 0 100%;width:100%;min-width:100%;height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;scroll-snap-align:start;scroll-snap-stop:always;padding:14px;margin:0;overscroll-behavior-y:contain}
+.timeframe-grid{grid-template-columns:1fr!important;gap:10px}
+.metric{padding:12px;font-size:13px;line-height:1.55}
+.time-label{font-size:19px!important;padding:7px!important}
+.price{font-size:30px!important}
+.trade-action{font-size:15px!important;padding:10px!important}
+.indicator-line{display:block!important;font-size:12px!important;line-height:1.5!important;color:#e0edff!important;margin-top:6px!important}
+.analysis-note{font-size:12px!important;line-height:1.55!important;color:#f0f6ff!important}
+.ai-box{font-size:13px!important;line-height:1.55!important;padding:12px!important;margin-top:9px!important;color:#f3f7ff!important}
+.ai-head{font-size:12px!important;color:#c9e3ff!important;flex-wrap:wrap}
+.ai-decision{font-size:16px!important}
+.ai-reason,.ai-risk{font-size:13px!important;line-height:1.6!important;color:#f1f6ff!important;overflow-wrap:anywhere;white-space:normal}
+.muted,.sub,.note,#source,#updated{color:#d0def1}
+.metric b{color:#fff}
+@media(max-width:480px){
+ html,body{height:100%;min-height:0;overflow:hidden}
+ body{height:100dvh;min-height:0;display:flex;flex-direction:column;padding:5px 7px;gap:3px}
+ .status-card{flex:0 0 auto;padding:5px 8px;margin:2px 0 3px}
+ .status-card p,.status-card button{display:none}
+ .status-card .live-clock{margin:2px auto;padding:4px 8px;font-size:12px}
+ #coinNav{margin:2px 0 5px;gap:7px}
+ #coinNav .coin-tab{padding:7px 20px;min-width:82px;font-size:13px}
+ #swipeHint{font-size:10px}
+ #markets{flex:1 1 0;min-height:0;display:flex!important;grid-template-columns:none;grid-template-rows:none;gap:0}
+ #markets>.card{padding:10px!important;border-radius:12px;height:100%;overflow-y:auto}
+ #markets>.card h2{font-size:19px;margin-bottom:8px}
+ .price{font-size:27px!important;margin:5px 0!important}
+ .fresh{font-size:11px!important;line-height:1.4!important}
+ .timeframe-grid{display:grid;grid-template-columns:1fr!important;gap:9px;flex:none}
+ .metric{padding:10px!important;font-size:12px!important;line-height:1.5}
+ .time-label{font-size:18px!important;margin:0 0 7px!important}
+ .choices{gap:7px;margin:6px 0}
+ .choice{font-size:12px;padding:7px 3px;color:#f0f5ff}
+ .choice small{font-size:11px}
+ .trade-action{font-size:14px!important;padding:8px!important;margin:7px 0!important}
+ .muted{font-size:11px!important;line-height:1.5!important;color:#e0eaff!important}
+ .indicator-line{display:block!important;font-size:11px!important;line-height:1.5!important;color:#e0edff!important;margin-top:5px!important}
+ .ai-box{font-size:12px!important;line-height:1.55!important;padding:10px!important}
+ .ai-head{font-size:11px!important}
+ .ai-decision{font-size:15px!important}
+ .ai-reason,.ai-risk{font-size:12px!important;line-height:1.6!important;color:#fff!important}
+ #historyCard,#warningCard,footer{display:none}
+}
+
 </style>
 </head>
 <body>
@@ -96,6 +148,7 @@ body{background:radial-gradient(ellipse at 50% -18%,#1b4774 0%,#0b1423 42%,#070b
  <p class="muted" id="updated" hidden>সর্বশেষ মার্কেট ডেটা: অপেক্ষমাণ</p>
  <button id="refreshButton" onclick="refreshAll()">এখনই আপডেট</button>
 </div>
+<nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button><span id="swipeHint">← স্লাইড করে SOL দেখুন →</span></nav>
 <div id="markets">
 <section class="card"><div class="row"><h2>BTC / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
 <section class="card"><div class="row"><h2>SOL / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
@@ -215,6 +268,24 @@ async function loadAiForSymbol(symbol,data){
   }
  }
 }
+
+
+function showCoin(index){
+ const el=document.getElementById("markets");if(!el)return;
+ el.scrollTo({left:index*el.clientWidth,behavior:"smooth"});
+ updateCoinTab(index);
+}
+function updateCoinTab(index){
+ const btc=document.getElementById("tabBTC"),sol=document.getElementById("tabSOL"),hint=document.getElementById("swipeHint");
+ if(btc)btc.classList.toggle("active",index===0);
+ if(sol)sol.classList.toggle("active",index===1);
+ if(hint)hint.textContent=index===0?"← স্লাইড করে SOL দেখুন →":"← স্লাইড করে BTC দেখুন →";
+}
+(function(){
+ const el=document.getElementById("markets");if(!el)return;
+ let ticking=false;
+ el.addEventListener("scroll",()=>{if(ticking)return;ticking=true;requestAnimationFrame(()=>{updateCoinTab(Math.round(el.scrollLeft/Math.max(1,el.clientWidth)));ticking=false;});},{passive:true});
+})();
 
 let refreshing=false;
 async function fetchWithRetry(symbol){
