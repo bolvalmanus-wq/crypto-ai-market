@@ -427,9 +427,7 @@ async function refreshAll(){
  if(visibleCard)visibleCard.scrollTop=previousScrollTop;
  refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
 }
-refreshAll();setInterval(refreshAll,60000);renderHistory();updateLivePrices();setInterval(updateLivePrices,1000);
-let livePriceBusy=false;
-async function updateLivePrices(){if(livePriceBusy||document.hidden)return;livePriceBusy=true;try{const results=await Promise.all(symbols.map(async symbol=>{const r=await fetch('/api/price?symbol='+symbol,{cache:'no-store'});if(!r.ok)throw new Error('price');return [symbol,await r.json()]}));for(const [symbol,d] of results){const p=Number(d.last),open=Number(d.open24h);if(!Number.isFinite(p)||p<=0)continue;const priceEl=document.getElementById('live-price-'+symbol),changeEl=document.getElementById('live-change-'+symbol);if(priceEl)priceEl.textContent='
+refreshAll();setInterval(refreshAll,60000);renderHistory();
 </script>
 <script>
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
