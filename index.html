@@ -1,108 +1,99 @@
-
 <!DOCTYPE html>
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#101827">
 <title>Crypto AI Market</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;padding:18px;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
-header{padding:12px 0 20px}
-h1{font-size:25px;margin:0 0 8px}
-.sub,.note{color:#aab6c8;font-size:13px}
-.card{background:#1c293b;border:1px solid #344258;border-radius:14px;padding:17px;margin:14px 0}
-.row{display:flex;justify-content:space-between;gap:10px}
-h2{font-size:19px;margin:0 0 12px}
-.tag{background:#39465b;padding:7px 12px;border-radius:20px;font-size:13px}
-.price{font-size:25px;font-weight:bold;margin:12px 0}
-.status{color:#f6c85f;font-weight:bold}
-button{background:#2878e8;color:white;border:0;border-radius:9px;padding:12px 18px;font-size:15px}
-footer{color:#8794a8;text-align:center;font-size:12px;margin-top:25px}
+*{box-sizing:border-box}body{margin:0;padding:16px;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
+header{padding:10px 0 14px}h1{font-size:24px;margin:0 0 7px}.sub,.note{color:#aab6c8;font-size:13px;line-height:1.55}
+.card{background:#1c293b;border:1px solid #344258;border-radius:14px;padding:15px;margin:13px 0}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}h2{font-size:18px;margin:0 0 10px}
+.tag{background:#39465b;padding:6px 10px;border-radius:20px;font-size:12px}
+.price{font-size:25px;font-weight:bold;margin:12px 0}.status{font-weight:bold;color:#f6c85f}
+.signal{font-size:20px;font-weight:bold;margin:8px 0}.muted{color:#aab6c8;font-size:13px;line-height:1.55}
+button{background:#2878e8;color:white;border:0;border-radius:9px;padding:12px 17px;font-size:15px}
+.good{color:#5ee0a0}.bad{color:#ff8585}footer{color:#8794a8;text-align:center;font-size:12px;margin:22px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.metric{background:#142033;padding:10px;border-radius:9px;font-size:13px;line-height:1.5}
+@media(max-width:360px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header>
-<h1>Crypto AI Market</h1>
-<div class="sub">BTC ও SOL Market Intelligence</div>
-</header>
-
+<header><h1>Crypto AI Market</h1><div class="sub">BTC ও SOL Perpetual Market Analysis</div></header>
 <div class="card">
-<div class="row">
-<h2>BTC / USDT</h2>
-<span class="tag">Bitcoin</span>
+ <div class="row"><h2>ডেটা অবস্থা</h2><span class="tag" id="connection">সংযোগ পরীক্ষা হচ্ছে</span></div>
+ <p class="muted" id="source">তথ্য উৎস: OKX USDT Perpetual। এটি Bybit-এর সরাসরি ডেটা নয়।</p>
+ <p class="muted" id="updated">সর্বশেষ আপডেট: অপেক্ষমাণ</p>
+ <button onclick="refreshAll()">এখনই আপডেট</button>
 </div>
-<div class="price" id="btc">$--</div>
-<div class="status" id="btcStatus">ডেটা লোড হচ্ছে...</div>
-<p class="note" id="btcChange">২৪ ঘণ্টার পরিবর্তন: --</p>
-</div>
-
-<div class="card">
-<div class="row">
-<h2>SOL / USDT</h2>
-<span class="tag">Solana</span>
-</div>
-<div class="price" id="sol">$--</div>
-<div class="status" id="solStatus">ডেটা লোড হচ্ছে...</div>
-<p class="note" id="solChange">২৪ ঘণ্টার পরিবর্তন: --</p>
-</div>
-
-<div class="card">
-<h2>মার্কেট ডেটা</h2>
-<p class="note" id="updated">সর্বশেষ আপডেট: অপেক্ষমাণ</p>
-<button onclick="loadPrices()">আবার ডেটা আপডেট করুন</button>
-</div>
-
-<div class="card">
-<h2>বিশ্লেষণ ব্যবস্থা</h2>
-<p class="note">৩০ মিনিট ও ১ ঘণ্টার বিশ্লেষণ ব্যবস্থা পরবর্তী ধাপে যুক্ত হবে।</p>
-<p class="status">WAIT — এখনো কোনো ট্রেডিং সংকেত তৈরি হয়নি।</p>
-</div>
-
-<footer>Crypto AI Market | Version 0.2</footer>
-
+<div id="markets"></div>
+<div class="card"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
+<div class="card"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 0.3</footer>
 <script>
-async function getPrice(symbol){
- const url="https://api.bybit.com/v5/market/tickers?category=linear&symbol="+symbol;
- const response=await fetch(url);
- if(!response.ok) throw new Error("Network error");
- const data=await response.json();
- if(data.retCode!==0 || !data.result.list.length) throw new Error("Data unavailable");
- return data.result.list[0];
+const symbols=["BTC","SOL"];
+const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
+const fmt=n=>Number(n).toLocaleString("en-US",{maximumFractionDigits:4});
+function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
+function rsi(values,p=14){let gains=0,losses=0;for(let i=values.length-p;i<values.length;i++){let d=values[i]-values[i-1];if(d>0)gains+=d;else losses-=d}if(losses===0)return 100;let rs=(gains/p)/(losses/p);return 100-100/(1+rs)}
+function analyse(candles,price){
+ const bars=candles.filter(c=>c.confirmed);
+ if(bars.length<30) return {signal:"WAIT",reason:"পর্যাপ্ত সম্পূর্ণ ক্যান্ডেল নেই"};
+ const close=bars.map(c=>c.close),last=bars[bars.length-1],prev=bars[bars.length-2];
+ const e9=ema(close.slice(-40),9),e21=ema(close.slice(-60),21),rv=rsi(close);
+ const tr=bars.slice(-14).map((c,i)=>Math.max(c.high-c.low,Math.abs(c.high-(bars[Math.max(0,bars.length-15+i)].close)),Math.abs(c.low-(bars[Math.max(0,bars.length-15+i)].close))));
+ const atr=tr.reduce((a,b)=>a+b,0)/tr.length;
+ const momentum=last.close-prev.close;
+ let score=0;if(e9>e21)score++;else score--;if(last.close>e9)score++;else score--;if(momentum>0)score++;else score--;
+ if(rv>52&&rv<70)score++;if(rv<48&&rv>30)score--;
+ let signal="WAIT",reason="ট্রেন্ড ও মোমেন্টাম একমত নয়";
+ if(score>=3&&rv<70) {signal="LONG";reason="EMA ট্রেন্ড ও মোমেন্টাম ঊর্ধ্বমুখী";}
+ if(score<=-3&&rv>30) {signal="SHORT";reason="EMA ট্রেন্ড ও মোমেন্টাম নিম্নমুখী";}
+ const entry=price;
+ return {signal,reason,entry,stop:signal==="LONG"?entry-1.4*atr:signal==="SHORT"?entry+1.4*atr:null,target:signal==="LONG"?entry+2*atr:signal==="SHORT"?entry-2*atr:null,rsi:rv,ema9:e9,ema21:e21,atr,score};
 }
-
-function showPrice(id,changeId,statusId,data){
- document.getElementById(id).textContent=
- "$"+Number(data.lastPrice).toLocaleString("en-US",{maximumFractionDigits:4});
- const change=Number(data.price24hPcnt)*100;
- const sign=change>0?"+":"";
- document.getElementById(changeId).textContent=
- "২৪ ঘণ্টার পরিবর্তন: "+sign+change.toFixed(2)+"%";
- document.getElementById(statusId).textContent="লাইভ ডেটা সংযুক্ত";
+function card(symbol,data){
+ const price=data.ticker.last,change=(price/data.ticker.open24h-1)*100;
+ const age=data.ageSeconds;
+ let html='<section class="card"><div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">OKX Perpetual</span></div>';
+ html+='<div class="price">$'+fmt(price)+'</div><p class="muted">২৪ ঘণ্টার পরিবর্তন: '+(change>=0?"+":"")+change.toFixed(2)+'% · ডেটার বয়স: '+age+' সেকেন্ড</p>';
+ if(age>180||!Number.isFinite(price)||price<=0){html+='<p class="status">WAIT — ডেটা পুরোনো বা অবৈধ</p>'}
+ else for(const tf of ["30m","1h"]){
+  const a=analyse(data.candles[tf],price),cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
+  html+='<div class="metric"><b>'+labels[tf]+' বিশ্লেষণ</b><div class="signal '+cls+'">'+a.signal+'</div><div>'+a.reason+'</div>';
+  if(a.entry){html+='<div>সম্ভাব্য এন্ট্রি: $'+fmt(a.entry)+'</div><div>স্টপ লস: $'+fmt(a.stop)+'</div><div>টার্গেট: $'+fmt(a.target)+'</div>'}
+  html+='<div>RSI: '+a.rsi.toFixed(1)+' · EMA9: '+fmt(a.ema9)+' · EMA21: '+fmt(a.ema21)+'</div></div><div style="height:8px"></div>';
+  saveSignal(symbol,tf,a.signal,price,a.reason);
+ }
+ html+='<p class="muted">দ্রষ্টব্য: এই মূল্য OKX-এর; Bybit-এর মূল্য নয়।</p></section>';return html;
 }
-
-async function loadPrices(){
- document.getElementById("btcStatus").textContent="ডেটা আনা হচ্ছে...";
- document.getElementById("solStatus").textContent="ডেটা আনা হচ্ছে...";
+function saveSignal(s,tf,signal,price,reason){
+ let h=[];try{h=JSON.parse(localStorage.getItem("signals")||"[]")}catch(e){}
+ const key=s+tf+signal;if(h[0]&&h[0].key===key)return;
+ h.unshift({key,s,tf,signal,price,reason,time:new Date().toLocaleString()});h=h.slice(0,20);
+ try{localStorage.setItem("signals",JSON.stringify(h))}catch(e){}
+}
+function renderHistory(){
+ let h=[];try{h=JSON.parse(localStorage.getItem("signals")||"[]")}catch(e){}
+ document.getElementById("history").innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+x.time+' · '+x.s+' · '+labels[x.tf]+' · <b>'+x.signal+'</b> · $'+fmt(x.price)+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
+}
+async function refreshAll(){
+ const root=document.getElementById("markets");root.innerHTML='<div class="card status">বাজারের তথ্য আনা হচ্ছে...</div>';
+ document.getElementById("connection").textContent="সংযোগ হচ্ছে";
  try{
-  const results=await Promise.all([
-   getPrice("BTCUSDT"),
-   getPrice("SOLUSDT")
-  ]);
-  showPrice("btc","btcChange","btcStatus",results[0]);
-  showPrice("sol","solChange","solStatus",results[1]);
-  document.getElementById("updated").textContent=
-   "সর্বশেষ আপডেট: "+new Date().toLocaleString();
- }catch(error){
-  document.getElementById("btcStatus").textContent="ডেটা সংযোগ হয়নি";
-  document.getElementById("solStatus").textContent="ডেটা সংযোগ হয়নি";
-  document.getElementById("updated").textContent=
-   "সংযোগ সমস্যা। আবার চেষ্টা করুন।";
+  const results=await Promise.all(symbols.map(async s=>{const r=await fetch("/api/market?symbol="+s,{cache:"no-store"});if(!r.ok)throw new Error("API "+r.status);return await r.json()}));
+  root.innerHTML=results.map((d,i)=>card(symbols[i],d)).join("");
+  document.getElementById("connection").textContent="ডেটা পাওয়া গেছে";
+  document.getElementById("connection").className="tag good";
+  document.getElementById("updated").textContent="সর্বশেষ আপডেট: "+new Date().toLocaleString();
+  renderHistory();
+ }catch(e){
+  root.innerHTML='<div class="card"><p class="status">WAIT — বাজারের ডেটা পাওয়া যায়নি</p><p class="muted">সার্ভার/ডেটা উৎসে সংযোগ হয়নি। কোনো ট্রেডিং সংকেত দেখানো হচ্ছে না। পরে আবার চেষ্টা করুন।</p></div>';
+  document.getElementById("connection").textContent="সংযোগ ব্যর্থ";
+  document.getElementById("updated").textContent="আপডেট ব্যর্থ; সর্বশেষ চেষ্টা: "+new Date().toLocaleString();
  }
 }
-
-loadPrices();
-setInterval(loadPrices,30000);
+refreshAll();setInterval(refreshAll,60000);renderHistory();
 </script>
-</body>
-</html>
+</body></html>
