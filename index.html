@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#101827">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/app-icon.svg" type="image/svg+xml">
 <title>Crypto AI Market</title>
 <style>
 *{box-sizing:border-box}body{margin:0;padding:16px;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
@@ -112,5 +114,8 @@ async function refreshAll(){
  finally{refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}}
 }
 refreshAll();setInterval(refreshAll,60000);renderHistory();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
 </script>
 </body></html>
