@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -6,75 +7,102 @@
 <title>Crypto AI Market</title>
 <style>
 *{box-sizing:border-box}
-body{
-  margin:0;padding:18px;
-  background:#101827;color:#f5f7fb;
-  font-family:Arial,sans-serif;
-}
+body{margin:0;padding:18px;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
 header{padding:12px 0 20px}
 h1{font-size:25px;margin:0 0 8px}
-.sub{color:#aab6c8;font-size:13px}
-.card{
-  background:#1c293b;border:1px solid #344258;
-  border-radius:14px;padding:17px;margin:14px 0;
-}
-h2{font-size:19px;margin:0 0 12px}
+.sub,.note{color:#aab6c8;font-size:13px}
+.card{background:#1c293b;border:1px solid #344258;border-radius:14px;padding:17px;margin:14px 0}
 .row{display:flex;justify-content:space-between;gap:10px}
+h2{font-size:19px;margin:0 0 12px}
+.tag{background:#39465b;padding:7px 12px;border-radius:20px;font-size:13px}
+.price{font-size:25px;font-weight:bold;margin:12px 0}
 .status{color:#f6c85f;font-weight:bold}
-.tag{
-  display:inline-block;padding:7px 12px;
-  border-radius:20px;background:#39465b;
-  font-size:13px;
-}
-.note{color:#aab6c8;font-size:13px;line-height:1.6}
-footer{color:#8794a8;text-align:center;font-size:12px;padding:20px}
+button{background:#2878e8;color:white;border:0;border-radius:9px;padding:12px 18px;font-size:15px}
+footer{color:#8794a8;text-align:center;font-size:12px;margin-top:25px}
 </style>
 </head>
 <body>
 <header>
-  <h1>Crypto AI Market</h1>
-  <div class="sub">BTC ও SOL Market Intelligence</div>
+<h1>Crypto AI Market</h1>
+<div class="sub">BTC ও SOL Market Intelligence</div>
 </header>
 
 <div class="card">
-  <div class="row">
-    <h2>BTC / USDT</h2>
-    <span class="tag">Bitcoin</span>
-  </div>
-  <p class="status">অপেক্ষমাণ — WAIT</p>
-  <p class="note">লাইভ মার্কেট ডেটা সংযোগ এখনো তৈরি হয়নি।</p>
+<div class="row">
+<h2>BTC / USDT</h2>
+<span class="tag">Bitcoin</span>
+</div>
+<div class="price" id="btc">$--</div>
+<div class="status" id="btcStatus">ডেটা লোড হচ্ছে...</div>
+<p class="note" id="btcChange">২৪ ঘণ্টার পরিবর্তন: --</p>
 </div>
 
 <div class="card">
-  <div class="row">
-    <h2>SOL / USDT</h2>
-    <span class="tag">Solana</span>
-  </div>
-  <p class="status">অপেক্ষমাণ — WAIT</p>
-  <p class="note">লাইভ মার্কেট ডেটা সংযোগ এখনো তৈরি হয়নি।</p>
+<div class="row">
+<h2>SOL / USDT</h2>
+<span class="tag">Solana</span>
+</div>
+<div class="price" id="sol">$--</div>
+<div class="status" id="solStatus">ডেটা লোড হচ্ছে...</div>
+<p class="note" id="solChange">২৪ ঘণ্টার পরিবর্তন: --</p>
 </div>
 
 <div class="card">
-  <h2>বিশ্লেষণের সময়সীমা</h2>
-  <p>৩০ মিনিটের পূর্বাভাস</p>
-  <p>১ ঘণ্টার পূর্বাভাস</p>
+<h2>মার্কেট ডেটা</h2>
+<p class="note" id="updated">সর্বশেষ আপডেট: অপেক্ষমাণ</p>
+<button onclick="loadPrices()">আবার ডেটা আপডেট করুন</button>
 </div>
 
 <div class="card">
-  <h2>AI বিশ্লেষণ</h2>
-  <p class="note">
-    Technical Analysis, Futures Data, Order Flow,
-    Global Market ও AI News Analysis পরে যুক্ত হবে।
-  </p>
+<h2>বিশ্লেষণ ব্যবস্থা</h2>
+<p class="note">৩০ মিনিট ও ১ ঘণ্টার বিশ্লেষণ ব্যবস্থা পরবর্তী ধাপে যুক্ত হবে।</p>
+<p class="status">WAIT — এখনো কোনো ট্রেডিং সংকেত তৈরি হয়নি।</p>
 </div>
 
-<div class="card">
-  <h2>সিগন্যাল ইতিহাস</h2>
-  <p class="note">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</p>
-</div>
+<footer>Crypto AI Market | Version 0.2</footer>
 
-<footer>
-  Demo Version 0.1 — এটি এখনো লাইভ ট্রেডিং সংকেত দেয় না।
-</footer>
+<script>
+async function getPrice(symbol){
+ const url="https://api.bybit.com/v5/market/tickers?category=linear&symbol="+symbol;
+ const response=await fetch(url);
+ if(!response.ok) throw new Error("Network error");
+ const data=await response.json();
+ if(data.retCode!==0 || !data.result.list.length) throw new Error("Data unavailable");
+ return data.result.list[0];
+}
+
+function showPrice(id,changeId,statusId,data){
+ document.getElementById(id).textContent=
+ "$"+Number(data.lastPrice).toLocaleString("en-US",{maximumFractionDigits:4});
+ const change=Number(data.price24hPcnt)*100;
+ const sign=change>0?"+":"";
+ document.getElementById(changeId).textContent=
+ "২৪ ঘণ্টার পরিবর্তন: "+sign+change.toFixed(2)+"%";
+ document.getElementById(statusId).textContent="লাইভ ডেটা সংযুক্ত";
+}
+
+async function loadPrices(){
+ document.getElementById("btcStatus").textContent="ডেটা আনা হচ্ছে...";
+ document.getElementById("solStatus").textContent="ডেটা আনা হচ্ছে...";
+ try{
+  const results=await Promise.all([
+   getPrice("BTCUSDT"),
+   getPrice("SOLUSDT")
+  ]);
+  showPrice("btc","btcChange","btcStatus",results[0]);
+  showPrice("sol","solChange","solStatus",results[1]);
+  document.getElementById("updated").textContent=
+   "সর্বশেষ আপডেট: "+new Date().toLocaleString();
+ }catch(error){
+  document.getElementById("btcStatus").textContent="ডেটা সংযোগ হয়নি";
+  document.getElementById("solStatus").textContent="ডেটা সংযোগ হয়নি";
+  document.getElementById("updated").textContent=
+   "সংযোগ সমস্যা। আবার চেষ্টা করুন।";
+ }
+}
+
+loadPrices();
+setInterval(loadPrices,30000);
+</script>
 </body>
 </html>
