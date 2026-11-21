@@ -30,7 +30,7 @@ button:disabled{opacity:.6}
 .status{font-weight:800;color:var(--amber)}
 .signal{font-size:19px;font-weight:850;letter-spacing:.5px;margin:9px 0}
 .good{color:var(--green)}.bad{color:var(--red)}
-.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.decision{margin-top:6px;padding:7px;border-radius:8px;background:#202d42;text-align:center;font-size:11px;font-weight:800}.decision.long-on{background:#123d36;color:#7df0c1}.decision.short-on{background:#492532;color:#ff9eaa}.fresh{font-size:10px;color:#72dcb1;margin:2px 0 8px}.indicator-line{font-size:10px;color:#b6c6dc;margin-top:4px;overflow-wrap:anywhere}.analysis-note{font-size:10px;line-height:1.55;color:#d2ddef;background:#101b2b;border-left:2px solid #4d91ff;padding:7px 9px;margin-top:7px;border-radius:5px}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}
+.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.decision{margin-top:6px;padding:7px;border-radius:8px;background:#202d42;text-align:center;font-size:11px;font-weight:800}.decision.long-on{background:#123d36;color:#7df0c1}.decision.short-on{background:#492532;color:#ff9eaa}.fresh{font-size:10px;color:#72dcb1;margin:2px 0 8px}.indicator-line{font-size:10px;color:#b6c6dc;margin-top:4px;overflow-wrap:anywhere}.analysis-note{font-size:10px;line-height:1.55;color:#d2ddef;background:#101b2b;border-left:2px solid #4d91ff;padding:7px 9px;margin-top:7px;border-radius:5px}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}.choice.long-card{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-card{border-color:#ff7185;background:#492532;color:#ff9eaa}.choice small{font-size:9px;display:block;margin-top:2px}.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#31d69a;margin-right:5px;box-shadow:0 0 0 0 #31d69a99;animation:pulse 1.5s infinite}.offline{color:#ff7185!important}.offline .live-dot{background:#ff7185;animation:none;box-shadow:none}.warn{color:#f5c768!important;border-color:#80652f!important}@keyframes pulse{0%{box-shadow:0 0 0 0 #31d69a99;opacity:1}70%{box-shadow:0 0 0 7px #31d69a00;opacity:.75}100%{box-shadow:0 0 0 0 #31d69a00;opacity:1}}
 .metric b{color:#dce9ff}
 footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
@@ -83,7 +83,7 @@ function analyse(candles,price,maxAgeMs,intervalMs){
 function card(symbol,data){
  const price=data.ticker.last,change=(price/data.ticker.open24h-1)*100,age=data.ageSeconds;
  const updated=new Date().toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
- let html='<section class="card"><div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row"><div class="price">$'+fmt(price)+'</div><div class="muted">'+(change>=0?"+":"")+change.toFixed(2)+'% · 24h</div></div><div class="fresh">● লাইভ ডেটা যাচাই: '+updated+' · প্রতি ৩০ সেকেন্ডে আপডেট</div>';
+ let html='<section class="card"><div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row"><div class="price">$'+fmt(price)+'</div><div class="muted">'+(change>=0?"+":"")+change.toFixed(2)+'% · 24h</div></div><div class="fresh"><span class="live-dot"></span>সর্বশেষ সফল ডেটা: '+updated+' · প্রতি ৩০ সেকেন্ডে আপডেট</div>';
  if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
   html+='<div class="timeframe-grid">';
@@ -91,9 +91,12 @@ function card(symbol,data){
    const interval=tf==="30m"?30*60*1000:60*60*1000;
    const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000,interval);
    const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
-   const score=Number.isFinite(a.score)?Math.abs(a.score):null;
-   const trend=Number.isFinite(a.score)?(a.score>0?"ঊর্ধ্বমুখী পক্ষ":a.score<0?"নিম্নমুখী পক্ষ":"নিরপেক্ষ"):"তথ্য অপর্যাপ্ত";
-   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG</div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT</div></div><div class="signal '+cls+'">'+a.signal+'</div><div class="muted"><b>সিদ্ধান্ত:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">দিকের স্কোর: '+(score===null?"—":score+"/4")+' · '+trend+'</div>';
+   const score=Number.isFinite(a.score)?a.score:null;
+   const longPct=score===null?null:Math.round((score+4)*12.5);
+   const shortPct=longPct===null?null:100-longPct;
+   const bias=score===null?"":score>0?"BULLISH":score<0?"BEARISH":"NEUTRAL";
+   const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
+   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="signal '+cls+'">'+displaySignal+'</div><div class="muted"><b>সিদ্ধান্ত:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+score+"/4")+'</div>';
    if(a.signal!=="WAIT")html+='<div class="indicator-line">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
    html+='</div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
@@ -140,11 +143,11 @@ async function refreshAll(){
    const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
    ok++;
   }catch(e){
-   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
+   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="fresh offline"><span class="live-dot"></span>নেটওয়ার্ক/ডেটা সংযোগ নেই</p><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
   }finally{
    done++;
    document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
-   document.getElementById("connection").className=ok?"tag good":"tag";
+   document.getElementById("connection").className=ok===2?"tag good":ok===1?"tag warn":"tag offline";
    if(done===2){document.getElementById("updated").textContent="সর্বশেষ সফল ডেটা: "+new Date().toLocaleString();renderHistory();}
   }
  });
