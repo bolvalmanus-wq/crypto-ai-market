@@ -52,19 +52,19 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 </div>
 <div class="card"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.0</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.1</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
-const fmt=n=>Number(n).toLocaleString("en-US",{maximumFractionDigits:4});
+const fmt=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:4}):"—";
 function safeText(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
 function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
 function rsi(values,p=14){let gains=0,losses=0;for(let i=values.length-p;i<values.length;i++){let d=values[i]-values[i-1];if(d>0)gains+=d;else losses-=d}if(gains===0&&losses===0)return 50;if(losses===0)return 100;if(gains===0)return 0;let rs=gains/losses;return 100-100/(1+rs)}
 function analyse(candles,price,maxAgeMs){
  const bars=candles.filter(c=>c.confirmed&&[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.high>=c.low&&c.close>0);
- if(bars.length<30)return {signal:"WAIT",reason:"পর্যাপ্ত সম্পূর্ণ ক্যান্ডেল নেই"};
+ if(bars.length<30)return {signal:"WAIT",reason:"পর্যাপ্ত সম্পূর্ণ ক্যান্ডেল নেই",rsi:null,ema9:null,ema21:null,atr:null,score:null};
  const candleAge=Date.now()-bars[bars.length-1].time;
- if(candleAge<0||candleAge>maxAgeMs)return {signal:"WAIT",reason:"সর্বশেষ সম্পূর্ণ ক্যান্ডেল পুরোনো; নতুন ডেটার অপেক্ষা"};
+ if(candleAge<0||candleAge>maxAgeMs)return {signal:"WAIT",reason:"সর্বশেষ সম্পূর্ণ ক্যান্ডেল পুরোনো; নতুন ডেটার অপেক্ষা",rsi:null,ema9:null,ema21:null,atr:null,score:null};
  const close=bars.map(c=>c.close),last=bars[bars.length-1],prev=bars[bars.length-2];
  const e9=ema(close.slice(-40),9),e21=ema(close.slice(-60),21),rv=rsi(close);
  const ranges=bars.slice(-15).map((c,i)=>{const p=bars[bars.length-16+i];return Math.max(c.high-c.low,Math.abs(c.high-p.close),Math.abs(c.low-p.close))});
@@ -91,7 +91,7 @@ function card(symbol,data){
    html+='<div class="metric"><b>'+labels[tf]+' বিশ্লেষণ</b><div class="signal '+cls+'">'+a.signal+'</div><div>'+a.reason+'</div>';
    if(a.signal!=="WAIT")html+='<div>সম্ভাব্য এন্ট্রি: $'+fmt(a.entry)+'</div><div>প্রস্তাবিত স্টপ: $'+fmt(a.stop)+'</div><div>সম্ভাব্য লক্ষ্য: $'+fmt(a.target)+'</div><div class="muted">ATR-ভিত্তিক আনুমানিক স্তর; নিশ্চিত নয়</div>';
    else html+='<div>এন্ট্রি / স্টপ / লক্ষ্য: সংকেত নিশ্চিত না হওয়া পর্যন্ত দেখানো হবে না</div>';
-   html+='<div>RSI: '+a.rsi.toFixed(1)+' · EMA9: '+fmt(a.ema9)+' · EMA21: '+fmt(a.ema21)+'</div><div>ট্রেন্ড স্কোর: '+a.score+' / ৪</div></div><div style="height:8px"></div>';
+   html+='<div>RSI: '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):'—')+' · EMA9: '+fmt(a.ema9)+' · EMA21: '+fmt(a.ema21)+'</div><div>ট্রেন্ড স্কোর: '+(Number.isFinite(a.score)?a.score:'—')+' / ৪</div></div><div style="height:8px"></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   const aligned=signals["30m"].signal===signals["1h"].signal&&signals["30m"].signal!=="WAIT";
