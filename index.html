@@ -8,23 +8,40 @@
 <link rel="icon" href="/app-icon.svg" type="image/svg+xml">
 <title>Crypto AI Market</title>
 <style>
-*{box-sizing:border-box}body{margin:0;padding:16px;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
-header{padding:10px 0 14px}h1{font-size:24px;margin:0 0 7px}.sub,.note{color:#aab6c8;font-size:13px;line-height:1.55}
-.card{background:#1c293b;border:1px solid #344258;border-radius:14px;padding:15px;margin:13px 0}
-.row{display:flex;justify-content:space-between;align-items:center;gap:8px}h2{font-size:18px;margin:0 0 10px}
-.tag{background:#39465b;padding:6px 10px;border-radius:20px;font-size:12px}
-.price{font-size:25px;font-weight:bold;margin:12px 0}.status{font-weight:bold;color:#f6c85f}
-.signal{font-size:20px;font-weight:bold;margin:8px 0}.muted{color:#aab6c8;font-size:13px;line-height:1.55}
-button{background:#2878e8;color:white;border:0;border-radius:9px;padding:12px 17px;font-size:15px}
-.good{color:#5ee0a0}.bad{color:#ff8585}footer{color:#8794a8;text-align:center;font-size:12px;margin:22px 0}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.metric{background:#142033;padding:10px;border-radius:9px;font-size:13px;line-height:1.5}
-@media(max-width:360px){.grid{grid-template-columns:1fr}}
+:root{color-scheme:dark;--bg:#080e1b;--panel:#111c2e;--panel2:#17243a;--line:#263650;--muted:#94a5bf;--text:#f3f7ff;--blue:#4d91ff;--green:#31d69a;--red:#ff7185;--amber:#f5c768}
+*{box-sizing:border-box}
+body{margin:0;padding:20px 16px 34px;background:radial-gradient(ellipse at 50% -15%,#1d3c68 0%,#0b1425 42%,var(--bg) 78%);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;max-width:760px;margin-inline:auto}
+header{padding:16px 2px 24px;display:flex;align-items:center;gap:13px}
+.logo{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#398bff,#6557e8);box-shadow:0 8px 24px #286de855;font-size:25px;font-weight:900}
+h1{font-size:23px;letter-spacing:-.5px;margin:0 0 4px}.sub,.note{color:var(--muted);font-size:12px;line-height:1.55}
+.eyebrow{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#83b5ff;font-weight:800;margin-bottom:4px}
+.card{background:linear-gradient(145deg,#15243aee,#101a2bee);border:1px solid var(--line);border-radius:21px;padding:19px;margin:14px 0;box-shadow:0 12px 34px #0003}
+.status-card{background:linear-gradient(120deg,#172b48,#142036 72%);border-color:#31517a}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+h2{font-size:17px;letter-spacing:-.2px;margin:0 0 12px}
+.tag{background:#263954;border:1px solid #385477;padding:7px 11px;border-radius:99px;font-size:11px;font-weight:700;color:#c8dcff;white-space:nowrap}
+#connection.good{color:var(--green);background:#123d36;border-color:#246c5a}
+#source,#updated,.muted{color:var(--muted);font-size:12px;line-height:1.65}
+button{background:linear-gradient(110deg,#398bff,#5869f5);color:white;border:0;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:750;box-shadow:0 7px 20px #347bdf38}
+button:disabled{opacity:.6}
+#markets{display:grid;grid-template-columns:1fr;gap:2px}
+#markets>.card{padding:20px}
+.price{font-size:34px;letter-spacing:-1px;font-weight:850;margin:8px 0 2px;font-variant-numeric:tabular-nums}
+.status{font-weight:800;color:var(--amber)}
+.signal{font-size:23px;font-weight:850;letter-spacing:.5px;margin:9px 0}
+.good{color:var(--green)}.bad{color:var(--red)}
+.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:15px;padding:14px;font-size:13px;line-height:1.7}
+.metric b{color:#dce9ff}
+footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
+#history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
+@media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:12px}#markets>.card{margin:0}.status-card{padding:22px}}
+@media(max-width:380px){body{padding:14px 12px 28px}.card{padding:15px;border-radius:17px}.price{font-size:29px}}
 </style>
 </head>
 <body>
-<header><h1>Crypto AI Market</h1><div class="sub">BTC ও SOL Perpetual Market Analysis</div></header>
-<div class="card">
- <div class="row"><h2>ডেটা অবস্থা</h2><span class="tag" id="connection">সংযোগ পরীক্ষা হচ্ছে</span></div>
+<header><div class="logo">₿</div><div><div class="eyebrow">SMART MARKET ANALYTICS</div><h1>Crypto AI Market</h1><div class="sub">BTC ও SOL · Perpetual Futures</div></div></header>
+<div class="card status-card">
+ <div class="row"><h2>লাইভ মার্কেট সংযোগ</h2><span class="tag" id="connection">সংযোগ পরীক্ষা হচ্ছে</span></div>
  <p class="muted" id="source">তথ্য উৎস: OKX USDT Perpetual। এটি Bybit-এর সরাসরি ডেটা নয়।</p>
  <p class="muted" id="updated">সর্বশেষ আপডেট: অপেক্ষমাণ</p>
  <button id="refreshButton" onclick="refreshAll()">এখনই আপডেট</button>
