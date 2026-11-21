@@ -11,7 +11,7 @@
 :root{color-scheme:dark;--bg:#080e1b;--panel:#111c2e;--panel2:#17243a;--line:#263650;--muted:#94a5bf;--text:#f3f7ff;--blue:#4d91ff;--green:#31d69a;--red:#ff7185;--amber:#f5c768}
 *{box-sizing:border-box}
 body{margin:0;padding:10px 10px 18px;background:radial-gradient(ellipse at 50% -15%,#1d3c68 0%,#0b1425 42%,var(--bg) 78%);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;max-width:760px;margin-inline:auto}
-header{padding:8px 2px 12px;display:flex;align-items:center;gap:13px}
+header{padding:12px 2px 14px;display:flex;align-items:center;justify-content:center;text-align:center;position:relative;min-height:66px}.logo{position:absolute;left:2px}
 .logo{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#398bff,#6557e8);box-shadow:0 8px 24px #286de855;font-size:25px;font-weight:900}
 h1{font-size:23px;letter-spacing:-.5px;margin:0 0 4px}.sub,.note{color:var(--muted);font-size:12px;line-height:1.55}
 .eyebrow{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#83b5ff;font-weight:800;margin-bottom:4px}
@@ -22,7 +22,7 @@ h2{font-size:17px;letter-spacing:-.2px;margin:0 0 12px}
 .tag{background:#263954;border:1px solid #385477;padding:7px 11px;border-radius:99px;font-size:11px;font-weight:700;color:#c8dcff;white-space:nowrap}
 #connection.good{color:var(--green);background:#123d36;border-color:#246c5a}
 #source,#updated,.muted{color:var(--muted);font-size:12px;line-height:1.65}
-button{background:linear-gradient(110deg,#398bff,#5869f5);color:white;border:0;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:750;box-shadow:0 7px 20px #347bdf38}
+button{background:linear-gradient(110deg,#398bff,#5869f5);color:white;border:0;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:750;box-shadow:0 7px 20px #347bdf38;display:block;margin:12px auto 0}
 button:disabled{opacity:.6}
 #markets{display:grid;grid-template-columns:1fr;gap:5px}
 #markets>.card{padding:8px;min-width:0;margin:4px 0}
@@ -31,14 +31,15 @@ button:disabled{opacity:.6}
 .signal{font-size:19px;font-weight:850;letter-spacing:.5px;margin:9px 0}
 .good{color:var(--green)}.bad{color:var(--red)}
 .metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.decision{margin-top:6px;padding:7px;border-radius:8px;background:#202d42;text-align:center;font-size:11px;font-weight:800}.decision.long-on{background:#123d36;color:#7df0c1}.decision.short-on{background:#492532;color:#ff9eaa}.fresh{font-size:10px;color:#72dcb1;margin:2px 0 8px}.indicator-line{font-size:10px;color:#b6c6dc;margin-top:4px;overflow-wrap:anywhere}.analysis-note{font-size:10px;line-height:1.55;color:#d2ddef;background:#101b2b;border-left:2px solid #4d91ff;padding:7px 9px;margin-top:7px;border-radius:5px}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}.choice.long-card{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-card{border-color:#ff7185;background:#492532;color:#ff9eaa}.choice small{font-size:9px;display:block;margin-top:2px}.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#31d69a;margin-right:5px;box-shadow:0 0 0 0 #31d69a99;animation:pulse 1.5s infinite}.offline{color:#ff7185!important}.offline .live-dot{background:#ff7185;animation:none;box-shadow:none}.warn{color:#f5c768!important;border-color:#80652f!important}@keyframes pulse{0%{box-shadow:0 0 0 0 #31d69a99;opacity:1}70%{box-shadow:0 0 0 7px #31d69a00;opacity:.75}100%{box-shadow:0 0 0 0 #31d69a00;opacity:1}}
-.metric b{color:#dce9ff}
+.metric b{color:#dce9ff}.time-label{display:block;text-align:center;color:#ffd36e!important;font-size:13px;letter-spacing:.6px;margin-bottom:7px}.outlook{border-radius:9px;padding:10px 5px;text-align:center;margin:7px 0 5px;background:#1c2a40;border:1px solid #3a4c66}.outlook small{display:block;font-size:9px;letter-spacing:1.2px;color:#b8c7dc;margin-bottom:3px}.outlook strong{font-size:24px;letter-spacing:1.2px}.outlook.bull{color:#53e0a9;border-color:#28765e;background:#10382f}.outlook.bear{color:#ff8798;border-color:#874252;background:#3b202b}.outlook.neutral{color:#f5cf76}.trade-action{font-size:13px;text-align:center;font-weight:900;padding:8px;border-radius:8px;background:#27364c;margin:6px 0}.trade-action.long-on{color:#7df0c1;background:#123d36}.trade-action.short-on{color:#ff9eaa;background:#492532}.trade-action.wait-on{color:#ffd36e;background:#3a3020}.splash{position:fixed;inset:0;z-index:99;background:radial-gradient(circle at center,#234c7d,#080e1b 72%);display:flex;align-items:center;justify-content:center;text-align:center;animation:splashOut .7s ease 1.65s forwards}.splash-inner{animation:splashIn .65s ease both}.splash-mark{font-size:44px;font-weight:900;color:#fff;text-shadow:0 0 28px #398bff;margin-bottom:8px}.splash-title{font-size:27px;font-weight:900;letter-spacing:.4px}.splash-sub{color:#a9c9f5;font-size:11px;letter-spacing:2px;margin-top:8px}@keyframes splashIn{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}@keyframes splashOut{to{opacity:0;visibility:hidden;pointer-events:none}}
 footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
 @media(min-width:620px){#markets{grid-template-columns:1fr 1fr;gap:10px}#markets>.card{margin:0;padding:12px}.status-card{padding:22px}}
-@media(max-width:480px){body{padding:8px 7px 12px}header{padding:5px 2px 9px;gap:9px}.logo{width:34px;height:34px;border-radius:10px;font-size:19px}h1{font-size:17px}.card{padding:10px;border-radius:11px;margin:6px 0}.price{font-size:23px}h2{font-size:14px}.tag{font-size:8px;padding:3px 5px}.sub,.note,#source,#updated,.muted{font-size:9px}.status-card p{margin:4px 0}.status-card button{padding:7px 10px;font-size:11px}.metric{padding:8px;font-size:10px}.signal{font-size:16px;margin:5px 0}.fresh,.indicator-line,.analysis-note{font-size:10px}#historyCard,#warningCard,footer{display:none}}
+@media(max-width:480px){body{padding:10px 9px 16px}header{padding:8px 2px 12px;min-height:62px}.logo{width:34px;height:34px;border-radius:10px;font-size:19px}h1{font-size:19px}.card{padding:12px;border-radius:12px;margin:8px 0}.price{font-size:25px}h2{font-size:16px}.tag{font-size:9px;padding:5px 7px}.sub,.note,#source,#updated,.muted{font-size:10px}.status-card p{margin:4px 0}.status-card button{padding:7px 10px;font-size:11px}.metric{padding:10px;font-size:11px}.signal{font-size:17px;margin:7px 0}.fresh,.indicator-line,.analysis-note{font-size:11px}.outlook strong{font-size:26px}.time-label{font-size:14px}#historyCard,#warningCard,footer{display:none}}
 </style>
 </head>
 <body>
+<div class="splash" id="splash"><div class="splash-inner"><div class="splash-mark">₿</div><div class="splash-title">Crypto AI Market</div><div class="splash-sub">SMART MARKET ANALYTICS</div></div></div>
 <header><div class="logo">₿</div><div><div class="eyebrow">SMART MARKET ANALYTICS</div><h1>Crypto AI Market</h1><div class="sub">BTC ও SOL · Perpetual Futures</div></div></header>
 <div class="card status-card">
  <div class="row"><h2>লাইভ মার্কেট সংযোগ</h2><span class="tag" id="connection">সংযোগ পরীক্ষা হচ্ছে</span></div>
@@ -52,7 +53,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 </div>
 <div class="card" id="historyCard"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card" id="warningCard"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.7</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.8</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
@@ -96,7 +97,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>0?"BULLISH":score<0?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="signal '+cls+'">'+displaySignal+'</div><div class="muted"><b>সিদ্ধান্ত:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+score+"/4")+'</div><div class="indicator-line">শতাংশটি সূচকের মিল; জয়ের সম্ভাবনা নয়</div>';
+   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="outlook '+(score===null?"":score>0?"bull":score<0?"bear":"neutral")+'"><small>'+(tf==="30m"?"30-MIN OUTLOOK":"1-HOUR OUTLOOK")+'</small><strong>'+(bias||"NO DATA")+'</strong></div><div class="trade-action '+(a.signal==="LONG"?"long-on":a.signal==="SHORT"?"short-on":"wait-on")+'">TRADE ACTION: '+a.signal+'</div><div class="muted"><b>সিদ্ধান্তের কারণ:</b> '+safeText(a.reason)+'</div><div class="indicator-line">RSI '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):"—")+' · EMA9 '+fmt(a.ema9)+' · EMA21 '+fmt(a.ema21)+'</div><div class="indicator-line">সূচকের দিক-সমর্থন স্কোর: '+(score===null?"—":(score>0?"+":"")+score+"/4")+'</div><div class="indicator-line">শতাংশটি সূচকের মিল; জয়ের সম্ভাবনা নয়</div>';
    if(a.signal!=="WAIT")html+='<div class="indicator-line">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
    html+='</div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
