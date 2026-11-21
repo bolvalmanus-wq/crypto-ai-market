@@ -30,7 +30,7 @@ button:disabled{opacity:.6}
 .status{font-weight:800;color:var(--amber)}
 .signal{font-size:19px;font-weight:850;letter-spacing:.5px;margin:9px 0}
 .good{color:var(--green)}.bad{color:var(--red)}
-.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}
+.metric{background:linear-gradient(145deg,#1b2b43,#152238);border:1px solid #2a3e5b;border-radius:9px;padding:7px;font-size:10px;line-height:1.5;min-width:0}.timeframe-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.decision{margin-top:6px;padding:7px;border-radius:8px;background:#202d42;text-align:center;font-size:11px;font-weight:800}.decision.long-on{background:#123d36;color:#7df0c1}.decision.short-on{background:#492532;color:#ff9eaa}.choices{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}.choice{border:1px solid #40516b;border-radius:7px;padding:5px 3px;text-align:center;color:#9aabc2;font-weight:800;font-size:10px}.choice small{display:block;font-size:8px;font-weight:500}.choice.long-on{border-color:#31d69a;background:#123d36;color:#7df0c1}.choice.short-on{border-color:#ff7185;background:#492532;color:#ff9eaa}
 .metric b{color:#dce9ff}
 footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 #history>div{padding:10px 0!important;border-bottom:1px solid var(--line)!important;font-size:12px}
@@ -52,7 +52,7 @@ footer{color:#6f829f;text-align:center;font-size:11px;margin:26px 0 8px}
 </div>
 <div class="card"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
-<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.4</footer>
+<footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 1.5</footer>
 <script>
 const symbols=["BTC","SOL"];
 const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
@@ -82,24 +82,26 @@ function analyse(candles,price,maxAgeMs,intervalMs){
 }
 function card(symbol,data){
  const price=data.ticker.last,change=(price/data.ticker.open24h-1)*100,age=data.ageSeconds;
- let html='<section class="card"><div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="price">$'+fmt(price)+'</div><p class="muted">২৪ ঘণ্টার পরিবর্তন: '+(change>=0?"+":"")+change.toFixed(2)+'% · ডেটার বয়স: '+age+' সেকেন্ড</p>';
- if(age>180||!Number.isFinite(price)||price<=0)html+='<p class="status">WAIT — ডেটা পুরোনো বা অবৈধ</p>';
+ let html='<section class="card"><div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row"><div class="price">$'+fmt(price)+'</div><div class="muted">'+(change>=0?"+":"")+change.toFixed(2)+'% · 24h</div></div>';
+ if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
-  const signals={};
   html+='<div class="timeframe-grid">';
   for(const tf of ["30m","1h"]){
-   const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000,tf==="30m"?30*60*1000:60*60*1000);signals[tf]=a;const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
-   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG<small>দাম উঠলে</small></div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT<small>দাম নামলে</small></div></div><div class="signal '+cls+'">'+a.signal+'</div><div>'+a.reason+'</div>';
-   if(a.signal!=="WAIT")html+='<div>সম্ভাব্য এন্ট্রি: $'+fmt(a.entry)+'</div><div>প্রস্তাবিত স্টপ: $'+fmt(a.stop)+'</div><div>সম্ভাব্য লক্ষ্য: $'+fmt(a.target)+'</div><div class="muted">ATR-ভিত্তিক আনুমানিক স্তর; নিশ্চিত নয়</div>';
-   else html+='<div>এন্ট্রি / স্টপ / লক্ষ্য: সংকেত নিশ্চিত না হওয়া পর্যন্ত দেখানো হবে না</div>';
-   html+='<div>RSI: '+(Number.isFinite(a.rsi)?a.rsi.toFixed(1):'—')+' · EMA9: '+fmt(a.ema9)+' · EMA21: '+fmt(a.ema21)+'</div><div>ট্রেন্ড স্কোর: '+(Number.isFinite(a.score)?a.score:'—')+' / ৪</div></div><div style="height:8px"></div>';
+   const interval=tf==="30m"?30*60*1000:60*60*1000;
+   const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000,interval);
+   const cls=a.signal==="LONG"?"good":a.signal==="SHORT"?"bad":"status";
+   const score=Number.isFinite(a.score)?Math.round(50+a.score*12.5):null;
+   html+='<div class="metric"><b>'+labels[tf]+'</b><div class="choices"><div class="choice '+(a.signal==="LONG"?"long-on":"")+'">LONG</div><div class="choice '+(a.signal==="SHORT"?"short-on":"")+'">SHORT</div></div><div class="signal '+cls+'">'+a.signal+'</div><div class="muted">'+safeText(a.reason)+'</div><div class="muted">ইন্ডিকেটর সমর্থন: '+(score===null?"—":score+"%")+'</div>';
+   if(a.signal!=="WAIT")html+='<div class="muted">Entry $'+fmt(a.entry)+' · SL $'+fmt(a.stop)+' · TP $'+fmt(a.target)+'</div>';
+   html+='</div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
-  const aligned=signals["30m"].signal===signals["1h"].signal&&signals["30m"].signal!=="WAIT";
-  html+='<div class="metric"><b>দুই টাইমফ্রেমের মিল</b><div class="signal '+(aligned?(signals["30m"].signal==="LONG"?"good":"bad"):"status")+'">'+(aligned?signals["30m"].signal+" — উভয় সময় একমত":"WAIT — দুই সময়ের সংকেত এক নয়")+'</div><div class="muted">দুটি সময় একমত না হলে অপেক্ষা করাই বেশি সতর্ক পদ্ধতি।</div></div>';
+  const a30=analyse(data.candles["30m"],price,45*60*1000,30*60*1000),a60=analyse(data.candles["1h"],price,90*60*1000,60*60*1000);
+  const decision=a60.signal==="LONG"?"১ ঘণ্টার ট্রেন্ড LONG-এর পক্ষে":a60.signal==="SHORT"?"১ ঘণ্টার ট্রেন্ড SHORT-এর পক্ষে":"এখন স্পষ্ট দিক নেই — অপেক্ষা করুন";
+  html+='<div class="decision '+(a60.signal==="LONG"?"long-on":a60.signal==="SHORT"?"short-on":"")+'">'+decision+'</div>';
  }
- html+='<p class="muted">দ্রষ্টব্য: দামের উৎস উপরের লেবেলে দেখানো হয়েছে। Bybit উৎস হলে Bybit-এর বাজারদর; OKX উৎস হলে OKX-এর বাজারদর।</p></section>';return html;
+ html+='</section>';return html;
 }
 function saveSignal(s,tf,signal,price,reason){
  let h=[],latest={};try{h=JSON.parse(localStorage.getItem("signals")||"[]");latest=JSON.parse(localStorage.getItem("latestSignals")||"{}")}catch(e){}
