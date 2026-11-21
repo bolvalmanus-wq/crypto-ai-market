@@ -187,7 +187,7 @@ async function loadAiForSymbol(symbol,data){
    localStorage.setItem(key,JSON.stringify(result));showAi(symbol,tf,result);
   }catch(error){
    try{localStorage.setItem(key+"_failed",String(Date.now()))}catch(e){}
-   const panel=aiPanel(symbol,tf);if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">এখন অনুপলব্ধ</span></div><div>AI বিশ্লেষণ পাওয়া যায়নি। সূচকভিত্তিক হিসাব আলাদা—এটিকে AI মতামত ভাববেন না।</div>';
+   const panel=aiPanel(symbol,tf);if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">এখন অনুপলব্ধ</span></div><div>AI বিশ্লেষণ পাওয়া যায়নি। কারণ: '+safeText(error?.message||"অজানা সার্ভার সমস্যা")+'</div><div class="muted">সূচকভিত্তিক হিসাব আলাদা—এটিকে AI মতামত ভাববেন না।</div>';
   }
  }
 }
