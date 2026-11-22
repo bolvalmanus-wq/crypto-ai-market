@@ -725,17 +725,18 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
 async function retryAi(symbol,tf){
  const button=document.getElementById("retry-"+symbol+"-"+tf);
  if(!button||button.disabled)return;
- const original=button.textContent;button.disabled=true;button.textContent="নতুন ডেটা আনা হচ্ছে…";
+ button.disabled=true;button.textContent="AI বিশ্লেষণ চলছে…";
+ const panel=aiPanel(symbol,tf);
  try{
-  const data=await fetchWithRetry(symbol);
-  const priceEl=document.getElementById("live-price-"+symbol);
-  if(priceEl&&Number.isFinite(Number(data.ticker.last)))priceEl.textContent="$ "+fmt(data.ticker.last);
-  button.textContent="AI বিশ্লেষণ চলছে…";
-  await loadAiForSymbol(symbol,data,true,tf);
+  const response=await fetch("/api/scheduled",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf}),cache:"no-store"});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(payload.error||("সার্ভার API "+response.status));
+  const result=(payload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
+  if(!result||!result.analysis)throw new Error("সার্ভার কোনো বিশ্লেষণ ফেরত দেয়নি");
+  showAi(symbol,tf,result);
   button.textContent="আবার বিশ্লেষণ";
  }catch(error){
-  const panel=aiPanel(symbol,tf);
-  if(panel)panel.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">নেটওয়ার্ক সমস্যা</span></div><div>'+safeText(error?.message||"মার্কেট ডেটা পাওয়া যায়নি")+'</div>';
+  if(panel)panel.innerHTML='<div class="ai-head"><span>✦ AI বিশ্লেষণ</span><span class="offline">বিশ্লেষণ ব্যর্থ</span></div><div>'+safeText(error?.message||"সার্ভার থেকে বিশ্লেষণ পাওয়া যায়নি")+'</div>';
   button.textContent="আবার চেষ্টা করুন";
  }finally{
   button.disabled=false;
