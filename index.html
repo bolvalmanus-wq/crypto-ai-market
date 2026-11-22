@@ -394,6 +394,21 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
   let cached=null,failedAt=0;try{cached=JSON.parse(localStorage.getItem(key)||"null");failedAt=Number(localStorage.getItem(key+"_failed")||0)}catch(e){}
   const lastClosedCandle=(data.candles[tf]||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
   const candleKey=lastClosedCandle?Number(lastClosedCandle.time):null;
+  // Prefer the independent Cloudflare Cron result when it matches the latest closed candle.
+  try{
+   const cloudResponse=await fetch("/api/scheduled?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf),{cache:"no-store"});
+   if(cloudResponse.ok){
+    const cloudPayload=await cloudResponse.json();
+    const cloudResult=(cloudPayload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
+    const expectedClose=candleKey===null?null:candleKey+(tf==="30m"?1800000:3600000);
+    if(cloudResult&&cloudResult.analysis&&expectedClose!==null&&Date.parse(cloudResult.candleCloseTime)===expectedClose){
+     cloudResult.model=(cloudResult.model||"Gemini")+" · ক্লাউড";
+     localStorage.setItem(key,JSON.stringify({...cloudResult,_candleTime:candleKey}));
+     showAi(symbol,tf,cloudResult);
+     continue;
+    }
+   }
+  }catch(e){}
   if(!force&&cached&&candleKey!==null&&cached._candleTime===candleKey&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]){showAi(symbol,tf,cached);continue;}
   if(!force&&failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>'+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল")+'</div>';const d=document.getElementById("decision-"+symbol+"-"+tf);if(d){d.textContent="AI অনুপলব্ধ";d.className="trade-action wait-on";}continue;}
   const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
