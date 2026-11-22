@@ -160,16 +160,28 @@ async function runOne(env, symbol, tf) {
   let reviewerStatus = "SKIPPED_NO_DIRECTIONAL_CANDIDATE";
   // Spend Workers AI neurons only when Gemini or the technical engine sees a LONG/SHORT candidate.
   if (["LONG","SHORT"].includes(ai.analysis.decision) || ["LONG","SHORT"].includes(market.indicators.technicalSignal)) {
-    reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis);
-    reviewerStatus = "REVIEWED";
+    try {
+      reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis);
+      reviewerStatus = "REVIEWED";
+    } catch (error) {
+      reviewerStatus = "REVIEW_FAILED";
+      reviewer = {
+        decision: "WAIT",
+        reason: "দ্বিতীয় AI-এর যাচাই পাওয়া যায়নি; তাই নিরাপদে WAIT রাখা হয়েছে।",
+        risk: error instanceof Error ? error.message.slice(0, 180) : "দ্বিতীয় AI সাময়িক অনুপলব্ধ"
+      };
+      console.error("Cloudflare AI review unavailable", { symbol, timeframe: tf, error: String(error) });
+    }
   }
   const analysis = reviewerStatus === "REVIEWED"
     ? finalDecision(market, ai.analysis, reviewer)
     : {
         decision: "WAIT",
         direction: ai.analysis.direction || "SIDEWAYS",
-        reason: "টেকনিক্যাল ইন্ডিকেটর ও প্রথম AI-তে এখনো নিশ্চিত LONG/SHORT প্রার্থী নেই।",
-        risk: ai.analysis.risk || "বাজারে ঝুঁকি রয়েছে",
+        reason: reviewerStatus === "REVIEW_FAILED"
+          ? "দ্বিতীয় AI যাচাই করতে পারেনি; ভুল সংকেত এড়াতে WAIT।"
+          : "টেকনিক্যাল ইন্ডিকেটর ও প্রথম AI-তে এখনো নিশ্চিত LONG/SHORT প্রার্থী নেই।",
+        risk: reviewer.risk || ai.analysis.risk || "বাজারে ঝুঁকি রয়েছে",
         dataQuality: ai.analysis.dataQuality || "LIMITED"
       };
   const result = {
