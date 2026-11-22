@@ -265,7 +265,17 @@ body{box-sizing:border-box}
 .price.price-tick{animation:priceTick .32s ease-out}
 @keyframes priceTick{0%{transform:scale(1);filter:brightness(1)}45%{transform:scale(1.045);filter:brightness(1.5)}100%{transform:scale(1);filter:brightness(1)}}
 @media(max-width:480px){.status-card h2{font-size:15px!important}}
-\n.retry-ai{display:block;width:100%;margin:5px auto 0;padding:6px 10px;font-size:11px;border:1px solid #4d86bd;background:linear-gradient(110deg,#183e65,#294b83);box-shadow:0 0 7px #398bff33;border-radius:8px}.retry-ai:disabled{opacity:.55}\n@media(max-width:480px){.retry-ai{padding:5px 8px;font-size:10px;margin-top:4px}}\n</style>
+\n.retry-ai{display:block;width:100%;margin:5px auto 0;padding:6px 10px;font-size:11px;border:1px solid #4d86bd;background:linear-gradient(110deg,#183e65,#294b83);box-shadow:0 0 7px #398bff33;border-radius:8px}.retry-ai:disabled{opacity:.55}\n@media(max-width:480px){.retry-ai{padding:5px 8px;font-size:10px;margin-top:4px}}\n
+/* Futuristic candle-close countdown */
+.tf-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;padding:5px 7px;border:1px solid #345477;border-radius:10px;background:linear-gradient(110deg,#122944,#111c31 65%,#182344);box-shadow:inset 0 0 14px #398bff12,0 0 10px #398bff12}
+.tf-heading .time-label{width:auto;flex:1;text-align:left;margin:0!important;padding:3px 5px!important;background:transparent!important;border:0!important;box-shadow:none!important;color:#d8eaff!important;font-size:16px!important;letter-spacing:.5px!important;animation:none!important}
+.countdown-box{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.countdown-ring{--progress:0deg;--ring-color:#53d9ff;width:43px;height:43px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ring-color) var(--progress),#26364d 0deg);position:relative;box-shadow:0 0 11px color-mix(in srgb,var(--ring-color) 32%,transparent)}
+.countdown-ring:before{content:"";position:absolute;inset:4px;border-radius:50%;background:#101b2d;border:1px solid #47617f}
+.countdown-ring span{position:relative;z-index:1;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums;color:#f4fbff;letter-spacing:.2px}
+.countdown-caption{font-size:9px;color:#a9c8e9;max-width:62px;line-height:1.25}
+@media(max-width:480px){.tf-heading{padding:4px 6px;margin-bottom:4px}.tf-heading .time-label{font-size:14px!important}.countdown-ring{width:39px;height:39px}.countdown-ring span{font-size:9px}.countdown-caption{font-size:8px;max-width:54px}}
+</style>
 </head>
 <body>
 <div class="splash" id="splash"><div class="splash-inner"><div class="splash-mark">₿</div><div class="splash-title">Crypto AI Market</div><div class="splash-sub">SMART MARKET ANALYTICS</div></div></div>
@@ -344,7 +354,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>.12?"BULLISH":score<-.12?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><div class="time-label">'+labels[tf]+'</div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div><button type="button" class="retry-ai" id="retry-'+symbol+'-'+tf+'" onclick="retryAi(&quot;'+symbol+'&quot;,&quot;'+tf+'&quot;)">আবার বিশ্লেষণ</button></div>';
+   html+='<div class="metric"><div class="tf-heading"><div class="time-label">'+labels[tf]+'</div><div class="countdown-box"><div class="countdown-ring" id="ring-'+symbol+'-'+tf+'"><span id="countdown-'+symbol+'-'+tf+'">--:--</span></div><div class="countdown-caption">পরবর্তী বিশ্লেষণ</div></div></div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div><button type="button" class="retry-ai" id="retry-'+symbol+'-'+tf+'" onclick="retryAi(&quot;'+symbol+'&quot;,&quot;'+tf+'&quot;)">আবার বিশ্লেষণ</button></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
@@ -384,7 +394,7 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
   let cached=null,failedAt=0;try{cached=JSON.parse(localStorage.getItem(key)||"null");failedAt=Number(localStorage.getItem(key+"_failed")||0)}catch(e){}
   const lastClosedCandle=(data.candles[tf]||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
   const candleKey=lastClosedCandle?Number(lastClosedCandle.time):null;
-  if(!force&&cached&&candleKey!==null&&cached._candleTime===candleKey&&Date.now()-Date.parse(cached.generatedAt)<300000){showAi(symbol,tf,cached);continue;}
+  if(!force&&cached&&candleKey!==null&&cached._candleTime===candleKey&&Date.now()-Date.parse(cached.generatedAt)<aiCacheTtl[tf]){showAi(symbol,tf,cached);continue;}
   if(!force&&failedAt&&Date.now()-failedAt<600000){let savedError="";try{savedError=localStorage.getItem(key+"_error")||""}catch(e){}const p=aiPanel(symbol,tf);if(p)p.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span class="offline">সাময়িক বন্ধ</span></div><div>'+safeText(savedError||"আগের অনুরোধ ব্যর্থ হয়েছিল")+'</div>';const d=document.getElementById("decision-"+symbol+"-"+tf);if(d){d.textContent="AI অনুপলব্ধ";d.className="trade-action wait-on";}continue;}
   const el=aiPanel(symbol,tf);if(el)el.innerHTML='<div class="ai-head"><span>✦ GEMINI AI</span><span>নতুন বিশ্লেষণ…</span></div><div>AI ডেটা যাচাই করছে</div>';
   const interval=tf==="30m"?1800000:3600000;
@@ -509,6 +519,25 @@ async function refreshLivePrices(){
   }));
  }finally{livePriceBusy=false}
 }
+let lastCountdownSlots={m30:Math.floor(Date.now()/1800000),h1:Math.floor(Date.now()/3600000)};
+function updateCandleCountdowns(){
+ const now=Date.now(),intervals={"30m":1800000,"1h":3600000};
+ let boundaryChanged=false;
+ for(const tf of ["30m","1h"]){
+  const interval=intervals[tf],slot=Math.floor(now/interval),key=tf==="30m"?"m30":"h1";
+  if(slot>lastCountdownSlots[key]){boundaryChanged=true;lastCountdownSlots[key]=slot;}
+  let remaining=interval-(now%interval);if(remaining===interval)remaining=0;
+  const seconds=Math.ceil(remaining/1000),minutes=Math.floor(seconds/60),secs=seconds%60;
+  const text=String(minutes).padStart(2,"0")+":"+String(secs).padStart(2,"0");
+  for(const symbol of symbols){
+   const el=document.getElementById("countdown-"+symbol+"-"+tf),ring=document.getElementById("ring-"+symbol+"-"+tf);
+   if(el)el.textContent=text;
+   if(ring){const progress=(interval-remaining)/interval;ring.style.setProperty("--progress",(progress*360).toFixed(2)+"deg");}
+  }
+ }
+ if(boundaryChanged&&!refreshing){setTimeout(()=>{if(!refreshing)refreshAll();},2500);}
+}
+updateCandleCountdowns();setInterval(updateCandleCountdowns,1000);
 refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval(refreshAll,60000);renderHistory();
 </script>
 <script>
