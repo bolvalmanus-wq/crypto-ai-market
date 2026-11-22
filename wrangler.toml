@@ -11,3 +11,6 @@ id = "845c373b33004fa797cb14c92c0568d7"
 
 [ai]
 binding = "AI"
+
+[vars]
+VAPID_PUBLIC_KEY = "BCh9ydTyt92aHI1FCwWyst8oNuPcLNb6hdDs8nabsLPO4jdD-HbHdmnZanB3liRz-haAQWlGsgCy_yMCUWPQFGc"
