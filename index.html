@@ -469,6 +469,40 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  .retry-ai{margin-top:8px!important;padding:9px!important;font-size:13px!important}
 }
 
+
+/* Responsive sizing: gently use available phone height without forcing tiny text */
+@media(max-width:600px){
+ body{min-height:100dvh!important;box-sizing:border-box!important}
+ #markets>.card,#markets>.market-card{
+  min-height:calc(100dvh - clamp(245px, 29dvh, 285px))!important;
+  display:flex!important;flex-direction:column!important;
+  padding:clamp(11px,1.65dvh,16px)!important;
+ }
+ .market-title h2{font-size:clamp(20px,2.65dvh,24px)!important}
+ .price-live-row .price{font-size:clamp(34px,5.1dvh,44px)!important}
+ .timeframe-tabs{margin-block:clamp(6px,1.15dvh,11px)!important}
+ .timeframe-tab{padding-block:clamp(8px,1.25dvh,12px)!important}
+ .timeframe-panel{padding:clamp(9px,1.45dvh,13px)!important}
+ .tf-label-large{font-size:clamp(22px,3.1dvh,27px)!important}
+ .countdown-time{font-size:clamp(17px,2.5dvh,21px)!important}
+ .countdown-track{margin-bottom:clamp(12px,1.8dvh,17px)!important}
+ .choice{padding-block:clamp(10px,1.55dvh,14px)!important;font-size:clamp(16px,2.2dvh,19px)!important}
+ .choice small{font-size:clamp(18px,2.6dvh,22px)!important}
+ .trade-action{padding-block:clamp(10px,1.55dvh,14px)!important;font-size:clamp(17px,2.45dvh,20px)!important}
+ .ai-box{padding:clamp(10px,1.5dvh,14px)!important;font-size:clamp(13px,1.85dvh,15px)!important;line-height:1.55!important}
+ .ai-reason{font-size:clamp(13px,1.85dvh,15px)!important;line-height:1.55!important}
+ .ai-risk{font-size:clamp(11px,1.55dvh,13px)!important}
+ .retry-ai{padding-block:clamp(9px,1.35dvh,12px)!important;font-size:clamp(13px,1.8dvh,15px)!important}
+}
+@media(max-width:600px) and (min-height:820px){
+ #markets>.card,#markets>.market-card{padding:16px!important}
+ .timeframe-panel{padding:13px!important}
+ .choices{gap:9px!important;margin-bottom:10px!important}
+ .choice{padding-block:14px!important}
+ .trade-action{margin-bottom:12px!important}
+ .ai-box{padding:14px!important}
+}
+
 </style>
 </head>
 <body>
