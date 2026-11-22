@@ -88,6 +88,20 @@ async function runOne(env, symbol, tf) {
   return result;
 }
 export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname !== "/latest") return Response.json({ error: "Not found" }, { status: 404 });
+    const symbol = url.searchParams.get("symbol");
+    const timeframe = url.searchParams.get("timeframe");
+    if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h"].includes(timeframe)) {
+      return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
+    }
+    if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
+    const latest = await env.ANALYSIS_KV.get("latest:" + symbol + ":" + timeframe, "json");
+    return Response.json({ items: latest ? [latest] : [] }, {
+      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }
+    });
+  },
   async scheduled(controller, env, ctx) {
     const minute = new Date(controller.scheduledTime).getUTCMinutes();
     const tasks = [];
