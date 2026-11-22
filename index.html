@@ -565,7 +565,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  #market-BTC .countdown-box{flex:0 0 auto!important;margin-left:6px!important}
 }
 
-</style>
+\n.notify-btn{margin:0!important;min-width:42px!important;padding:7px 9px!important;border-radius:12px!important;font-size:17px!important;background:#18344a!important;border:1px solid #3a7187!important;box-shadow:none!important}\n.notify-btn.enabled{background:#0d493c!important;border-color:#29dfa0!important;color:#8ff3ca!important}\n.notify-btn:disabled{opacity:.7}\n</style>
 </head>
 <body>
 <div class="splash" id="splash"><div class="splash-inner"><div class="splash-mark">₿</div><div class="splash-title">Crypto AI Market</div><div class="splash-sub">SMART MARKET ANALYTICS</div></div></div>
@@ -577,7 +577,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  <p class="muted" id="updated" hidden>সর্বশেষ মার্কেট ডেটা: অপেক্ষমাণ</p>
  <button id="refreshButton" onclick="refreshAll()">এখনই আপডেট</button>
 </div>
-<nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button></nav>
+<nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button><button type="button" class="notify-btn" id="notifyButton" onclick="enableNotifications()" aria-label="নোটিফিকেশন চালু">🔔</button></nav>
 <div id="markets">
 <section class="card"><div class="row"><h2>BTC / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
 <section class="card"><div class="row"><h2>SOL / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
@@ -851,5 +851,51 @@ refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval
 </script>
 <script>
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
+</script>
+<script>
+function base64UrlToBytes(value){
+ const padding="=".repeat((4-value.length%4)%4);
+ const base64=(value+padding).replace(/-/g,"+").replace(/_/g,"/");
+ const raw=atob(base64);return Uint8Array.from(raw,c=>c.charCodeAt(0));
+}
+async function enableNotifications(){
+ const button=document.getElementById("notifyButton");
+ if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){
+  alert("এই ব্রাউজারে Push Notification সমর্থিত নয়। Android Chrome দিয়ে অ্যাপটি খোলো।");return;
+ }
+ if(!window.isSecureContext){alert("নোটিফিকেশনের জন্য HTTPS সংযোগ প্রয়োজন।");return;}
+ if(button){button.disabled=true;button.textContent="…";}
+ try{
+  const permission=await Notification.requestPermission();
+  if(permission!=="granted"){if(button)button.textContent="🔔";alert("নোটিফিকেশন অনুমতি চালু হয়নি। ফোনের Chrome Settings-এ অনুমতি দাও।");return;}
+  const registration=await navigator.serviceWorker.ready;
+  let subscription=await registration.pushManager.getSubscription();
+  if(!subscription){
+   const keyResponse=await fetch("/api/push?action=public-key",{cache:"no-store"});
+   const keyData=await keyResponse.json();
+   if(!keyResponse.ok||!keyData.publicKey)throw new Error(keyData.error||"Push key পাওয়া যায়নি");
+   subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToBytes(keyData.publicKey)});
+  }
+  const response=await fetch("/api/push?action=subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(subscription)});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||!result.ok)throw new Error(result.error||"Subscription সংরক্ষণ হয়নি");
+  if(button){button.textContent="🔔 চালু";button.classList.add("enabled");}
+  alert("নোটিফিকেশন চালু হয়েছে। নতুন LONG বা SHORT সিদ্ধান্ত হলে অ্যালার্ট আসবে।");
+ }catch(error){
+  if(button){button.textContent="🔔";button.classList.remove("enabled");}
+  alert("নোটিফিকেশন চালু করা যায়নি: "+(error?.message||"অজানা সমস্যা"));
+ }finally{if(button)button.disabled=false;}
+}
+async function updateNotificationButton(){
+ const button=document.getElementById("notifyButton");if(!button)return;
+ try{
+  if("Notification" in window&&Notification.permission==="granted"&&"serviceWorker" in navigator){
+   const registration=await navigator.serviceWorker.ready;
+   const subscription=await registration.pushManager.getSubscription();
+   if(subscription){button.textContent="🔔 চালু";button.classList.add("enabled");}
+  }
+ }catch(_){}
+}
+updateNotificationButton();
 </script>
 </body></html>
