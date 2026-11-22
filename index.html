@@ -275,6 +275,84 @@ body{box-sizing:border-box}
 .countdown-ring span{position:relative;z-index:1;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums;color:#f4fbff;letter-spacing:.2px}
 .countdown-caption{font-size:9px;color:#a9c8e9;max-width:62px;line-height:1.25}
 @media(max-width:480px){.tf-heading{padding:4px 6px;margin-bottom:4px}.tf-heading .time-label{font-size:14px!important}.countdown-ring{width:39px;height:39px}.countdown-ring span{font-size:9px}.countdown-caption{font-size:8px;max-width:54px}}
+
+/* Clean compact mobile trading dashboard inspired by the supplied reference */
+:root{--bg:#090d0c;--panel:#111817;--panel2:#17211f;--line:#25433c;--muted:#91aaa2;--text:#f3faf7;--blue:#00d6aa;--green:#00d6aa;--red:#ff5267;--amber:#f2c66d}
+body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b0a 88%)!important}
+.card{background:linear-gradient(150deg,#121d1a,#0d1513)!important;border:1px solid #29483f!important;border-radius:17px!important;box-shadow:0 8px 26px #0005,inset 0 1px #ffffff09!important}
+.status-card{background:linear-gradient(110deg,#14251f,#101a17)!important;border-color:#2d5b4c!important}
+.status-card h2{color:#e8fff5!important;text-shadow:none!important;animation:none!important}
+.live-clock{background:#10231d!important;border-color:#28604d!important;color:#c8f9e8!important;box-shadow:0 0 12px #00d6aa20!important;animation:none!important}
+#coinNav .coin-tab{background:#111c19!important;border:1px solid #315348!important;color:#c5d8d0!important;border-radius:30px!important;box-shadow:none!important}
+#coinNav .coin-tab.active{background:#00c99b!important;border-color:#5dffcf!important;color:#03130e!important;box-shadow:0 0 16px #00d6aa55!important;transform:none!important}
+#coinNav .coin-tab.active:after{display:none!important}
+#markets{overflow:hidden!important}
+#markets>.card{overflow:hidden!important;padding:10px!important}
+#markets>.card h2{font-size:18px!important;color:#f4fbf8!important;text-shadow:none!important}
+.price{font-size:clamp(24px,7vw,34px)!important;color:#fff!important;text-shadow:none!important;font-weight:850!important}
+.fresh{color:#6ee7c0!important}
+.timeframe-grid{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr)!important;gap:8px!important;align-items:stretch!important;min-height:0!important}
+.metric{min-width:0!important;display:flex!important;flex-direction:column!important;justify-content:flex-start!important;gap:5px!important;padding:9px 7px!important;border-radius:13px!important;background:linear-gradient(160deg,#172521,#101916)!important;border:1px solid #315448!important;overflow:hidden!important;font-size:11px!important;line-height:1.35!important}
+.tf-heading{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:5px!important;margin:0!important;padding:0 0 6px!important;border:0!important;border-bottom:1px solid #29483f!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.tf-heading .time-label{font-size:15px!important;color:#dffaf0!important;letter-spacing:0!important;font-weight:800!important}
+.countdown-box{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:4px!important;width:100%!important}
+.countdown-caption{font-size:9px!important;color:#91aaa2!important;max-width:none!important}
+.countdown-time{font-size:13px!important;color:#00e0ae!important;font-variant-numeric:tabular-nums!important;letter-spacing:.5px!important}
+.countdown-track{height:5px!important;width:100%!important;background:#263a34!important;border-radius:20px!important;overflow:hidden!important}
+.countdown-track span{display:block;height:100%;width:100%;border-radius:20px;background:linear-gradient(90deg,#00a981,#49f2c1);box-shadow:0 0 8px #00d6aa55;transition:width .8s linear}
+.choices{display:grid!important;grid-template-columns:1fr 1fr!important;gap:5px!important;margin:2px 0!important}
+.choice{border-radius:9px!important;padding:7px 3px!important;font-size:11px!important;background:#102820!important;border:1px solid #087d61!important;color:#6cf0c2!important;box-shadow:none!important;animation:none!important;text-shadow:none!important}
+.choice.short-card{background:#321b22!important;border-color:#a63f52!important;color:#ff9bab!important}
+.choice small{font-size:12px!important;margin-top:3px!important}
+.trade-action{border-radius:9px!important;font-size:13px!important;padding:8px 4px!important;margin:1px 0!important}
+.trade-action.long-on{background:#073c2e!important;color:#65f1c0!important;box-shadow:none!important}
+.trade-action.short-on{background:#421e28!important;color:#ff9bab!important;box-shadow:none!important}
+.trade-action.wait-on{background:#332b18!important;color:#f5d27b!important;box-shadow:none!important}
+.ai-box{margin-top:2px!important;padding:7px!important;border-radius:9px!important;background:#101b17!important;border:1px solid #29483f!important;box-shadow:none!important;font-size:10px!important;line-height:1.35!important;min-height:0!important;height:auto!important;max-height:94px!important;flex:1 1 auto!important;overflow:hidden!important}
+.ai-head{font-size:9px!important;color:#9debd0!important;line-height:1.3!important;flex-wrap:wrap!important}
+.ai-reason{font-size:10px!important;line-height:1.4!important;color:#e1f0e9!important;display:-webkit-box!important;-webkit-line-clamp:3!important;-webkit-box-orient:vertical!important;overflow:hidden!important}
+.ai-risk{display:none!important}
+.retry-ai{display:none!important}
+.indicator-line{display:none!important}
+#historyCard,#warningCard,footer{display:none!important}
+@media(max-width:480px){
+ html,body{height:100%!important;height:100dvh!important;min-height:0!important;overflow:hidden!important;width:100%!important}
+ body{display:flex!important;flex-direction:column!important;gap:4px!important;padding:5px 6px!important}
+ .status-card{flex:0 0 auto!important;padding:7px 9px!important;margin:1px 0 2px!important}
+ .status-card .row h2{font-size:14px!important}
+ .status-card .tag{font-size:9px!important;padding:4px 6px!important}
+ .live-clock{font-size:11px!important;padding:4px 8px!important;margin:4px auto 0!important}
+ #coinNav{flex:0 0 auto!important;margin:1px auto 4px!important;gap:10px!important}
+ #coinNav .coin-tab{width:43%!important;max-width:150px!important;min-width:0!important;padding:8px 8px!important;font-size:14px!important}
+ #markets{flex:1 1 0!important;min-height:0!important;display:flex!important;overflow:hidden!important}
+ #markets>.card{height:100%!important;min-height:0!important;flex:0 0 100%!important;width:100%!important;padding:9px!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+ #markets>.card h2{font-size:17px!important;margin:0!important}
+ .price-live-row{gap:3px!important;align-items:center!important}
+ .price-live-row .price{font-size:clamp(23px,7vw,31px)!important;flex:1 1 auto!important}
+ .price-live-row .fresh{font-size:9px!important;flex:0 1 auto!important}
+ .timeframe-grid{flex:1 1 0!important;min-height:0!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:7px!important}
+ .metric{padding:8px 6px!important;gap:5px!important}
+ .tf-heading .time-label{font-size:14px!important}
+ .countdown-caption{font-size:8px!important}
+ .countdown-time{font-size:12px!important}
+ .choices{gap:4px!important}
+ .choice{font-size:10px!important;padding:6px 2px!important}
+ .choice small{font-size:11px!important}
+ .trade-action{font-size:12px!important;padding:7px 2px!important}
+ .ai-box{padding:6px!important;max-height:96px!important;font-size:9px!important}
+ .ai-head{font-size:8px!important}
+ .ai-reason{font-size:9px!important;-webkit-line-clamp:3!important}
+}
+@media(max-width:350px){
+ #markets>.card{padding:6px!important}
+ .metric{padding:6px 4px!important}
+ .tf-heading .time-label{font-size:12px!important}
+ .choice{font-size:9px!important}
+ .choice small{font-size:10px!important}
+ .trade-action{font-size:10px!important}
+ .ai-reason{font-size:8px!important;-webkit-line-clamp:2!important}
+}
+
 </style>
 </head>
 <body>
@@ -354,7 +432,7 @@ function card(symbol,data){
    const shortPct=longPct===null?null:100-longPct;
    const bias=score===null?"":score>.12?"BULLISH":score<-.12?"BEARISH":"NEUTRAL";
    const displaySignal=a.signal==="WAIT"&&bias?("WAIT · "+bias):a.signal;
-   html+='<div class="metric"><div class="tf-heading"><div class="time-label">'+labels[tf]+'</div><div class="countdown-box"><div class="countdown-ring" id="ring-'+symbol+'-'+tf+'"><span id="countdown-'+symbol+'-'+tf+'">--:--</span></div><div class="countdown-caption">পরবর্তী বিশ্লেষণ</div></div></div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div><button type="button" class="retry-ai" id="retry-'+symbol+'-'+tf+'" onclick="retryAi(&quot;'+symbol+'&quot;,&quot;'+tf+'&quot;)">আবার বিশ্লেষণ</button></div>';
+   html+='<div class="metric"><div class="tf-heading"><div class="time-label">'+labels[tf]+'</div><div class="countdown-box"><span class="countdown-caption">পরবর্তী বিশ্লেষণ</span><strong class="countdown-time" id="countdown-'+symbol+'-'+tf+'">--:--</strong></div><div class="countdown-track"><span id="countdown-bar-'+symbol+'-'+tf+'"></span></div></div><div class="choices"><div class="choice long-card">LONG<small>'+(longPct===null?"—":longPct+"%")+'</small></div><div class="choice short-card">SHORT<small>'+(shortPct===null?"—":shortPct+"%")+'</small></div></div><div class="trade-action wait-on" id="decision-'+symbol+'-'+tf+'">AI সিদ্ধান্তের অপেক্ষা</div><div class="ai-box" id="ai-'+symbol+'-'+tf+'"><div class="ai-head"><span>✦ GEMINI AI</span><span>বিশ্লেষণ লোড হচ্ছে…</span></div><div>AI মতামত এখনো পাওয়া যায়নি</div></div><button type="button" class="retry-ai" id="retry-'+symbol+'-'+tf+'" onclick="retryAi(&quot;'+symbol+'&quot;,&quot;'+tf+'&quot;)">আবার বিশ্লেষণ</button></div>';
    saveSignal(symbol,tf,a.signal,price,a.reason);
   }
   html+='</div>';
@@ -545,9 +623,9 @@ function updateCandleCountdowns(){
   const seconds=Math.ceil(remaining/1000),minutes=Math.floor(seconds/60),secs=seconds%60;
   const text=String(minutes).padStart(2,"0")+":"+String(secs).padStart(2,"0");
   for(const symbol of symbols){
-   const el=document.getElementById("countdown-"+symbol+"-"+tf),ring=document.getElementById("ring-"+symbol+"-"+tf);
+   const el=document.getElementById("countdown-"+symbol+"-"+tf),bar=document.getElementById("countdown-bar-"+symbol+"-"+tf);
    if(el)el.textContent=text;
-   if(ring){const progress=(interval-remaining)/interval;ring.style.setProperty("--progress",(progress*360).toFixed(2)+"deg");}
+   if(bar){const progress=(remaining/interval)*100;bar.style.width=progress.toFixed(2)+"%";}
   }
  }
  if(boundaryChanged&&!refreshing){setTimeout(()=>{if(!refreshing)refreshAll();},2500);}
