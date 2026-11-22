@@ -1,6 +1,14 @@
 const PAGE_URL = "https://crypto-ai-market.pages.dev";
 const b64u = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-const unb64u = value => Uint8Array.from(atob(value.replace(/-/g,"+").replace(/_/g,"/")+"===".slice((value.length+3)%4)), ch => ch.charCodeAt(0));
+const unb64u = value => {
+  value = String(value).trim().replace(/^["']|["']$/g,"").replace(/\\s+/g,"");
+  if (/^(0x)?[0-9a-fA-F]{64}$/.test(value)) {
+    value = value.replace(/^0x/i,"");
+    return Uint8Array.from(value.match(/.{2}/g), pair => parseInt(pair,16));
+  }
+  value = value.replace(/-/g,"+").replace(/_/g,"/");
+  return Uint8Array.from(atob(value + "===".slice((value.length+3)%4)), ch => ch.charCodeAt(0));
+};
 const utf8 = value => new TextEncoder().encode(value);
 const concatBytes = (...parts) => {
   const size = parts.reduce((n,p)=>n+p.length,0), out = new Uint8Array(size);
