@@ -557,6 +557,14 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  #market-BTC .retry-ai{margin-top:5px!important;padding-top:6px!important;padding-bottom:6px!important}
 }
 
+
+/* Keep BTC timeframe title on one horizontal line */
+@media(max-width:600px){
+ #market-BTC .tf-summary>div:first-child{min-width:0!important;flex:1 1 auto!important}
+ #market-BTC .tf-label-large{white-space:nowrap!important;word-break:keep-all!important;font-size:clamp(19px,2.5dvh,22px)!important;line-height:1.15!important}
+ #market-BTC .countdown-box{flex:0 0 auto!important;margin-left:6px!important}
+}
+
 </style>
 </head>
 <body>
