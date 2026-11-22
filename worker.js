@@ -103,6 +103,7 @@ function analyze(data, tf) {
   const last = bars[bars.length - 1];
   const closeTime = last.time + interval;
   if (Date.now() < closeTime) throw new Error("Latest candle is not closed yet");
+  if (Date.now() - closeTime > interval * 1.5) throw new Error("Latest confirmed candle is stale");
   const price = Number(data.ticker.last);
   const closes = [...bars.map(c => c.close).slice(0, -1), price];
   const e9 = ema(closes.slice(-40), 9), e21 = ema(closes.slice(-60), 21), rv = rsi(closes);
@@ -116,7 +117,25 @@ function analyze(data, tf) {
   const priceTrend = clamp((price / e9 - 1) * 80);
   const momentum = clamp((price / last.close - 1) * 250);
   const rsiBias = clamp((rv - 50) / 22);
-  const score = clamp(.38*trend + .32*priceTrend + .22*momentum + .08*rsiBias);
+  let rawScore = .38*trend + .32*priceTrend + .22*momentum + .08*rsiBias;
+  const derivatives = data.derivatives || {};
+  const oi = tf === "30m" ? derivatives.openInterest30m : derivatives.openInterest1h;
+  if (Array.isArray(oi) && oi.length >= 2 && Number(oi[0].value) > 0) {
+    const delta = Number(oi[oi.length - 1].value) / Number(oi[0].value) - 1;
+    rawScore += clamp(delta * 18) * .08;
+  }
+  const ratios = tf === "30m" ? derivatives.longShort30m : derivatives.longShort1h;
+  if (Array.isArray(ratios) && ratios.length) {
+    const longRatio = Number(ratios[ratios.length - 1].long);
+    if (Number.isFinite(longRatio)) rawScore += clamp((longRatio - .5) * 2) * .06;
+  }
+  const book = derivatives.orderbook;
+  if (book?.bids?.length && book?.asks?.length) {
+    const bid = book.bids.reduce((n,x)=>n+Number(x[0])*Number(x[1]),0);
+    const ask = book.asks.reduce((n,x)=>n+Number(x[0])*Number(x[1]),0);
+    if (bid + ask > 0) rawScore += clamp(((bid - ask) / (bid + ask)) * 2) * .07;
+  }
+  const score = clamp(rawScore);
   let signal = "WAIT", reason = "ট্রেন্ড, লাইভ মোমেন্টাম ও সূচকগুলো এখনো একমত নয়";
   // RSI extremes are risk warnings, not automatic bans on a valid trend signal.
   if (score >= .48 && rv < 90) { signal = "LONG"; reason = rv >= 78 ? "ট্রেন্ড LONG-এর পক্ষে, তবে RSI বেশি হওয়ায় ঝুঁকি উঁচু" : "EMA ট্রেন্ড ও মোমেন্টাম LONG-এর পক্ষে"; }
