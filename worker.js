@@ -398,6 +398,31 @@ export default {
       }
       return Response.json({ ok: true });
     }
+    if (url.pathname === "/analyze" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
+      const { symbol, timeframe } = body || {};
+      if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h"].includes(timeframe)) {
+        return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
+      }
+      if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
+      const lockKey = "manual-run:" + symbol + ":" + timeframe;
+      const locked = await env.ANALYSIS_KV.get(lockKey);
+      if (locked) {
+        const cached = await env.ANALYSIS_KV.get("latest:" + symbol + ":" + timeframe, "json");
+        if (cached) return Response.json({ items: [cached], throttled: true }, { headers: { "Cache-Control": "no-store" } });
+        return Response.json({ error: "বিশ্লেষণ ইতিমধ্যে চলছে; কিছুক্ষণ পর আবার চেষ্টা করুন।" }, { status: 429 });
+      }
+      await env.ANALYSIS_KV.put(lockKey, "1", { expirationTtl: 120 });
+      try {
+        const result = await runOne(env, symbol, timeframe);
+        return Response.json({ items: [result], triggered: true }, { headers: { "Cache-Control": "no-store" } });
+      } catch (error) {
+        await env.ANALYSIS_KV.delete(lockKey);
+        console.error("Manual analysis failed", { symbol, timeframe, error: String(error) });
+        return Response.json({ error: error instanceof Error ? error.message : "বিশ্লেষণ ব্যর্থ হয়েছে" }, { status: 502 });
+      }
+    }
     if (url.pathname !== "/latest") return Response.json({ error: "Not found" }, { status: 404 });
     const symbol = url.searchParams.get("symbol");
     const timeframe = url.searchParams.get("timeframe");
