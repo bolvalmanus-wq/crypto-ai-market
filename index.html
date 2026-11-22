@@ -403,6 +403,40 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  #historyCard,#warningCard,footer{display:none!important}
 }
 
+
+/* BTC and SOL are separate full-width swipeable screens */
+@media(max-width:600px){
+ #markets{
+  display:flex!important;
+  flex-direction:row!important;
+  flex-wrap:nowrap!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  scroll-snap-type:x mandatory!important;
+  scroll-behavior:smooth!important;
+  -webkit-overflow-scrolling:touch!important;
+  gap:0!important;
+  scrollbar-width:none!important;
+ }
+ #markets::-webkit-scrollbar{display:none!important}
+ #markets>.card,#markets>.market-card{
+  display:block!important;
+  box-sizing:border-box!important;
+  flex:0 0 100%!important;
+  width:100%!important;
+  min-width:100%!important;
+  max-width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  scroll-snap-align:start!important;
+  scroll-snap-stop:always!important;
+ }
+}
+
 </style>
 </head>
 <body>
@@ -469,7 +503,7 @@ function analyse(candles,price,maxAgeMs,intervalMs,derivatives,tf){
 }
 function card(symbol,data){
  const price=Number(data.ticker.last),change=(price/Number(data.ticker.open24h)-1)*100,age=data.ageSeconds;
- let html='<section class="card market-card"><div class="row market-title"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row price-live-row"><div class="price" id="live-price-'+symbol+'">$ '+fmt(price)+'</div><div class="fresh '+((age>180||!Number.isFinite(price)||price<=0)?"offline":"")+'">'+(age>180||!Number.isFinite(price)||price<=0?'<span class="live-dot"></span>ডেটা পুরোনো বা অপ্রাপ্য':'<span class="live-dot"></span>লাইভ মার্কেট ডেটা সচল')+'</div></div>';
+ let html='<section class="card market-card" id="market-'+symbol+'"><div class="row market-title"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row price-live-row"><div class="price" id="live-price-'+symbol+'">$ '+fmt(price)+'</div><div class="fresh '+((age>180||!Number.isFinite(price)||price<=0)?"offline":"")+'">'+(age>180||!Number.isFinite(price)||price<=0?'<span class="live-dot"></span>ডেটা পুরোনো বা অপ্রাপ্য':'<span class="live-dot"></span>লাইভ মার্কেট ডেটা সচল')+'</div></div>';
  if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
   html+='<nav class="timeframe-tabs" aria-label="সময় নির্বাচন"><button type="button" class="timeframe-tab active" id="tf-tab-'+symbol+'-30m" onclick="showTimeframe(\''+symbol+'\',\'30m\')">৩০ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1h" onclick="showTimeframe(\''+symbol+'\',\'1h\')">১ ঘণ্টা</button></nav><div class="timeframe-panels">';
