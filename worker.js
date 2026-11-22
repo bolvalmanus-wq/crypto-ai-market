@@ -264,15 +264,18 @@ async function runOne(env, symbol, tf) {
   const data = await marketResponse.json();
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
   const market = analyze(data, tf);
-  const otherTf = tf === "30m" ? "1h" : "30m";
-  try {
-    const other = analyze(data, otherTf);
-    market.higherTimeframe = {
-      timeframe: otherTf, signal: other.indicators.technicalSignal,
-      score: other.indicators.technicalScore, rsi: other.indicators.rsi,
-      ema9: other.indicators.ema9, ema21: other.indicators.ema21
-    };
-  } catch (_) {}
+  // Only 1h is a higher timeframe confirmation for the 30m setup.
+  // Do not incorrectly treat 30m as the higher timeframe for a 1h setup.
+  if (tf === "30m") {
+    try {
+      const other = analyze(data, "1h");
+      market.higherTimeframe = {
+        timeframe: "1h", signal: other.indicators.technicalSignal,
+        score: other.indicators.technicalScore, rsi: other.indicators.rsi,
+        ema9: other.indicators.ema9, ema21: other.indicators.ema21
+      };
+    } catch (_) {}
+  }
 
   const aiResponse = await fetch(PAGE_URL + "/api/ai", {
     method: "POST", headers: { "Content-Type": "application/json" },
