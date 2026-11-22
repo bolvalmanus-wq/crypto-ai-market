@@ -178,7 +178,7 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
   ];
   const output = await env.AI.run(REVIEW_MODEL, {
     messages,
-    max_tokens: 220,
+    max_completion_tokens: 220,
     temperature: 0.1
   });
   return parseModelJson(output);
