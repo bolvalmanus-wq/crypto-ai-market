@@ -1,7 +1,7 @@
 const PAGE_URL = "https://crypto-ai-market.pages.dev";
 const b64u = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const unb64u = value => {
-  value = String(value).trim().replace(/^["']|["']$/g,"").replace(/\\s+/g,"");
+  value = String(value).trim().replace(/^["']|["']$/g,"").replace(/\s+/g,"");
   if (/^(0x)?[0-9a-fA-F]{64}$/.test(value)) {
     value = value.replace(/^0x/i,"");
     return Uint8Array.from(value.match(/.{2}/g), pair => parseInt(pair,16));
@@ -9,6 +9,23 @@ const unb64u = value => {
   value = value.replace(/-/g,"+").replace(/_/g,"/");
   return Uint8Array.from(atob(value + "===".slice((value.length+3)%4)), ch => ch.charCodeAt(0));
 };
+function decodeVapidPrivateKey(input) {
+  let value = String(input ?? "").trim().replace(/^["']|["']$/g,"").replace(/\s+/g,"");
+  if (!value) throw new Error("Secret value is empty");
+  if (value.startsWith("{")) {
+    const jwk = JSON.parse(value);
+    if (jwk.kty !== "EC" || jwk.crv !== "P-256" || !jwk.d) throw new Error("JSON secret is not a P-256 private JWK");
+    value = jwk.d;
+  }
+  if (/^(0x)?[0-9a-fA-F]{64}$/.test(value)) {
+    value = value.replace(/^0x/i,"");
+    return Uint8Array.from(value.match(/.{2}/g), pair => parseInt(pair,16));
+  }
+  const normalized = value.replace(/-/g,"+").replace(/_/g,"/");
+  const decoded = Uint8Array.from(atob(normalized + "=".repeat((4-normalized.length%4)%4)), ch => ch.charCodeAt(0));
+  if (decoded.length !== 32) throw new Error("Decoded private key must be 32 bytes; got " + decoded.length);
+  return decoded;
+}
 const utf8 = value => new TextEncoder().encode(value);
 const concatBytes = (...parts) => {
   const size = parts.reduce((n,p)=>n+p.length,0), out = new Uint8Array(size);
@@ -21,7 +38,7 @@ async function hkdf(ikm,salt,info,length) {
 async function vapidToken(audience,env) {
   if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY) throw new Error("VAPID keys are not configured");
   const publicBytes=unb64u(env.VAPID_PUBLIC_KEY);
-  const privateBytes=unb64u(env.VAPID_PRIVATE_KEY);
+  const privateBytes=decodeVapidPrivateKey(env.VAPID_PRIVATE_KEY);
   const x=b64u(publicBytes.slice(1,33)), y=b64u(publicBytes.slice(33,65)), d=b64u(privateBytes);
   const key=await crypto.subtle.importKey("jwk",{kty:"EC",crv:"P-256",x,y,d,ext:true},{name:"ECDSA",namedCurve:"P-256"},false,["sign"]);
   const header=b64u(utf8(JSON.stringify({typ:"JWT",alg:"ES256"})));
@@ -319,13 +336,19 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/push/health" && request.method === "GET") {
-      let privateKeyBytes = 0, publicKeyBytes = 0;
-      try { if (env.VAPID_PRIVATE_KEY) privateKeyBytes = unb64u(env.VAPID_PRIVATE_KEY).length; } catch (_) {}
+      let privateKeyBytes = 0, publicKeyBytes = 0, privateKeyError = null;
+      const privateKeyPresent = !!env.VAPID_PRIVATE_KEY;
+      try { if (privateKeyPresent) privateKeyBytes = decodeVapidPrivateKey(env.VAPID_PRIVATE_KEY).length; }
+      catch (error) { privateKeyError = error instanceof Error ? error.message : "Private key parse failed"; }
       try { if (env.VAPID_PUBLIC_KEY) publicKeyBytes = unb64u(env.VAPID_PUBLIC_KEY).length; } catch (_) {}
       return Response.json({
         analysisKv: !!env.ANALYSIS_KV,
         vapidPublicKey: publicKeyBytes === 65,
+        vapidPrivateKeyPresent: privateKeyPresent,
         vapidPrivateKey: privateKeyBytes === 32,
+        privateKeyInputLength: privateKeyPresent ? String(env.VAPID_PRIVATE_KEY).trim().length : 0,
+        privateKeyBytes,
+        privateKeyError,
         pushReady: !!env.ANALYSIS_KV && publicKeyBytes === 65 && privateKeyBytes === 32
       }, { headers: { "Cache-Control": "no-store" } });
     }
