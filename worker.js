@@ -310,6 +310,16 @@ async function runOne(env, symbol, tf) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/push/health" && request.method === "GET") {
+      const privateKeyBytes = env.VAPID_PRIVATE_KEY ? unb64u(env.VAPID_PRIVATE_KEY).length : 0;
+      const publicKeyBytes = env.VAPID_PUBLIC_KEY ? unb64u(env.VAPID_PUBLIC_KEY).length : 0;
+      return Response.json({
+        analysisKv: !!env.ANALYSIS_KV,
+        vapidPublicKey: publicKeyBytes === 65,
+        vapidPrivateKey: privateKeyBytes === 32,
+        pushReady: !!env.ANALYSIS_KV && publicKeyBytes === 65 && privateKeyBytes === 32
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (url.pathname === "/push/public-key" && request.method === "GET") {
       if (!env.VAPID_PUBLIC_KEY) return Response.json({ error: "Push notifications are not configured" }, { status: 503 });
       return Response.json({ publicKey: env.VAPID_PUBLIC_KEY }, { headers: { "Cache-Control": "no-store" } });
