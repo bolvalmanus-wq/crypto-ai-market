@@ -610,7 +610,7 @@ function analyse(candles,price,maxAgeMs,intervalMs,derivatives,tf){
  const priceTrend=clamp((price/e9-1)*80);
  const liveMomentum=clamp((price/last.close-1)*250);
  const rsiBias=clamp((rv-50)/22);
- let raw=.34*trend+.28*priceTrend+.23*liveMomentum+.15*rsiBias;
+ let raw=.38*trend+.32*priceTrend+.22*liveMomentum+.08*rsiBias;
  let extras=[];
  const oi=derivatives?.[tf==="30m"?"openInterest30m":"openInterest1h"]||[];
  if(oi.length>=2&&Number(oi[0].value)>0){const delta=Number(oi[oi.length-1].value)/Number(oi[0].value)-1;raw+=clamp(delta*18)*.08;extras.push("OI "+(delta>=0?"+":"")+(delta*100).toFixed(2)+"%")}
@@ -621,10 +621,10 @@ function analyse(candles,price,maxAgeMs,intervalMs,derivatives,tf){
  raw=clamp(raw);
  const score=Math.round(raw*100)/100;
  let signal="WAIT",reason="ট্রেন্ড, লাইভ মোমেন্টাম ও অতিরিক্ত বাজার-তথ্য এখনো যথেষ্ট একমত নয়";
- if(rv>=75)reason="RSI খুব বেশি — দামের পেছনে ছুটে LONG নেওয়া ঝুঁকিপূর্ণ";
- else if(rv<=25)reason="RSI খুব কম — তীব্র পতনের পর SHORT নেওয়া ঝুঁকিপূর্ণ";
- else if(score>=.48&&rv>=50&&rv<75){signal="LONG";reason="ট্রেন্ড, লাইভ মোমেন্টাম ও বাজারের অতিরিক্ত তথ্য LONG-এর পক্ষে";}
- else if(score<=-.48&&rv>25&&rv<=50){signal="SHORT";reason="ট্রেন্ড, লাইভ মোমেন্টাম ও বাজারের অতিরিক্ত তথ্য SHORT-এর পক্ষে";}
+ if(score>=.48&&rv<90){signal="LONG";reason=rv>=78?"ট্রেন্ড LONG-এর পক্ষে, তবে RSI বেশি হওয়ায় ঝুঁকি উঁচু":"ট্রেন্ড, লাইভ মোমেন্টাম ও বাজারের অতিরিক্ত তথ্য LONG-এর পক্ষে";}
+ else if(score<=-.48&&rv>10){signal="SHORT";reason=rv<=22?"ট্রেন্ড SHORT-এর পক্ষে, তবে RSI কম হওয়ায় ঝুঁকি উঁচু":"ট্রেন্ড, লাইভ মোমেন্টাম ও বাজারের অতিরিক্ত তথ্য SHORT-এর পক্ষে";}
+ else if(rv>=78)reason="RSI বেশি — নতুন LONG নেওয়ার আগে নিশ্চিতকরণ দরকার";
+ else if(rv<=22)reason="RSI কম — নতুন SHORT নেওয়ার আগে নিশ্চিতকরণ দরকার";
  const result={signal,reason,rsi:rv,ema9:e9,ema21:e21,atr,score,extras};
  if(signal!=="WAIT"){result.entry=price;result.stop=signal==="LONG"?price-1.5*atr:price+1.5*atr;result.target=signal==="LONG"?price+2*atr:price-2*atr}
  return result;
