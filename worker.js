@@ -307,6 +307,23 @@ export default {
       await env.ANALYSIS_KV.put("push:sub:" + id, JSON.stringify(subscription), { expirationTtl: 60 * 60 * 24 * 180 });
       return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
     }
+    if (url.pathname === "/push/test" && request.method === "POST") {
+      if (!env.ANALYSIS_KV || !env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) {
+        return Response.json({ error: "Push keys are not configured" }, { status: 503 });
+      }
+      const listed = await env.ANALYSIS_KV.list({ prefix: "push:sub:", limit: 100 });
+      if (!listed.keys.length) return Response.json({ error: "No push subscription found" }, { status: 404 });
+      const payload = { title: "নোটিফিকেশন পরীক্ষা", body: "সাউন্ড ও নোটিফিকেশন পরীক্ষা সফল", url: "/", tag: "crypto-ai-market-test-" + Date.now() };
+      const results = await Promise.allSettled(listed.keys.map(async item => {
+        const subscription = await env.ANALYSIS_KV.get(item.name, "json");
+        if (!subscription) return;
+        const response = await sendOnePush(env, subscription, payload);
+        if (response.status === 404 || response.status === 410) await env.ANALYSIS_KV.delete(item.name);
+        if (!response.ok) throw new Error("Push provider HTTP " + response.status);
+      }));
+      const failed = results.filter(x => x.status === "rejected").length;
+      return Response.json({ ok: failed === 0, failed }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (url.pathname === "/push/unsubscribe" && request.method === "POST") {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
