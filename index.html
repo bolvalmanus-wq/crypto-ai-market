@@ -673,12 +673,24 @@ const aiCacheTtl={"30m":1800000,"1h":3600000};
 function aiPanel(symbol,tf){return document.getElementById("ai-"+symbol+"-"+tf)}
 function showAi(symbol,tf,result){
  const el=aiPanel(symbol,tf);if(!el)return;
- const a=result.analysis,cls=a.decision==="LONG"?"ai-long":a.decision==="SHORT"?"ai-short":"ai-wait";
+ const a=result.analysis,debate=result.debate||{};
  const dir=a.direction==="UPWARD"?"ঊর্ধ্বমুখী":a.direction==="DOWNWARD"?"নিম্নমুখী":"সমতল";
  const model=safeText(result.model||"Gemini");
  const decision=document.getElementById("decision-"+symbol+"-"+tf);
- if(decision){decision.textContent="সিদ্ধান্ত: "+a.decision;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
- el.innerHTML='<div class="ai-head"><span>✦ AI পর্যালোচনা · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div><div class="ai-reason">'+safeText(a.reason)+'</div><div class="ai-risk">ঝুঁকি: '+safeText(a.risk)+'</div>';
+ if(decision){decision.textContent="চূড়ান্ত সিদ্ধান্ত: "+a.decision;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
+ let opinions="";
+ if(debate.status==="REVIEWED"&&debate.gemini&&debate.cloudflare){
+  opinions='<div class="ai-reason"><b>Gemini: '+safeText(debate.gemini.decision)+'</b> — '+safeText(debate.gemini.reason)+'</div>'+
+   '<div class="ai-reason"><b>Cloudflare GLM-4.7-Flash: '+safeText(debate.cloudflare.decision)+'</b> — '+safeText(debate.cloudflare.reason)+'</div>'+
+   '<div class="ai-risk">দুই AI ও টেকনিক্যাল যাচাই: '+(debate.gemini.decision===debate.cloudflare.decision?"দুই AI একমত":"দুই AI-এর মতভেদ")+
+   ' · টেকনিক্যাল: '+safeText(debate.technicalSignal||"অজানা")+'</div>';
+ }else if(debate.status==="REVIEW_FAILED"){
+  opinions='<div class="ai-risk">দ্বিতীয় AI যাচাই ব্যর্থ: '+safeText(debate.cloudflare?.risk||a.risk||"সাময়িক সমস্যা")+' — নিরাপত্তার জন্য WAIT</div>';
+ }else{
+  opinions='<div class="ai-risk">দ্বিতীয় AI ডাকা হয়নি: এখনো LONG/SHORT প্রার্থী নেই; তাই WAIT।</div>';
+ }
+ el.innerHTML='<div class="ai-head"><span>✦ দুই AI পর্যালোচনা · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
+  opinions+'<div class="ai-reason"><b>অ্যাপের চূড়ান্ত সিদ্ধান্ত: '+safeText(a.decision)+'</b> — '+safeText(a.reason)+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(a.risk)+'</div>';
 }
 
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
