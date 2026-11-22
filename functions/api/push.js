@@ -4,7 +4,7 @@ export async function onRequest({ request, env }) {
   }
   const incoming = new URL(request.url);
   const action = incoming.searchParams.get("action");
-  if (!["public-key", "subscribe", "unsubscribe"].includes(action)) {
+  if (!["public-key", "subscribe", "unsubscribe", "test"].includes(action)) {
     return Response.json({ error: "Unsupported push action" }, { status: 400 });
   }
   if (action === "public-key" && request.method !== "GET") {
