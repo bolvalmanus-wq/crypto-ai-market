@@ -503,6 +503,41 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  .ai-box{padding:14px!important}
 }
 
+
+/* Fit the full active coin card into shorter phone viewports */
+@media(max-width:600px) and (max-height:780px){
+ body{padding-top:3px!important;padding-bottom:3px!important}
+ .status-card{padding:6px 9px!important;margin:1px 0 4px!important}
+ .status-card .row h2{font-size:15px!important;margin-bottom:4px!important}
+ .live-clock{margin:3px auto 0!important;padding:4px 8px!important;font-size:10px!important}
+ #coinNav{margin:4px auto 5px!important;gap:7px!important}
+ #coinNav .coin-tab{padding:7px!important;font-size:15px!important}
+ #markets>.card,#markets>.market-card{min-height:0!important;height:auto!important;padding:9px!important}
+ .market-title h2{font-size:19px!important;margin-bottom:5px!important}
+ .price-live-row{margin:2px 0 5px!important}
+ .price-live-row .price{font-size:clamp(30px,4.8dvh,36px)!important}
+ .price-live-row .fresh{font-size:9px!important}
+ .timeframe-tabs{margin:4px 0 6px!important;padding:2px!important}
+ .timeframe-tab{padding:6px!important;font-size:14px!important}
+ .timeframe-panel{padding:8px!important}
+ .tf-summary{margin-bottom:5px!important}
+ .tf-kicker{font-size:9px!important;letter-spacing:1px!important}
+ .tf-label-large{font-size:clamp(20px,2.8dvh,23px)!important}
+ .countdown-caption{font-size:9px!important}
+ .countdown-time{font-size:16px!important}
+ .countdown-track{height:5px!important;margin-bottom:8px!important}
+ .sentiment-title{font-size:12px!important;margin-bottom:4px!important}
+ .choices{gap:6px!important;margin-bottom:6px!important}
+ .choice{padding:7px 5px!important;font-size:15px!important}
+ .choice small{font-size:17px!important;margin-top:2px!important}
+ .trade-action{padding:7px!important;font-size:16px!important;margin:0 0 7px!important}
+ .ai-box{padding:8px!important;font-size:12px!important;line-height:1.4!important}
+ .ai-head{font-size:9px!important;margin-bottom:4px!important}
+ .ai-reason{font-size:12px!important;line-height:1.4!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:4!important;overflow:hidden!important}
+ .ai-risk{font-size:10px!important;line-height:1.35!important;margin-top:4px!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:1!important;overflow:hidden!important}
+ .retry-ai{margin-top:6px!important;padding:7px!important;font-size:12px!important}
+}
+
 </style>
 </head>
 <body>
