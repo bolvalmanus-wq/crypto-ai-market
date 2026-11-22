@@ -53,15 +53,15 @@ async function sendOnePush(env,subscription,payload) {
 }
 async function sendSignalPush(env,result) {
   if(!env.ANALYSIS_KV) return;
+  if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY) {
+    console.log("Signal alert skipped: VAPID keys not configured",{symbol:result.symbol,timeframe:result.timeframe,decision:result.analysis.decision});
+    return;
+  }
   const decision=result.analysis.decision;
   const stateKey="lastsignal:"+result.symbol+":"+result.timeframe;
   const previous=await env.ANALYSIS_KV.get(stateKey,"json");
   await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime}),{expirationTtl:60*60*24*14});
   if(!["LONG","SHORT"].includes(decision)||previous?.decision===decision) return;
-  if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY) {
-    console.log("Signal alert skipped: VAPID keys not configured",{symbol:result.symbol,timeframe:result.timeframe,decision});
-    return;
-  }
   const listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});
   const payload={
     title:decision,
