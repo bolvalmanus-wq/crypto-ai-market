@@ -1,4 +1,85 @@
 const PAGE_URL = "https://crypto-ai-market.pages.dev";
+const b64u = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const unb64u = value => Uint8Array.from(atob(value.replace(/-/g,"+").replace(/_/g,"/")+"===".slice((value.length+3)%4)), ch => ch.charCodeAt(0));
+const utf8 = value => new TextEncoder().encode(value);
+const concatBytes = (...parts) => {
+  const size = parts.reduce((n,p)=>n+p.length,0), out = new Uint8Array(size);
+  let offset=0; for(const part of parts){out.set(part,offset);offset+=part.length;} return out;
+};
+async function hkdf(ikm,salt,info,length) {
+  const key=await crypto.subtle.importKey("raw",ikm,"HKDF",false,["deriveBits"]);
+  return new Uint8Array(await crypto.subtle.deriveBits({name:"HKDF",hash:"SHA-256",salt,info},key,length*8));
+}
+async function vapidToken(audience,env) {
+  if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY) throw new Error("VAPID keys are not configured");
+  const publicBytes=unb64u(env.VAPID_PUBLIC_KEY);
+  const privateBytes=unb64u(env.VAPID_PRIVATE_KEY);
+  const x=b64u(publicBytes.slice(1,33)), y=b64u(publicBytes.slice(33,65)), d=b64u(privateBytes);
+  const key=await crypto.subtle.importKey("jwk",{kty:"EC",crv:"P-256",x,y,d,ext:true},{name:"ECDSA",namedCurve:"P-256"},false,["sign"]);
+  const header=b64u(utf8(JSON.stringify({typ:"JWT",alg:"ES256"})));
+  const payload=b64u(utf8(JSON.stringify({aud:audience,exp:Math.floor(Date.now()/1000)+12*60*60,sub:PAGE_URL})));
+  const unsigned=header+"."+payload;
+  const signature=await crypto.subtle.sign({name:"ECDSA",hash:"SHA-256"},key,utf8(unsigned));
+  return unsigned+"."+b64u(signature);
+}
+async function encryptPush(subscription,payload) {
+  const uaPublic=unb64u(subscription.keys.p256dh), auth=unb64u(subscription.keys.auth);
+  const uaKey=await crypto.subtle.importKey("raw",uaPublic,{name:"ECDH",namedCurve:"P-256"},false,[]);
+  const server=await crypto.subtle.generateKey({name:"ECDH",namedCurve:"P-256"},true,["deriveBits"]);
+  const serverPublic=new Uint8Array(await crypto.subtle.exportKey("raw",server.publicKey));
+  const shared=new Uint8Array(await crypto.subtle.deriveBits({name:"ECDH",public:uaKey},server.privateKey,256));
+  const ikm=await hkdf(shared,auth,concatBytes(utf8("WebPush: info\0"),uaPublic,serverPublic),32);
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const cek=await hkdf(ikm,salt,utf8("Content-Encoding: aes128gcm\0"),16);
+  const nonce=await hkdf(ikm,salt,utf8("Content-Encoding: nonce\0"),12);
+  const aes=await crypto.subtle.importKey("raw",cek,{name:"AES-GCM"},false,["encrypt"]);
+  const plain=concatBytes(utf8(JSON.stringify(payload)),new Uint8Array([2]));
+  const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:nonce},aes,plain));
+  const header=new Uint8Array(21); header.set(salt,0);
+  new DataView(header.buffer).setUint32(16,4096,false); header[20]=serverPublic.length;
+  return concatBytes(header,serverPublic,cipher);
+}
+async function sendOnePush(env,subscription,payload) {
+  const endpoint=new URL(subscription.endpoint);
+  const token=await vapidToken(endpoint.origin,env);
+  const body=await encryptPush(subscription,payload);
+  return fetch(subscription.endpoint,{
+    method:"POST",headers:{
+      "Authorization":"vapid t="+token+", k="+env.VAPID_PUBLIC_KEY,
+      "Content-Type":"application/octet-stream","Content-Encoding":"aes128gcm",
+      "TTL":"300","Urgency":"high"
+    },body
+  });
+}
+async function sendSignalPush(env,result) {
+  if(!env.ANALYSIS_KV) return;
+  const decision=result.analysis.decision;
+  const stateKey="lastsignal:"+result.symbol+":"+result.timeframe;
+  const previous=await env.ANALYSIS_KV.get(stateKey,"json");
+  await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime}),{expirationTtl:60*60*24*14});
+  if(!["LONG","SHORT"].includes(decision)||previous?.decision===decision) return;
+  if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY) {
+    console.log("Signal alert skipped: VAPID keys not configured",{symbol:result.symbol,timeframe:result.timeframe,decision});
+    return;
+  }
+  const listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});
+  const payload={
+    title:decision,
+    body:result.symbol+" · "+(result.timeframe==="30m"?"৩০ মিনিট":"১ ঘণ্টা"),
+    url:"/",
+    tag:result.symbol+"-"+result.timeframe+"-"+decision,
+    decision,symbol:result.symbol,timeframe:result.timeframe
+  };
+  await Promise.allSettled(listed.keys.map(async item=>{
+    const subscription=await env.ANALYSIS_KV.get(item.name,"json");
+    if(!subscription) return;
+    try {
+      const response=await sendOnePush(env,subscription,payload);
+      if(response.status===404||response.status===410) await env.ANALYSIS_KV.delete(item.name);
+      else if(!response.ok) console.error("Push delivery failed",response.status);
+    } catch(error) { console.error("Push send error",String(error)); }
+  }));
+}
 const INTERVALS = { "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000 };
 const REVIEW_MODEL = "@cf/zai-org/glm-4.7-flash";
 
@@ -203,12 +284,39 @@ async function runOne(env, symbol, tf) {
   const key = "latest:" + symbol + ":" + tf;
   await env.ANALYSIS_KV.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
   await env.ANALYSIS_KV.put("history:" + symbol + ":" + tf + ":" + Date.now(), JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
+  await sendSignalPush(env, result);
   return result;
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/push/public-key" && request.method === "GET") {
+      if (!env.VAPID_PUBLIC_KEY) return Response.json({ error: "Push notifications are not configured" }, { status: 503 });
+      return Response.json({ publicKey: env.VAPID_PUBLIC_KEY }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (url.pathname === "/push/subscribe" && request.method === "POST") {
+      if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
+      let subscription;
+      try { subscription = await request.json(); } catch { return Response.json({ error: "Invalid subscription" }, { status: 400 }); }
+      if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth || !subscription.endpoint.startsWith("https://")) {
+        return Response.json({ error: "Invalid push subscription" }, { status: 400 });
+      }
+      const digest = await crypto.subtle.digest("SHA-256", utf8(subscription.endpoint));
+      const id = b64u(new Uint8Array(digest)).slice(0, 32);
+      await env.ANALYSIS_KV.put("push:sub:" + id, JSON.stringify(subscription), { expirationTtl: 60 * 60 * 24 * 180 });
+      return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (url.pathname === "/push/unsubscribe" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
+      if (body?.endpoint && env.ANALYSIS_KV) {
+        const digest = await crypto.subtle.digest("SHA-256", utf8(body.endpoint));
+        const id = b64u(new Uint8Array(digest)).slice(0, 32);
+        await env.ANALYSIS_KV.delete("push:sub:" + id);
+      }
+      return Response.json({ ok: true });
+    }
     if (url.pathname !== "/latest") return Response.json({ error: "Not found" }, { status: 404 });
     const symbol = url.searchParams.get("symbol");
     const timeframe = url.searchParams.get("timeframe");
