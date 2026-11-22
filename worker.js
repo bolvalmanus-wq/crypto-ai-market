@@ -311,8 +311,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/push/health" && request.method === "GET") {
-      const privateKeyBytes = env.VAPID_PRIVATE_KEY ? unb64u(env.VAPID_PRIVATE_KEY).length : 0;
-      const publicKeyBytes = env.VAPID_PUBLIC_KEY ? unb64u(env.VAPID_PUBLIC_KEY).length : 0;
+      let privateKeyBytes = 0, publicKeyBytes = 0;
+      try { if (env.VAPID_PRIVATE_KEY) privateKeyBytes = unb64u(env.VAPID_PRIVATE_KEY).length; } catch (_) {}
+      try { if (env.VAPID_PUBLIC_KEY) publicKeyBytes = unb64u(env.VAPID_PUBLIC_KEY).length; } catch (_) {}
       return Response.json({
         analysisKv: !!env.ANALYSIS_KV,
         vapidPublicKey: publicKeyBytes === 65,
