@@ -284,22 +284,19 @@ async function runOne(env, symbol, tf) {
   const ai = await aiResponse.json().catch(() => ({}));
   if (!aiResponse.ok || !ai.analysis) throw new Error(ai.error || "Gemini API HTTP " + aiResponse.status);
 
-  let reviewer = { decision: "WAIT", reason: "প্রাথমিকভাবে দুই AI-এর বিতর্ক প্রয়োজন হয়নি", risk: ai.analysis.risk || "বাজারে ঝুঁকি রয়েছে" };
-  let reviewerStatus = "SKIPPED_NO_DIRECTIONAL_CANDIDATE";
-  // Spend Workers AI neurons only when Gemini or the technical engine sees a LONG/SHORT candidate.
-  if (["LONG","SHORT"].includes(ai.analysis.decision) || ["LONG","SHORT"].includes(market.indicators.technicalSignal)) {
-    try {
-      reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis);
-      reviewerStatus = "REVIEWED";
-    } catch (error) {
-      reviewerStatus = "REVIEW_FAILED";
-      reviewer = {
-        decision: "WAIT",
-        reason: "দ্বিতীয় AI-এর যাচাই পাওয়া যায়নি; তাই নিরাপদে WAIT রাখা হয়েছে।",
-        risk: error instanceof Error ? error.message.slice(0, 180) : "দ্বিতীয় AI সাময়িক অনুপলব্ধ"
-      };
-      console.error("Cloudflare AI review unavailable", { symbol, timeframe: tf, error: String(error) });
-    }
+  // Always run the independent Cloudflare reviewer so every analysis contains two AI opinions.
+  let reviewer = null;
+  let reviewerStatus = "REVIEW_FAILED";
+  try {
+    reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis);
+    reviewerStatus = "REVIEWED";
+  } catch (error) {
+    reviewer = {
+      decision: "WAIT",
+      reason: "দ্বিতীয় AI-এর যাচাই পাওয়া যায়নি; তাই নিরাপদে WAIT রাখা হয়েছে।",
+      risk: error instanceof Error ? error.message.slice(0, 180) : "দ্বিতীয় AI সাময়িক অনুপলব্ধ"
+    };
+    console.error("Cloudflare AI review unavailable", { symbol, timeframe: tf, error: String(error) });
   }
   const analysis = reviewerStatus === "REVIEWED"
     ? finalDecision(market, ai.analysis, reviewer)
