@@ -29,7 +29,7 @@ function renderRecords(){
    return '<div class="decision"><div class="decision-head">'+time(r.decidedAt)+' · '+safe(r.symbol)+' / '+safe(r.timeframe)+' · <span class="'+(r.decision==="LONG"?"long":"short")+'">'+r.decision+'</span></div>সিদ্ধান্তের সময়কার দাম: <b class="price">$'+fmt(r.entryPrice)+'</b>'+result+'</div>';
   }).join("");
   return rows?'<div class="day"><h3>'+date(d.date)+'</h3><div class="muted">সিদ্ধান্ত: '+decisions.length+'</div>'+rows+'</div>':"";
- }).join("")|| "গত ১০ দিনে কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি.":"");
+ }).join("") || "গত ১০ দিনে কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি." : "";
 }
 async function loadReport(){
  const stats=document.getElementById("stats"),records=document.getElementById("records"),btn=document.getElementById("refresh");btn.disabled=true;
