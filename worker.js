@@ -393,7 +393,9 @@ async function runOne(env, symbol, tf) {
   let reviewer = null;
   let reviewerStatus = "REVIEW_FAILED";
   try {
-    const performanceFeedback = await getDecisionFeedback(env, symbol, tf);
+    let performanceFeedback = null;
+    try { performanceFeedback = await getDecisionFeedback(env, symbol, tf); }
+    catch (feedbackError) { console.warn("Decision feedback unavailable", String(feedbackError)); }
     reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis, performanceFeedback);
     reviewerStatus = "REVIEWED";
   } catch (error) {
