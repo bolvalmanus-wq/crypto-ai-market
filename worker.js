@@ -83,11 +83,12 @@ async function sendSignalPush(env,result) {
     return;
   }
   const decision=result.analysis.decision;
+  if(!["LONG","SHORT"].includes(decision)) return;
   const stateKey="lastsignal:"+result.symbol+":"+result.timeframe;
   const previous=await env.ANALYSIS_KV.get(stateKey,"json");
-  await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime}),{expirationTtl:60*60*24*14});
-  if(!["LONG","SHORT"].includes(decision)||previous?.decision===decision) return;
+  if(previous?.decision===decision) return;
   const listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});
+  if(!listed.keys.length) return;
   const payload={
     title:decision,
     body:result.symbol+" · "+(result.timeframe==="30m"?"৩০ মিনিট":result.timeframe==="1h"?"১ ঘণ্টা":"৪ ঘণ্টা"),
@@ -95,15 +96,29 @@ async function sendSignalPush(env,result) {
     tag:result.symbol+"-"+result.timeframe+"-"+decision,
     decision,symbol:result.symbol,timeframe:result.timeframe
   };
-  await Promise.allSettled(listed.keys.map(async item=>{
+  const deliveries=await Promise.allSettled(listed.keys.map(async item=>{
     const subscription=await env.ANALYSIS_KV.get(item.name,"json");
-    if(!subscription) return;
+    if(!subscription) return false;
     try {
       const response=await sendOnePush(env,subscription,payload);
-      if(response.status===404||response.status===410) await env.ANALYSIS_KV.delete(item.name);
-      else if(!response.ok) console.error("Push delivery failed",response.status);
-    } catch(error) { console.error("Push send error",String(error)); }
+      if(response.status===404||response.status===410) {
+        await env.ANALYSIS_KV.delete(item.name);
+        return false;
+      }
+      if(!response.ok) {
+        console.error("Push delivery failed",response.status);
+        return false;
+      }
+      return true;
+    } catch(error) {
+      console.error("Push send error",String(error));
+      return false;
+    }
   }));
+  const delivered=deliveries.some(item=>item.status==="fulfilled"&&item.value===true);
+  // Only remember a signal after a push provider accepted it. Otherwise a
+  // temporary delivery failure would suppress every retry of this signal.
+  if(delivered) await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime,notifiedAt:new Date().toISOString()}),{expirationTtl:60*60*24*14});
 }
 const INTERVALS = { "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
 const REVIEW_MODEL = "@cf/zai-org/glm-4.7-flash";
