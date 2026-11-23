@@ -678,7 +678,7 @@ function showAi(symbol,tf,result){
  const model=safeText(result.model||"Gemini");
  const ti=debate.technicalIndicators||{};
  const indicatorSummary=Number.isFinite(Number(ti.rsi))
-  ? '<div class="ai-risk">ইন্ডিকেটর ডেটা: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · ATR '+safeText(ti.atr)+' · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
+  ? '<div class="ai-risk">ইন্ডিকেটর ডেটা: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · ATR '+safeText(ti.atr)+' · MACD hist '+safeText(ti.macdHistogram)+' · ADX '+safeText(ti.adx)+' · Bollinger অবস্থান '+safeText(ti.bollingerPosition)+' · Relative volume '+safeText(ti.relativeVolume)+'x · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
   : '';
  const decision=document.getElementById("decision-"+symbol+"-"+tf);
  if(decision){decision.textContent="চূড়ান্ত সিদ্ধান্ত: "+a.decision;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
