@@ -626,9 +626,9 @@ function analyse(candles,price,maxAgeMs,intervalMs,derivatives,tf){
  const rsiBias=clamp((rv-50)/22);
  let raw=.38*trend+.32*priceTrend+.22*liveMomentum+.08*rsiBias;
  let extras=[];
- const oi=derivatives?.[tf==="30m"?"openInterest30m":"openInterest1h"]||[];
+ const oi=derivatives?.[tf==="30m"?"openInterest30m":tf==="1h"?"openInterest1h":null]||[];
  if(oi.length>=2&&Number(oi[0].value)>0){const delta=Number(oi[oi.length-1].value)/Number(oi[0].value)-1;raw+=clamp(delta*18)*.08;extras.push("OI "+(delta>=0?"+":"")+(delta*100).toFixed(2)+"%")}
- const ratios=derivatives?.[tf==="30m"?"longShort30m":"longShort1h"]||[];
+ const ratios=derivatives?.[tf==="30m"?"longShort30m":tf==="1h"?"longShort1h":null]||[];
  if(ratios.length){const lr=Number(ratios[ratios.length-1].long);if(Number.isFinite(lr)){raw+=clamp((lr-.5)*2)*.06;extras.push("Long ratio "+(lr*100).toFixed(1)+"%")}}
  const book=derivatives?.orderbook;
  if(book?.bids?.length&&book?.asks?.length){const bid=book.bids.reduce((n,x)=>n+Number(x[0])*Number(x[1]),0),ask=book.asks.reduce((n,x)=>n+Number(x[0])*Number(x[1]),0);if(bid+ask>0){const imbalance=(bid-ask)/(bid+ask);raw+=clamp(imbalance*2)*.07;extras.push("Book "+(imbalance>=0?"buy":"sell")+" pressure")}}
