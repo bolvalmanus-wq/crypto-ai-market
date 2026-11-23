@@ -421,38 +421,17 @@ async function runOne(env, symbol, tf) {
   const key = "latest:" + symbol + ":" + tf;
   await env.ANALYSIS_KV.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
   const decisionId = symbol + ":" + tf + ":" + Date.parse(result.generatedAt);
-  const decisionRecord = {
-    id: decisionId,
-    symbol,
-    timeframe: tf,
-    decision: analysis.decision,
-    entryPrice: Number(market.ticker.last),
-    decidedAt: result.generatedAt,
-    expectedEvaluationAt: new Date(Date.parse(result.generatedAt) + 24 * 60 * 60 * 1000).toISOString(),
-    outcome: "PENDING",
-    reason: analysis.reason || "",
-    risk: analysis.risk || "",
-    direction: analysis.direction || "",
-    dataQuality: analysis.dataQuality || "",
-    provider: result.provider,
-    model: result.model,
-    gemini: result.debate.gemini ? {
-      decision: result.debate.gemini.decision || "",
-      reason: result.debate.gemini.reason || "",
-      risk: result.debate.gemini.risk || ""
-    } : null,
-    cloudflare: result.debate.cloudflare ? {
-      decision: result.debate.cloudflare.decision || "",
-      reason: result.debate.cloudflare.reason || "",
-      risk: result.debate.cloudflare.risk || ""
-    } : null,
-    technicalIndicators: result.debate.technicalIndicators,
-    technicalSignal: result.debate.technicalSignal,
-    higherTimeframeSignal: result.debate.higherTimeframeSignal,
-    marketSource: result.marketSource,
-    candleCloseTime: result.candleCloseTime
-  };
-  if (Number.isFinite(decisionRecord.entryPrice) && decisionRecord.entryPrice > 0) {
+  if ((analysis.decision === "LONG" || analysis.decision === "SHORT") && Number.isFinite(Number(market.ticker.last)) && Number(market.ticker.last) > 0) {
+    const decisionRecord = {
+      id: decisionId,
+      symbol,
+      timeframe: tf,
+      decision: analysis.decision,
+      entryPrice: Number(market.ticker.last),
+      decidedAt: result.generatedAt,
+      expectedEvaluationAt: new Date(Date.parse(result.generatedAt) + 24 * 60 * 60 * 1000).toISOString(),
+      outcome: "PENDING"
+    };
     await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), { expirationTtl: 60 * 60 * 24 * 11 });
   }
   await env.ANALYSIS_KV.put("history:" + symbol + ":" + tf + ":" + Date.now(), JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
@@ -462,17 +441,23 @@ async function runOne(env, symbol, tf) {
 
 async function evaluateMaturedDecisions(env) {
   if (!env.ANALYSIS_KV) return;
-  const now = Date.now(), listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+  const now = Date.now();
+  const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
   const due = [];
   for (const item of listed.keys) {
     const r = await env.ANALYSIS_KV.get(item.name, "json");
-    if (r && r.outcome === "PENDING" && now - Date.parse(r.decidedAt) >= 24 * 60 * 60 * 1000) due.push({ key: item.name, record: r });
+    if (r && (r.decision === "LONG" || r.decision === "SHORT") &&
+        r.outcome === "PENDING" && now - Date.parse(r.decidedAt) >= 24 * 60 * 60 * 1000) {
+      due.push({ key: item.name, record: r });
+    }
   }
   const symbols = [...new Set(due.map(x => x.record.symbol))];
   const prices = {};
   await Promise.all(symbols.map(async symbol => {
     try {
-      const response = await fetch(PAGE_URL + "/api/price?symbol=" + encodeURIComponent(symbol), { headers: { "Cache-Control": "no-cache" } });
+      const response = await fetch(PAGE_URL + "/api/price?symbol=" + encodeURIComponent(symbol), {
+        headers: { "Cache-Control": "no-cache" }
+      });
       if (!response.ok) return;
       const data = await response.json();
       const price = Number(data.last);
@@ -484,14 +469,11 @@ async function evaluateMaturedDecisions(env) {
     if (!Number.isFinite(exitPrice)) continue;
     r.exitPrice = exitPrice;
     r.evaluatedAt = new Date(now).toISOString();
-    r.evaluationDelayMs = Math.max(0, now - Date.parse(r.expectedEvaluationAt || (Date.parse(r.decidedAt) + 86400000)));
-    if (r.decision === "LONG" || r.decision === "SHORT") {
-      r.pnlPct = (r.decision === "LONG" ? (exitPrice / r.entryPrice - 1) : (r.entryPrice / exitPrice - 1)) * 100;
-      r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
-    } else {
-      r.outcome = "NO_TRADE";
-      r.pnlPct = null;
-    }
+    r.evaluationDelayMs = Math.max(0, now - Date.parse(r.expectedEvaluationAt));
+    r.pnlPct = (r.decision === "LONG"
+      ? (exitPrice / r.entryPrice - 1)
+      : (r.entryPrice / exitPrice - 1)) * 100;
+    r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
     await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 11 });
   }
 }
@@ -566,33 +548,40 @@ export default {
       const records = [];
       for (const item of listed.keys) {
         const record = await env.ANALYSIS_KV.get(item.name, "json");
-        if (record && Date.parse(record.decidedAt) >= cutoff) records.push(record);
+        if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
+            Date.parse(record.decidedAt) >= cutoff) records.push(record);
       }
       records.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
       const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
       const settled = records.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG");
-      const wins = settled.filter(x => x.outcome === "CORRECT").length;
-      const summary = { total: records.length, evaluated: settled.length, correct: wins,
-        wrong: settled.length - wins, pending: records.filter(x => x.outcome === "PENDING").length,
-        noTrade: records.filter(x => x.outcome === "NO_TRADE").length,
-        accuracy: settled.length ? Math.round(wins / settled.length * 1000) / 10 : null,
-        last24: { total: last24.length, evaluated: last24.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG").length,
+      const correct = settled.filter(x => x.outcome === "CORRECT").length;
+      const summary = {
+        total: records.length, correct, wrong: settled.length - correct,
+        pending: records.filter(x => x.outcome === "PENDING").length,
+        accuracy: settled.length ? Math.round(correct / settled.length * 1000) / 10 : null,
+        last24: {
+          total: last24.length,
           correct: last24.filter(x => x.outcome === "CORRECT").length,
           wrong: last24.filter(x => x.outcome === "WRONG").length,
-          pending: last24.filter(x => x.outcome === "PENDING").length,
-          noTrade: last24.filter(x => x.outcome === "NO_TRADE").length } };
+          pending: last24.filter(x => x.outcome === "PENDING").length
+        }
+      };
       const dailyMap = {};
       for (const r of records) {
         const day = new Date(r.decidedAt).toISOString().slice(0,10);
-        if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, noTrade: 0 };
-        const d = dailyMap[day]; d.total++;
+        if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, records: [] };
+        const d = dailyMap[day];
+        d.total++;
         if (r.outcome === "CORRECT") d.correct++;
         else if (r.outcome === "WRONG") d.wrong++;
-        else if (r.outcome === "NO_TRADE") d.noTrade++;
         else d.pending++;
+        d.records.push(r);
       }
-      return Response.json({ summary, daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)), records },
-        { headers: { "Cache-Control": "no-store" } });
+      return Response.json({
+        summary,
+        daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)),
+        records
+      }, { headers: { "Cache-Control": "no-store" } });
     }
     if (url.pathname === "/analyze" && request.method === "POST") {
       let body;
