@@ -271,13 +271,13 @@ function buildFourHourContext(data) {
 }
 
 function parseModelJson(output) {
-  let raw = output && output.response;
+  let raw = output && (output.response ?? output.generated_text ?? output.output_text);
   if (raw == null && output && output.choices && output.choices[0] && output.choices[0].message) raw = output.choices[0].message.content;
-  if (raw == null && output && output.result) raw = output.result.response;
-  if (Array.isArray(raw)) raw = raw.map(part => typeof part === "string" ? part : part && part.text || "").join("");
+  if (raw == null && output && output.result != null) raw = typeof output.result === "string" ? output.result : (output.result.response ?? output.result.generated_text ?? output.result.text ?? output.result.content);
+  if (Array.isArray(raw)) raw = raw.map(part => typeof part === "string" ? part : part && (part.text || part.content) || "").join("");
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     if (raw.decision) return validateReviewerAnswer(raw);
-    raw = raw.text || raw.content || "";
+    raw = raw.text || raw.content || raw.generated_text || "";
   }
   if (typeof raw !== "string") throw new Error("Cloudflare AI returned an unsupported response");
   const cleaned = raw
@@ -316,83 +316,112 @@ function validateReviewerAnswer(parsed) {
   return { decision, reason: reason.slice(0, 500), risk: risk.slice(0, 500) };
 }
 
-async function reviewWithCloudflare(env, symbol, tf, market, gemini, performanceFeedback = null) {
-  if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
+async function runCloudflareAgent(env, model, role, instructions, symbol, tf, market) {
   const compactMarket = {
     source: market.source,
-    ticker: {
-      last: market.ticker?.last,
-      mark: market.ticker?.mark,
-      index: market.ticker?.index,
-      bid: market.ticker?.bid,
-      ask: market.ticker?.ask,
-      volume24h: market.ticker?.volume24h,
-      openInterest: market.ticker?.openInterest,
-      fundingRate: market.ticker?.fundingRate
-    },
+    ticker: { last: market.ticker?.last, mark: market.ticker?.mark, bid: market.ticker?.bid, ask: market.ticker?.ask, volume24h: market.ticker?.volume24h, openInterest: market.ticker?.openInterest, fundingRate: market.ticker?.fundingRate },
     indicators: market.indicators,
-    performanceFeedback,
     higherTimeframe: market.higherTimeframe,
     riskEngine: market.riskEngine,
-    derivatives: market.derivatives ? {
-      longShort: market.derivatives.longShort,
-      openInterest: market.derivatives.openInterest,
-      orderbook: market.derivatives.orderbook,
-      fundingHistory: market.derivatives.fundingHistory
-    } : null,
-    recentCandles: (market.candles || []).slice(-12).map(c => ({
-      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume
-    }))
+    derivatives: market.derivatives,
+    recentCandles: (market.candles || []).slice(-12).map(c => ({ open:c.open, high:c.high, low:c.low, close:c.close, volume:c.volume }))
   };
-  const messages = [
-    { role: "system", content: "তুমি স্বাধীন ও কঠোর ঝুঁকি-পর্যালোচক ক্রিপ্টো পারপেচুয়াল বিশ্লেষক। প্রথম AI-এর সিদ্ধান্তকে অন্ধভাবে সমর্থন করবে না। প্রদত্ত ডেটা দিয়ে তার যুক্তির দুর্বলতা খুঁজবে, বিপরীত দিকের সম্ভাবনাও পরীক্ষা করবে। ডেটায় নেই এমন তথ্য বানাবে না। প্রথম AI-এর মতামত ছাড়াও RSI, EMA9/EMA21, ATR, MACD histogram, ADX ও DI+/DI-, Bollinger অবস্থান, relative volume, technicalScore, technicalSignal, উচ্চতর সময়সীমা, ৪ ঘণ্টার EMA20/EMA50, ৪ ঘণ্টার RSI, supportBreakdown, resistanceBreakout, riskEngine-এর bearishWarning/bullishWarning ও warnings, open interest, long/short ratio, order book ও funding data একসঙ্গে যাচাই করবে। কোনো একটি সূচককে একা চূড়ান্ত সিদ্ধান্তের ভিত্তি করবে না। অস্পষ্টতা, মতবিরোধ বা দুর্বল ডেটা হলে WAIT বেছে নেবে। কোনো ব্যাখ্যা বা Markdown নয়, কেবল সম্পূর্ণ বৈধ JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"সংক্ষিপ্ত বাংলা যুক্তি\",\"risk\":\"সংক্ষিপ্ত বাংলা ঝুঁকি\"}. জয়ের সম্ভাবনার শতাংশ দেবে না।" },
-    { role: "user", content: JSON.stringify({
-      task: "প্রথম AI-এর সঙ্গে যুক্তি-পরীক্ষা করো এবং সম্ভাব্য বিপরীত দিকের যুক্তি খুঁজে দেখো। ছোট টাইমফ্রেমের bounce-কে trend reversal ধরে নিও না। ৪ ঘণ্টার trend, support breakdown, momentum deterioration ও volume confirmation যাচাই করো। প্রয়োজন হলে প্রথম AI-এর সিদ্ধান্ত প্রত্যাখ্যান করো। অতীতের যাচাইকৃত ফল দেখবে, কিন্তু ছোট নমুনা থেকে নিয়ম বানাবে না।",
-      symbol, timeframe: tf, market: compactMarket,
-      firstAI: { decision: gemini.decision, direction: gemini.direction, reason: gemini.reason, risk: gemini.risk, dataQuality: gemini.dataQuality }
-    }) }
-  ];
-  const output = await env.AI.run(REVIEW_MODEL, {
-    messages,
-    max_completion_tokens: 420,
+  const output = await env.AI.run(model, {
+    messages: [
+      { role:"system", content:"তুমি AI Council-এর স্বাধীন " + role + " বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। " + instructions + " কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
+      { role:"user", content:JSON.stringify({ symbol, timeframe:tf, market:compactMarket }) }
+    ],
+    max_completion_tokens: 260,
     temperature: 0
   });
-  return parseModelJson(output);
+  return { agent:role, model, ...parseModelJson(output) };
 }
 
-function finalDecision(market, gemini, reviewer) {
+async function runCouncilJudge(env, symbol, tf, market, opinions) {
+  const output = await env.AI.run(REVIEW_MODEL, {
+    messages: [
+      { role:"system", content:"তুমি AI Council-এর চূড়ান্ত বিচারক। স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
+      { role:"user", content:JSON.stringify({
+        task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",
+        symbol,timeframe:tf,
+        market:{ source:market.source, ticker:market.ticker, indicators:market.indicators, higherTimeframe:market.higherTimeframe, riskEngine:market.riskEngine, derivatives:market.derivatives },
+        opinions
+      }) }
+    ],
+    max_completion_tokens: 300,
+    temperature: 0
+  });
+  return { agent:"Council Judge", model:REVIEW_MODEL, ...parseModelJson(output) };
+}
+
+async function runAICouncil(env, symbol, tf, market, gemini) {
+  if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
+  const geminiOpinions = Array.isArray(gemini.councilOpinions) && gemini.councilOpinions.length
+    ? gemini.councilOpinions
+    : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }];
+  const specialistModels = [
+    { model:"@cf/google/gemma-4-26b-a4b-it", role:"Trend & Momentum Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe ও candle structure বিচার করো।" },
+    { model:"@cf/nvidia/nemotron-3-120b-a12b", role:"Contrarian & Risk Analyst", instructions:"প্রথমে বিপরীত দিকের শক্তিশালী যুক্তি খোঁজো; false breakout, liquidity, funding, open interest, support/resistance ও downside/upside risk যাচাই করো।" }
+  ];
+  const settled = await Promise.allSettled(specialistModels.map(agent =>
+    runCloudflareAgent(env, agent.model, agent.role, agent.instructions, symbol, tf, market)
+  ));
+  const specialists = settled.flatMap(item => item.status === "fulfilled" ? [item.value] : []);
+  const errors = settled.flatMap((item,index) => item.status === "rejected"
+    ? [{ agent:specialistModels[index].role, error:String(item.reason).slice(0,180) }] : []);
+  const preJudge = [...geminiOpinions, ...specialists];
+  let judge = null, judgeError = null;
+  try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge); }
+  catch(error) { judgeError = String(error).slice(0,180); }
+  const opinions = judge ? [...preJudge, judge] : preJudge;
+  if (opinions.length < 3) throw new Error("AI Council quorum not reached: " + opinions.length + " valid opinions; " + errors.map(x=>x.error).join(" | "));
+  return { opinions, judge, errors, judgeError, status:judge ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
+}
+
+function finalDecision(market, council) {
+  const opinions = council.opinions || [];
+  const counts = { LONG:0, SHORT:0, WAIT:0 };
+  for (const opinion of opinions) if (counts[opinion.decision] !== undefined) counts[opinion.decision]++;
+  const valid = opinions.length;
+  const ranked = ["LONG","SHORT"].sort((a,b)=>counts[b]-counts[a]);
+  const candidate = ranked[0], opposing = ranked[1];
+  const margin = counts[candidate] - counts[opposing];
+  const requiredVotes = Math.max(3, Math.ceil(valid * 0.6));
   const technical = market.indicators.technicalSignal;
-  const a = gemini.decision, b = reviewer.decision;
-  const higherSignals = [market.higherTimeframe?.signal, market.higherTimeframe?.fourHour?.signal].filter(signal => signal === "LONG" || signal === "SHORT");
-  const sameAI = a === b && (a === "LONG" || a === "SHORT");
-  const sameTechnical = technical === a;
-  const higherConflicts = higherSignals.some(signal => signal !== a);
-  const higherContextMissing = market.riskEngine?.available !== true;
-  const criticalRiskConflict = (a === "LONG" && (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)) || (a === "SHORT" && market.riskEngine?.bullishWarning === true);
-  if (sameAI && sameTechnical && !higherConflicts && !criticalRiskConflict && !higherContextMissing && gemini.dataQuality === "GOOD") {
+  const score = Number(market.indicators.technicalScore) || 0;
+  const technicalSupports = candidate === "LONG" ? score >= 48 : score <= -48;
+  const higherSignals = [market.higherTimeframe?.signal, market.higherTimeframe?.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT");
+  const higherConflict = higherSignals.some(x=>x!==candidate);
+  const hardRisk = candidate === "LONG"
+    ? market.riskEngine?.supportBreakdown === true
+    : market.riskEngine?.resistanceBreakout === true;
+  const enough = counts[candidate] >= requiredVotes && margin >= 2 && candidate !== "WAIT";
+  const judgeSupports = council.judge?.decision === candidate;
+  const dataQualityGood = opinions.some(x=>x.agent?.startsWith("Gemini") && x.dataQuality==="GOOD");
+  const strongEnough = enough && technicalSupports && !hardRisk && judgeSupports && dataQualityGood;
+  if (strongEnough && (!higherConflict || (counts[candidate] >= 4 && margin >= 3))) {
+    const judgeReason = council.judge?.reason || "AI Council-এর অধিকাংশ স্বাধীন বিশ্লেষণ একমত।";
     return {
-      decision: a,
-      direction: a === "LONG" ? "UPWARD" : "DOWNWARD",
-      reason: "দুই AI একমত এবং টেকনিক্যাল ইন্ডিকেটরও " + a + " সমর্থন করছে। " + gemini.reason,
-      risk: reviewer.risk || gemini.risk,
-      dataQuality: gemini.dataQuality
+      decision:candidate,
+      direction:candidate==="LONG"?"UPWARD":"DOWNWARD",
+      reason:"AI Council-এর " + counts[candidate] + "/" + valid + " মতামত " + candidate + " সমর্থন করেছে; টেকনিক্যাল স্কোরও সমর্থন করছে। " + judgeReason,
+      risk:council.judge?.risk || "বাজারের অস্থিরতা ও দ্রুত দিক পরিবর্তনের ঝুঁকি রয়েছে।",
+      dataQuality:"GOOD"
     };
   }
-  const why = higherContextMissing
-    ? "৪ ঘণ্টার বড় প্রবণতা যাচাইয়ের পর্যাপ্ত ডেটা নেই; নিরাপদে WAIT"
-    : criticalRiskConflict
-    ? "৪ ঘণ্টার ট্রেন্ড/সাপোর্ট প্রস্তাবিত দিকের বিপরীত; ঝুঁকি বেশি"
-    : higherConflicts
-    ? "১ ঘণ্টা/৪ ঘণ্টার বড় প্রবণতা প্রস্তাবিত সিদ্ধান্তের বিপরীত"
-    : !sameAI ? "দুই AI-এর সিদ্ধান্ত এক নয়"
-    : !sameTechnical ? "ইন্ডিকেটর AI-দের সিদ্ধান্ত নিশ্চিত করছে না"
-    : "ডেটার মান যথেষ্ট নিশ্চিত নয়";
+  let why = !council.judge ? "চূড়ান্ত বিচারক অনুপলব্ধ"
+    : counts[candidate] < requiredVotes || margin < 2 ? "AI মতামতে পর্যাপ্ত ঐকমত্য নেই"
+    : !technicalSupports ? "টেকনিক্যাল স্কোর প্রস্তাবিত দিককে যথেষ্ট সমর্থন করছে না"
+    : hardRisk ? "গুরুত্বপূর্ণ সাপোর্ট/রেজিস্ট্যান্স ঝুঁকি বিপরীত"
+    : !dataQualityGood ? "বাজার ডেটার মান যথেষ্ট নিশ্চিত নয়"
+    : higherConflict ? "বড় টাইমফ্রেমে বিপরীত প্রবণতা রয়েছে"
+    : "নিরাপদ সিদ্ধান্তের শর্ত পূরণ হয়নি";
   return {
-    decision: "WAIT",
-    direction: technical === "LONG" ? "UPWARD" : technical === "SHORT" ? "DOWNWARD" : "SIDEWAYS",
-    reason: why + "; তাই ঝুঁকি না নিয়ে অপেক্ষা করা হচ্ছে। Gemini: " + gemini.reason,
-    risk: reviewer.risk || gemini.risk,
-    dataQuality: gemini.dataQuality
+    decision:"WAIT",
+    direction:technical==="LONG"?"UPWARD":technical==="SHORT"?"DOWNWARD":"SIDEWAYS",
+    reason:"AI Council: LONG " + counts.LONG + ", SHORT " + counts.SHORT + ", WAIT " + counts.WAIT + " — " + why + "।",
+    risk:council.judge?.risk || "ঐকমত্য না থাকলে ট্রেড না নেওয়াই নিরাপদ।",
+    dataQuality:dataQualityGood?"GOOD":"LIMITED"
   };
 }
 
@@ -451,40 +480,40 @@ async function runOne(env, symbol, tf) {
   const ai = await aiResponse.json().catch(() => ({}));
   if (!aiResponse.ok || !ai.analysis) throw new Error(ai.error || "Gemini API HTTP " + aiResponse.status);
 
-  // Always run the independent Cloudflare reviewer so every analysis contains two AI opinions.
-  let reviewer = null;
-  let reviewerStatus = "REVIEW_FAILED";
+  // Multi-agent council: independent Gemini opinions, two specialist models, then a separate GLM judge.
+  let council = null;
+  let councilError = null;
   try {
-    reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis, performanceFeedback);
-    reviewerStatus = "REVIEWED";
+    council = await runAICouncil(env, symbol, tf, market, ai);
   } catch (error) {
-    reviewer = {
-      decision: "WAIT",
-      reason: "দ্বিতীয় AI-এর যাচাই পাওয়া যায়নি; তাই নিরাপদে WAIT রাখা হয়েছে।",
-      risk: error instanceof Error ? error.message.slice(0, 180) : "দ্বিতীয় AI সাময়িক অনুপলব্ধ"
-    };
-    console.error("Cloudflare AI review unavailable", { symbol, timeframe: tf, error: String(error) });
+    councilError = error instanceof Error ? error.message.slice(0,240) : String(error);
+    console.error("AI Council failed", { symbol, timeframe: tf, error:councilError });
   }
-  const analysis = reviewerStatus === "REVIEWED"
-    ? finalDecision(market, ai.analysis, reviewer)
+  const analysis = council
+    ? finalDecision(market, council)
     : {
-        decision: "WAIT",
-        direction: ai.analysis.direction || "SIDEWAYS",
-        reason: reviewerStatus === "REVIEW_FAILED"
-          ? "দ্বিতীয় AI যাচাই করতে পারেনি; ভুল সংকেত এড়াতে WAIT।"
-          : "টেকনিক্যাল ইন্ডিকেটর ও প্রথম AI-তে এখনো নিশ্চিত LONG/SHORT প্রার্থী নেই।",
-        risk: reviewer.risk || ai.analysis.risk || "বাজারে ঝুঁকি রয়েছে",
-        dataQuality: ai.analysis.dataQuality || "LIMITED"
+        decision:"WAIT",
+        direction:ai.analysis.direction || "SIDEWAYS",
+        reason:"AI Council-এর প্রয়োজনীয় স্বাধীন মতামত পাওয়া যায়নি; নিরাপদে WAIT।",
+        risk:councilError || ai.analysis.risk || "AI সেবা সাময়িক অনুপলব্ধ",
+        dataQuality:ai.analysis.dataQuality || "LIMITED"
       };
   const result = {
     symbol, timeframe: tf,
-    provider: reviewerStatus === "REVIEWED" ? "Gemini + Cloudflare Workers AI" : "Gemini + technical filters",
-    model: (ai.model || "Gemini") + (reviewerStatus === "REVIEWED" ? " + " + REVIEW_MODEL : ""),
+    provider: council ? "Gemini + Cloudflare AI Council" : "Gemini + technical filters",
+    model: (ai.model || "Gemini") + (council ? " + Gemma 4 + Nemotron 3 + " + REVIEW_MODEL : ""),
     analysis,
     debate: {
-      status: reviewerStatus,
+      status: council?.status || "COUNCIL_FAILED",
       gemini: ai.analysis,
-      cloudflare: reviewerStatus === "REVIEWED" ? reviewer : null,
+      councilOpinions: council?.opinions || [],
+      councilVoteCounts: council ? {
+        LONG:council.opinions.filter(x=>x.decision==="LONG").length,
+        SHORT:council.opinions.filter(x=>x.decision==="SHORT").length,
+        WAIT:council.opinions.filter(x=>x.decision==="WAIT").length
+      } : null,
+      councilErrors: council?.errors || [],
+      judgeError: council?.judgeError || councilError,
       technicalSignal: market.indicators.technicalSignal,
       higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE",
       fourHourContext: market.higherTimeframe?.fourHour || null,
