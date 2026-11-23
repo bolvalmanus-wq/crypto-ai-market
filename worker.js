@@ -160,8 +160,39 @@ function analyze(data, tf) {
     const ask = book.asks.reduce((n,x)=>n+Number(x[0])*Number(x[1]),0);
     if (bid + ask > 0) rawScore += clamp(((bid - ask) / (bid + ask)) * 2) * .07;
   }
+  // Additional independent confirmation indicators: MACD, ADX, Bollinger position and relative volume.
+  const recentCloses = closes.slice(-35);
+  const ema12 = ema(recentCloses.slice(-26), 12);
+  const ema26 = ema(recentCloses, 26);
+  const macdLine = ema12 - ema26;
+  const macdSignal = ema(recentCloses.slice(-30), 9) - ema(recentCloses.slice(-30), 21);
+  const macdHistogram = macdLine - macdSignal;
+  const macdBias = clamp((macdHistogram / Math.max(atr, price * 0.0001)) * 12);
+  const bbWindow = closes.slice(-20);
+  const bbMean = bbWindow.reduce((sum, value) => sum + value, 0) / bbWindow.length;
+  const bbStd = Math.sqrt(bbWindow.reduce((sum, value) => sum + (value - bbMean) ** 2, 0) / bbWindow.length);
+  const bbUpper = bbMean + 2 * bbStd, bbLower = bbMean - 2 * bbStd;
+  const bbPosition = bbUpper > bbLower ? clamp(((price - bbMean) / (2 * bbStd || 1)) * 0.5) : 0;
+  const volumeWindow = bars.slice(-21, -1).map(c => Number(c.volume)).filter(Number.isFinite);
+  const avgVolume = volumeWindow.length ? volumeWindow.reduce((sum, value) => sum + value, 0) / volumeWindow.length : 0;
+  const currentVolume = Number(last.volume);
+  const relativeVolume = avgVolume > 0 && Number.isFinite(currentVolume) ? currentVolume / avgVolume : null;
+  const volumeBias = relativeVolume === null ? 0 : clamp((relativeVolume - 1) * 0.35) * Math.sign(price - last.open);
+  let plusDm = 0, minusDm = 0, trSum = 0;
+  for (let i = bars.length - 14; i < bars.length; i++) {
+    const cur = bars[i], prev = bars[i - 1];
+    const up = cur.high - prev.high, down = prev.low - cur.low;
+    if (up > down && up > 0) plusDm += up;
+    if (down > up && down > 0) minusDm += down;
+    trSum += Math.max(cur.high - cur.low, Math.abs(cur.high - prev.close), Math.abs(cur.low - prev.close));
+  }
+  const plusDI = trSum > 0 ? plusDm / trSum * 100 : 0;
+  const minusDI = trSum > 0 ? minusDm / trSum * 100 : 0;
+  const adx = plusDI + minusDI > 0 ? Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100 : 0;
+  const adxBias = adx >= 18 ? Math.sign(plusDI - minusDI) * clamp((adx - 18) / 25) : 0;
+  rawScore = clamp(rawScore * 0.68 + macdBias * 0.14 + bbPosition * 0.08 + adxBias * 0.07 + volumeBias * 0.03);
   const score = clamp(rawScore);
-  let signal = "WAIT", reason = "ট্রেন্ড, লাইভ মোমেন্টাম ও সূচকগুলো এখনো একমত নয়";
+  let signal = "WAIT", reason = "ট্রেন্ড, MACD, ADX, ভলিউম ও অন্যান্য সূচক এখনো একমত নয়";
   // RSI extremes are risk warnings, not automatic bans on a valid trend signal.
   if (score >= .48 && rv < 90) { signal = "LONG"; reason = rv >= 78 ? "ট্রেন্ড LONG-এর পক্ষে, তবে RSI বেশি হওয়ায় ঝুঁকি উঁচু" : "EMA ট্রেন্ড ও মোমেন্টাম LONG-এর পক্ষে"; }
   else if (score <= -.48 && rv > 10) { signal = "SHORT"; reason = rv <= 22 ? "ট্রেন্ড SHORT-এর পক্ষে, তবে RSI কম হওয়ায় ঝুঁকি উঁচু" : "EMA ট্রেন্ড ও মোমেন্টাম SHORT-এর পক্ষে"; }
@@ -169,7 +200,7 @@ function analyze(data, tf) {
   else if (rv <= 22) reason = "RSI কম; নতুন SHORT নেওয়ার আগে নিশ্চিতকরণ দরকার";
   return {
     source: data.source, ticker: data.ticker,
-    indicators: { rsi: rv, ema9: e9, ema21: e21, atr, technicalScore: score, technicalSignal: signal },
+    indicators: { rsi: rv, ema9: e9, ema21: e21, atr, macdLine, macdSignal, macdHistogram, adx, plusDI, minusDI, bbUpper, bbMiddle: bbMean, bbLower, bbPosition, relativeVolume, technicalScore: score, technicalSignal: signal },
     candles: bars.slice(-48),
     higherTimeframe: null,
     derivatives: data.derivatives ? {
@@ -256,7 +287,7 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
     }))
   };
   const messages = [
-    { role: "system", content: "তুমি স্বাধীন ও কঠোর ঝুঁকি-পর্যালোচক ক্রিপ্টো পারপেচুয়াল বিশ্লেষক। প্রথম AI-এর সিদ্ধান্তকে অন্ধভাবে সমর্থন করবে না। প্রদত্ত ডেটা দিয়ে তার যুক্তির দুর্বলতা খুঁজবে, বিপরীত দিকের সম্ভাবনাও পরীক্ষা করবে। ডেটায় নেই এমন তথ্য বানাবে না। প্রথম AI-এর মতামত ছাড়াও RSI, EMA9/EMA21, ATR, technicalScore, technicalSignal, উচ্চতর সময়সীমা, open interest, long/short ratio, order book ও funding data একসঙ্গে যাচাই করবে। কোনো একটি সূচককে একা চূড়ান্ত সিদ্ধান্তের ভিত্তি করবে না। অস্পষ্টতা, মতবিরোধ বা দুর্বল ডেটা হলে WAIT বেছে নেবে। কোনো ব্যাখ্যা বা Markdown নয়, কেবল সম্পূর্ণ বৈধ JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"সংক্ষিপ্ত বাংলা যুক্তি\",\"risk\":\"সংক্ষিপ্ত বাংলা ঝুঁকি\"}. জয়ের সম্ভাবনার শতাংশ দেবে না।" },
+    { role: "system", content: "তুমি স্বাধীন ও কঠোর ঝুঁকি-পর্যালোচক ক্রিপ্টো পারপেচুয়াল বিশ্লেষক। প্রথম AI-এর সিদ্ধান্তকে অন্ধভাবে সমর্থন করবে না। প্রদত্ত ডেটা দিয়ে তার যুক্তির দুর্বলতা খুঁজবে, বিপরীত দিকের সম্ভাবনাও পরীক্ষা করবে। ডেটায় নেই এমন তথ্য বানাবে না। প্রথম AI-এর মতামত ছাড়াও RSI, EMA9/EMA21, ATR, MACD histogram, ADX ও DI+/DI-, Bollinger অবস্থান, relative volume, technicalScore, technicalSignal, উচ্চতর সময়সীমা, open interest, long/short ratio, order book ও funding data একসঙ্গে যাচাই করবে। কোনো একটি সূচককে একা চূড়ান্ত সিদ্ধান্তের ভিত্তি করবে না। অস্পষ্টতা, মতবিরোধ বা দুর্বল ডেটা হলে WAIT বেছে নেবে। কোনো ব্যাখ্যা বা Markdown নয়, কেবল সম্পূর্ণ বৈধ JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"সংক্ষিপ্ত বাংলা যুক্তি\",\"risk\":\"সংক্ষিপ্ত বাংলা ঝুঁকি\"}. জয়ের সম্ভাবনার শতাংশ দেবে না।" },
     { role: "user", content: JSON.stringify({
       task: "প্রথম AI-এর সঙ্গে যুক্তি-পরীক্ষা করো। প্রয়োজন হলে তার সিদ্ধান্ত প্রত্যাখ্যান করো।",
       symbol, timeframe: tf, market: compactMarket,
@@ -368,6 +399,12 @@ async function runOne(env, symbol, tf) {
         ema9: market.indicators.ema9,
         ema21: market.indicators.ema21,
         atr: market.indicators.atr,
+        macdHistogram: market.indicators.macdHistogram,
+        adx: market.indicators.adx,
+        plusDI: market.indicators.plusDI,
+        minusDI: market.indicators.minusDI,
+        bollingerPosition: market.indicators.bbPosition,
+        relativeVolume: market.indicators.relativeVolume,
         technicalScore: market.indicators.technicalScore,
         technicalSignal: market.indicators.technicalSignal
       }
