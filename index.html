@@ -907,6 +907,12 @@ async function enableNotifications(){
  try{
   const permission=await Notification.requestPermission();
   if(permission!=="granted"){if(button)button.textContent="🔔";alert("নোটিফিকেশন অনুমতি চালু হয়নি। ফোনের Chrome Settings-এ অনুমতি দাও।");return;}
+  const healthResponse=await fetch("/api/push?action=health",{cache:"no-store"});
+  const health=await healthResponse.json().catch(()=>({}));
+  if(!healthResponse.ok||!health.pushReady){
+   const detail=health.privateKeyError||(!health.analysisKv?"Worker KV সংযোগ নেই":!health.vapidPublicKey?"VAPID Public Key ভুল বা নেই":!health.vapidPrivateKey?"VAPID Private Key নেই বা ভুল":"Push সার্ভার প্রস্তুত নয়");
+   throw new Error("সার্ভার Push-এর জন্য প্রস্তুত নয়: "+detail);
+  }
   const registration=await navigator.serviceWorker.ready;
   let subscription=await registration.pushManager.getSubscription();
   if(!subscription){
@@ -924,8 +930,10 @@ async function enableNotifications(){
   if(!testResponse.ok||!testResult.ok)throw new Error(testResult.error||"নোটিফিকেশন পরীক্ষা পাঠানো যায়নি");
   alert("নোটিফিকেশন চালু হয়েছে। একটি পরীক্ষামূলক অ্যালার্ট পাঠানো হয়েছে। নতুন LONG বা SHORT সিদ্ধান্ত হলেই আবার অ্যালার্ট আসবে।");
  }catch(error){
-  if(button){button.textContent="🔔";button.classList.remove("enabled");}
-  alert("নোটিফিকেশন চালু করা যায়নি: "+(error?.message||"অজানা সমস্যা"));
+  let subscribed=false;
+  try{const registration=await navigator.serviceWorker.ready;subscribed=!!(await registration.pushManager.getSubscription());}catch(_){}
+  if(button){button.textContent=subscribed?"🔔 চালু":"🔔";button.classList.toggle("enabled",subscribed);}
+  alert((subscribed?"সাবস্ক্রিপশন সংরক্ষিত আছে, তবে পরীক্ষামূলক নোটিফিকেশন পাঠানো ব্যর্থ হয়েছে: ":"নোটিফিকেশন চালু করা যায়নি: ")+(error?.message||"অজানা সমস্যা"));
  }finally{if(button)button.disabled=false;}
 }
 async function updateNotificationButton(){
