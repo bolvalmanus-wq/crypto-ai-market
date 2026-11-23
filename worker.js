@@ -161,11 +161,13 @@ function analyze(data, tf) {
     if (bid + ask > 0) rawScore += clamp(((bid - ask) / (bid + ask)) * 2) * .07;
   }
   // Additional independent confirmation indicators: MACD, ADX, Bollinger position and relative volume.
-  const recentCloses = closes.slice(-35);
-  const ema12 = ema(recentCloses.slice(-26), 12);
-  const ema26 = ema(recentCloses, 26);
-  const macdLine = ema12 - ema26;
-  const macdSignal = ema(recentCloses.slice(-30), 9) - ema(recentCloses.slice(-30), 21);
+  const recentCloses = closes.slice(-60);
+  const macdSeries = recentCloses.map((_, index) => {
+    const sample = recentCloses.slice(0, index + 1).slice(-26);
+    return ema(sample, 12) - ema(sample, 26);
+  });
+  const macdLine = macdSeries[macdSeries.length - 1];
+  const macdSignal = ema(macdSeries.slice(-9), 9);
   const macdHistogram = macdLine - macdSignal;
   const macdBias = clamp((macdHistogram / Math.max(atr, price * 0.0001)) * 12);
   const bbWindow = closes.slice(-20);
