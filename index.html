@@ -570,7 +570,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
 #performanceView .perf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
 #performanceView .perf-stat{background:#14263e;border:1px solid #355171;border-radius:10px;padding:10px}
 #performanceView .perf-stat b{display:block;font-size:21px;margin-top:3px}
-#performanceView .perf-row{padding:9px 2px;border-bottom:1px solid #2a3d56;font-size:12px;line-height:1.5}
+#performanceView .perf-day{margin:10px 0 14px}#performanceView .perf-day h3{font-size:14px;margin:10px 0 4px}#performanceView .perf-row{padding:9px 2px;border-bottom:1px solid #2a3d56;font-size:12px;line-height:1.5}
 #performanceView .perf-ok{color:#31d69a}#performanceView .perf-bad{color:#ff7185}#performanceView .perf-pending{color:#ffd166}
 #tabPerformance{margin:0;padding:8px 12px;min-width:95px;background:#142944;border:1px solid #52749b}
 #tabPerformance.active{background:linear-gradient(110deg,#1766a9,#384fba);border-color:#8bc5ff}
@@ -588,7 +588,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  <button id="refreshButton" onclick="refreshAll()">এখনই আপডেট</button>
 </div>
 <nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button><button type="button" class="coin-tab" id="tabPerformance" onclick="showPerformance()">১০ দিনের রিপোর্ট</button><button type="button" class="notify-btn" id="notifyButton" onclick="enableNotifications()" aria-label="নোটিফিকেশন চালু">🔔</button></nav>
-<section class="card" id="performanceView"><div class="row"><h2>১০ দিনের সিদ্ধান্ত পরীক্ষা</h2><span class="tag" id="perfUpdated">লোড হচ্ছে</span></div><p class="muted">প্রতিটি LONG/SHORT সিদ্ধান্ত ২৪ ঘণ্টা পর প্রবেশমূল্য ও বাজারদর মিলিয়ে যাচাই হয়। WAIT আলাদা গণনা করা হয়, সাফল্যের হারে যোগ হয় না।</p><div class="perf-grid" id="perfStats"></div><div class="row" style="margin-top:12px"><h2>গত ২৪ ঘণ্টা</h2><span class="tag" id="perf24">—</span></div><div id="perfDaily"></div><h2 style="margin-top:14px">সিদ্ধান্তের বিস্তারিত</h2><div id="perfRecords" class="muted">রেকর্ড লোড হচ্ছে…</div></section>
+<section class="card" id="performanceView"><div class="row"><h2>১০ দিনের LONG/SHORT পরীক্ষা</h2><span class="tag" id="perfUpdated">লোড হচ্ছে</span></div><p class="muted">শুধু LONG ও SHORT সিগন্যাল জমা হবে। প্রতিটি সিগন্যাল ২৪ ঘণ্টা পর বাজারদরের সঙ্গে যাচাই হবে। WAIT সংরক্ষণ হবে না।</p><div class="perf-grid" id="perfStats"></div><div class="row" style="margin-top:12px"><h2>গত ২৪ ঘণ্টা</h2><span class="tag" id="perf24">—</span></div><h2 style="margin-top:14px">দিন অনুযায়ী সিদ্ধান্ত</h2><div id="perfRecords" class="muted">রেকর্ড লোড হচ্ছে…</div></section>
 <div id="markets">
 <section class="card"><div class="row"><h2>BTC / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
 <section class="card"><div class="row"><h2>SOL / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
@@ -776,13 +776,15 @@ function updateCoinTab(index){
 })();
 
 let performanceVisible=false;
+let performanceVisible=false;
 function showPerformance(){
  performanceVisible=true;
  document.getElementById("markets").style.display="none";
  document.getElementById("performanceView").style.display="block";
  document.getElementById("historyCard").style.display="none";
  document.getElementById("warningCard").style.display="none";
- document.getElementById("tabBTC").classList.remove("active");document.getElementById("tabSOL").classList.remove("active");
+ document.getElementById("tabBTC").classList.remove("active");
+ document.getElementById("tabSOL").classList.remove("active");
  document.getElementById("tabPerformance").classList.add("active");
  loadPerformance();
 }
@@ -798,18 +800,27 @@ function showMarket(){
 async function loadPerformance(){
  const stats=document.getElementById("perfStats"),recordsEl=document.getElementById("perfRecords");
  try{
-  const res=await fetch("/api/performance",{cache:"no-store"}),data=await res.json();
+  const res=await fetch("/api/performance",{cache:"no-store"});
+  const data=await res.json();
   if(!res.ok)throw new Error(data.error||"রিপোর্ট পাওয়া যায়নি");
   const s=data.summary||{},v=s.last24||{};
-  const tiles=[["১০ দিনে সিদ্ধান্ত",s.total??0],["সঠিক",s.correct??0],["ভুল",s.wrong??0],["যাচাই বাকি",s.pending??0],["WAIT / ট্রেড নয়",s.noTrade??0],["সাফল্যের হার",s.accuracy===null||s.accuracy===undefined?"—":s.accuracy+"%"]];
+  const tiles=[["১০ দিনে LONG/SHORT",s.total??0],["সঠিক",s.correct??0],["ভুল",s.wrong??0],["২৪ ঘণ্টা যাচাই বাকি",s.pending??0],["সাফল্যের হার",s.accuracy==null?"—":s.accuracy+"%"]];
   stats.innerHTML=tiles.map(x=>'<div class="perf-stat"><span class="muted">'+x[0]+'</span><b>'+safeText(x[1])+'</b></div>').join("");
-  document.getElementById("perf24").textContent="মোট "+(v.total||0)+" · সঠিক "+(v.correct||0)+" · ভুল "+(v.wrong||0)+" · অপেক্ষমাণ "+(v.pending||0);
+  document.getElementById("perf24").textContent="সিদ্ধান্ত "+(v.total||0)+" · সঠিক "+(v.correct||0)+" · ভুল "+(v.wrong||0)+" · বাকি "+(v.pending||0);
   document.getElementById("perfUpdated").textContent="আপডেট "+new Date().toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"});
   const daily=data.daily||[];
-  document.getElementById("perfDaily").innerHTML=daily.length?daily.map(d=>'<div class="perf-row"><b>'+safeText(d.date)+'</b> · মোট '+d.total+' · <span class="perf-ok">সঠিক '+d.correct+'</span> · <span class="perf-bad">ভুল '+d.wrong+'</span> · <span class="perf-pending">বাকি '+d.pending+'</span> · WAIT '+d.noTrade+'</div>').join(""):'এখনো ১০ দিনের কোনো রেকর্ড নেই।';
-  recordsEl.innerHTML=(data.records||[]).length?data.records.map(r=>{
-   const dt=new Date(r.decidedAt),out=r.outcome==="CORRECT"?'<span class="perf-ok">সঠিক</span>':r.outcome==="WRONG"?'<span class="perf-bad">ভুল</span>':r.outcome==="NO_TRADE"?"WAIT · ট্রেড নয়":'<span class="perf-pending">২৪ ঘণ্টার ফলের অপেক্ষা</span>';
-   return '<div class="perf-row"><b>'+safeText(r.symbol)+' / '+safeText(r.timeframe)+' · '+safeText(r.decision)+'</b> · '+dt.toLocaleString("bn-BD")+'<br>সিদ্ধান্তের দাম: 
+  recordsEl.innerHTML=daily.length?daily.map(d=>{
+   const rows=(d.records||[]).map(r=>{
+    const t=new Date(r.decidedAt).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"});
+    const result=r.outcome==="CORRECT"?'<span class="perf-ok">সঠিক</span>':r.outcome==="WRONG"?'<span class="perf-bad">ভুল</span>':'<span class="perf-pending">২৪ ঘণ্টা অপেক্ষমাণ</span>';
+    const after=r.exitPrice==null?"অপেক্ষমাণ":fmt(r.exitPrice);
+    const change=Number.isFinite(Number(r.pnlPct))&&r.pnlPct!=null?" · "+Number(r.pnlPct).toFixed(2)+"%":"";
+    return '<div class="perf-row"><b>'+safeText(t)+' · '+safeText(r.symbol)+' / '+safeText(r.timeframe)+' · '+safeText(r.decision)+'</b><br>সিদ্ধান্তের দাম: '+fmt(r.entryPrice)+' · ২৪ ঘণ্টা পর: '+after+'<br>ফল: '+result+change+'</div>';
+   }).join("");
+   return '<div class="perf-day"><h3>'+safeText(d.date)+'</h3><p class="muted">মোট '+d.total+' · <span class="perf-ok">সঠিক '+d.correct+'</span> · <span class="perf-bad">ভুল '+d.wrong+'</span> · <span class="perf-pending">বাকি '+d.pending+'</span></p>'+rows+'</div>';
+  }).join(""):'এখনো কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।';
+ }catch(e){stats.innerHTML='<div class="perf-row">রিপোর্ট লোড হয়নি: '+safeText(e.message)+'</div>';}
+}
 async function fetchWithRetry(symbol){
  let lastError;
  for(let attempt=0;attempt<2;attempt++){
@@ -899,298 +910,6 @@ function updateCandleCountdowns(){
 }
 updateCandleCountdowns();setInterval(updateCandleCountdowns,1000);
 refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval(refreshAll,60000);setInterval(()=>{if(performanceVisible)loadPerformance();},60000);renderHistory();
-</script>
-<script>
-if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
-</script>
-<script>
-function base64UrlToBytes(value){
- const padding="=".repeat((4-value.length%4)%4);
- const base64=(value+padding).replace(/-/g,"+").replace(/_/g,"/");
- const raw=atob(base64);return Uint8Array.from(raw,c=>c.charCodeAt(0));
-}
-async function enableNotifications(){
- const button=document.getElementById("notifyButton");
- if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){
-  alert("এই ব্রাউজারে Push Notification সমর্থিত নয়। Android Chrome দিয়ে অ্যাপটি খোলো।");return;
- }
- if(!window.isSecureContext){alert("নোটিফিকেশনের জন্য HTTPS সংযোগ প্রয়োজন।");return;}
- if(button){button.disabled=true;button.textContent="…";}
- try{
-  const permission=await Notification.requestPermission();
-  if(permission!=="granted"){if(button)button.textContent="🔔";alert("নোটিফিকেশন অনুমতি চালু হয়নি। ফোনের Chrome Settings-এ অনুমতি দাও।");return;}
-  const registration=await navigator.serviceWorker.ready;
-  let subscription=await registration.pushManager.getSubscription();
-  if(!subscription){
-   const keyResponse=await fetch("/api/push?action=public-key",{cache:"no-store"});
-   const keyData=await keyResponse.json();
-   if(!keyResponse.ok||!keyData.publicKey)throw new Error(keyData.error||"Push key পাওয়া যায়নি");
-   subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToBytes(keyData.publicKey)});
-  }
-  const response=await fetch("/api/push?action=subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(subscription)});
-  const result=await response.json().catch(()=>({}));
-  if(!response.ok||!result.ok)throw new Error(result.error||"Subscription সংরক্ষণ হয়নি");
-  if(button){button.textContent="🔔 চালু";button.classList.add("enabled");}
-  const testResponse=await fetch("/api/push?action=test",{method:"POST"});
-  const testResult=await testResponse.json().catch(()=>({}));
-  if(!testResponse.ok||!testResult.ok)throw new Error(testResult.error||"নোটিফিকেশন পরীক্ষা পাঠানো যায়নি");
-  alert("নোটিফিকেশন চালু হয়েছে। একটি পরীক্ষামূলক অ্যালার্ট পাঠানো হয়েছে। নতুন LONG বা SHORT সিদ্ধান্ত হলেই আবার অ্যালার্ট আসবে।");
- }catch(error){
-  if(button){button.textContent="🔔";button.classList.remove("enabled");}
-  alert("নোটিফিকেশন চালু করা যায়নি: "+(error?.message||"অজানা সমস্যা"));
- }finally{if(button)button.disabled=false;}
-}
-async function updateNotificationButton(){
- const button=document.getElementById("notifyButton");if(!button)return;
- try{
-  if("Notification" in window&&Notification.permission==="granted"&&"serviceWorker" in navigator){
-   const registration=await navigator.serviceWorker.ready;
-   const subscription=await registration.pushManager.getSubscription();
-   if(subscription){button.textContent="🔔 চালু";button.classList.add("enabled");}
-  }
- }catch(_){}
-}
-updateNotificationButton();
-</script>
-</body></html>
-+fmt(r.entryPrice)+' · ২৪ ঘণ্টা পর: '+(r.exitPrice?('
-async function fetchWithRetry(symbol){
- let lastError;
- for(let attempt=0;attempt<2;attempt++){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
-  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
-  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
-  finally{clearTimeout(timer)}
- }
- throw lastError||new Error("ডেটা পাওয়া যায়নি");
-}
-async function refreshAll(){
- if(refreshing)return;refreshing=true;
- const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
- document.getElementById("connection").textContent="সংযোগ হচ্ছে";
- const markets=document.getElementById("markets");
- const previousScrollLeft=markets.scrollLeft;
- const previousScrollTop=markets.querySelector(".card")?.scrollTop||0;
- markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
- let ok=0,done=0;
- const jobs=symbols.map(async symbol=>{
-  const target=()=>document.getElementById("market-"+symbol);
-  try{
-   const data=await fetchWithRetry(symbol);
-   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
-   loadAiForSymbol(symbol,data);
-   ok++;
-  }catch(e){
-   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="fresh offline"><span class="live-dot"></span>নেটওয়ার্ক/ডেটা সংযোগ নেই</p><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
-  }finally{
-   done++;
-   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
-   document.getElementById("connection").className=ok===2?"tag good":ok===1?"tag warn":"tag offline";
-   if(done===2){document.getElementById("updated").textContent="সর্বশেষ মার্কেট ডেটা: "+new Date().toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderHistory();}
-  }
- });
- await Promise.all(jobs);
- markets.scrollLeft=previousScrollLeft;
- const visibleCard=markets.querySelectorAll(":scope > .card")[Math.round(previousScrollLeft/Math.max(1,markets.clientWidth))];
- if(visibleCard)visibleCard.scrollTop=previousScrollTop;
- refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
-}
-let livePriceBusy=false;
-const previousLivePrices={};
-async function refreshLivePrices(){
- if(livePriceBusy)return;livePriceBusy=true;
- try{
-  await Promise.all(symbols.map(async symbol=>{
-   const priceEl=document.getElementById("live-price-"+symbol);
-   if(!priceEl)return;
-   try{
-    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),2800);
-    let response;
-    try{response=await fetch("/api/price?symbol="+symbol,{cache:"no-store",signal:controller.signal})}
-    finally{clearTimeout(timer)}
-    if(!response.ok)return;
-    const data=await response.json();const next=Number(data.last);
-    if(!Number.isFinite(next)||next<=0)return;
-    const previous=previousLivePrices[symbol];
-    priceEl.textContent="$ "+fmt(next);
-    if(Number.isFinite(previous)&&next!==previous){
-     priceEl.classList.remove("price-tick","price-up","price-down");
-     priceEl.classList.add(next>previous?"price-up":"price-down");
-     void priceEl.offsetWidth;priceEl.classList.add("price-tick");
-    }
-    previousLivePrices[symbol]=next;
-   }catch(e){}
-  }));
- }finally{livePriceBusy=false}
-}
-let lastCountdownSlots={m30:Math.floor(Date.now()/1800000),h1:Math.floor(Date.now()/3600000)};
-function updateCandleCountdowns(){
- const now=Date.now(),intervals={"30m":1800000,"1h":3600000};
- let boundaryChanged=false;
- for(const tf of ["30m","1h"]){
-  const interval=intervals[tf],slot=Math.floor(now/interval),key=tf==="30m"?"m30":"h1";
-  if(slot>lastCountdownSlots[key]){boundaryChanged=true;lastCountdownSlots[key]=slot;}
-  let remaining=interval-(now%interval);if(remaining===interval)remaining=0;
-  const seconds=Math.ceil(remaining/1000),minutes=Math.floor(seconds/60),secs=seconds%60;
-  const text=String(minutes).padStart(2,"0")+":"+String(secs).padStart(2,"0");
-  for(const symbol of symbols){
-   const el=document.getElementById("countdown-"+symbol+"-"+tf),bar=document.getElementById("countdown-bar-"+symbol+"-"+tf);
-   if(el)el.textContent=text;
-   if(bar){const progress=(remaining/interval)*100;bar.style.width=progress.toFixed(2)+"%";}
-  }
- }
- if(boundaryChanged&&!refreshing){setTimeout(()=>{if(!refreshing)refreshAll();},2500);}
-}
-updateCandleCountdowns();setInterval(updateCandleCountdowns,1000);
-refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval(refreshAll,60000);renderHistory();
-</script>
-<script>
-if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
-</script>
-<script>
-function base64UrlToBytes(value){
- const padding="=".repeat((4-value.length%4)%4);
- const base64=(value+padding).replace(/-/g,"+").replace(/_/g,"/");
- const raw=atob(base64);return Uint8Array.from(raw,c=>c.charCodeAt(0));
-}
-async function enableNotifications(){
- const button=document.getElementById("notifyButton");
- if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){
-  alert("এই ব্রাউজারে Push Notification সমর্থিত নয়। Android Chrome দিয়ে অ্যাপটি খোলো।");return;
- }
- if(!window.isSecureContext){alert("নোটিফিকেশনের জন্য HTTPS সংযোগ প্রয়োজন।");return;}
- if(button){button.disabled=true;button.textContent="…";}
- try{
-  const permission=await Notification.requestPermission();
-  if(permission!=="granted"){if(button)button.textContent="🔔";alert("নোটিফিকেশন অনুমতি চালু হয়নি। ফোনের Chrome Settings-এ অনুমতি দাও।");return;}
-  const registration=await navigator.serviceWorker.ready;
-  let subscription=await registration.pushManager.getSubscription();
-  if(!subscription){
-   const keyResponse=await fetch("/api/push?action=public-key",{cache:"no-store"});
-   const keyData=await keyResponse.json();
-   if(!keyResponse.ok||!keyData.publicKey)throw new Error(keyData.error||"Push key পাওয়া যায়নি");
-   subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToBytes(keyData.publicKey)});
-  }
-  const response=await fetch("/api/push?action=subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(subscription)});
-  const result=await response.json().catch(()=>({}));
-  if(!response.ok||!result.ok)throw new Error(result.error||"Subscription সংরক্ষণ হয়নি");
-  if(button){button.textContent="🔔 চালু";button.classList.add("enabled");}
-  const testResponse=await fetch("/api/push?action=test",{method:"POST"});
-  const testResult=await testResponse.json().catch(()=>({}));
-  if(!testResponse.ok||!testResult.ok)throw new Error(testResult.error||"নোটিফিকেশন পরীক্ষা পাঠানো যায়নি");
-  alert("নোটিফিকেশন চালু হয়েছে। একটি পরীক্ষামূলক অ্যালার্ট পাঠানো হয়েছে। নতুন LONG বা SHORT সিদ্ধান্ত হলেই আবার অ্যালার্ট আসবে।");
- }catch(error){
-  if(button){button.textContent="🔔";button.classList.remove("enabled");}
-  alert("নোটিফিকেশন চালু করা যায়নি: "+(error?.message||"অজানা সমস্যা"));
- }finally{if(button)button.disabled=false;}
-}
-async function updateNotificationButton(){
- const button=document.getElementById("notifyButton");if(!button)return;
- try{
-  if("Notification" in window&&Notification.permission==="granted"&&"serviceWorker" in navigator){
-   const registration=await navigator.serviceWorker.ready;
-   const subscription=await registration.pushManager.getSubscription();
-   if(subscription){button.textContent="🔔 চালু";button.classList.add("enabled");}
-  }
- }catch(_){}
-}
-updateNotificationButton();
-</script>
-</body></html>
-+fmt(r.exitPrice)):"অপেক্ষমাণ")+'<br>ফল: '+out+(Number.isFinite(r.pnlPct)?' · পরিবর্তন '+r.pnlPct.toFixed(2)+'%':'')+'</div>';
-  }).join(""):'এখনো কোনো সিদ্ধান্ত রেকর্ড নেই।';
- }catch(e){stats.innerHTML='<div class="perf-row">রিপোর্ট লোড হয়নি: '+safeText(e.message)+'</div>';}
-}
-let refreshing=false;
-async function fetchWithRetry(symbol){
- let lastError;
- for(let attempt=0;attempt<2;attempt++){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
-  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
-  catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
-  finally{clearTimeout(timer)}
- }
- throw lastError||new Error("ডেটা পাওয়া যায়নি");
-}
-async function refreshAll(){
- if(refreshing)return;refreshing=true;
- const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
- document.getElementById("connection").textContent="সংযোগ হচ্ছে";
- const markets=document.getElementById("markets");
- const previousScrollLeft=markets.scrollLeft;
- const previousScrollTop=markets.querySelector(".card")?.scrollTop||0;
- markets.innerHTML=symbols.map(s=>'<section class="card" id="market-'+s+'"><div class="row"><h2>'+s+' / USDT</h2><span class="tag">লোড হচ্ছে</span></div><p class="status">মার্কেট ডেটা আনা হচ্ছে…</p></section>').join("");
- let ok=0,done=0;
- const jobs=symbols.map(async symbol=>{
-  const target=()=>document.getElementById("market-"+symbol);
-  try{
-   const data=await fetchWithRetry(symbol);
-   const el=target();if(el)el.outerHTML=card(symbol,data).replace('<section class="card">','<section class="card" id="market-'+symbol+'">');
-   loadAiForSymbol(symbol,data);
-   ok++;
-  }catch(e){
-   const el=target();if(el)el.innerHTML='<div class="row"><h2>'+symbol+' / USDT</h2><span class="tag">ডেটা পাওয়া যায়নি</span></div><p class="fresh offline"><span class="live-dot"></span>নেটওয়ার্ক/ডেটা সংযোগ নেই</p><p class="status">লোডিং ব্যর্থ</p><p class="muted">'+safeText(e?.message||"API সংযোগে সমস্যা")+'</p><p class="muted">একটু পরে আবার চেষ্টা করুন।</p>';
-  }finally{
-   done++;
-   document.getElementById("connection").textContent=done<2?"ডেটা আনা হচ্ছে ("+done+"/2)":ok===2?"দুই কয়েনের ডেটা পাওয়া গেছে":ok===1?"একটি কয়েনের ডেটা পাওয়া গেছে":"সংযোগ ব্যর্থ";
-   document.getElementById("connection").className=ok===2?"tag good":ok===1?"tag warn":"tag offline";
-   if(done===2){document.getElementById("updated").textContent="সর্বশেষ মার্কেট ডেটা: "+new Date().toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});renderHistory();}
-  }
- });
- await Promise.all(jobs);
- markets.scrollLeft=previousScrollLeft;
- const visibleCard=markets.querySelectorAll(":scope > .card")[Math.round(previousScrollLeft/Math.max(1,markets.clientWidth))];
- if(visibleCard)visibleCard.scrollTop=previousScrollTop;
- refreshing=false;if(button){button.disabled=false;button.textContent="এখনই আপডেট"}
-}
-let livePriceBusy=false;
-const previousLivePrices={};
-async function refreshLivePrices(){
- if(livePriceBusy)return;livePriceBusy=true;
- try{
-  await Promise.all(symbols.map(async symbol=>{
-   const priceEl=document.getElementById("live-price-"+symbol);
-   if(!priceEl)return;
-   try{
-    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),2800);
-    let response;
-    try{response=await fetch("/api/price?symbol="+symbol,{cache:"no-store",signal:controller.signal})}
-    finally{clearTimeout(timer)}
-    if(!response.ok)return;
-    const data=await response.json();const next=Number(data.last);
-    if(!Number.isFinite(next)||next<=0)return;
-    const previous=previousLivePrices[symbol];
-    priceEl.textContent="$ "+fmt(next);
-    if(Number.isFinite(previous)&&next!==previous){
-     priceEl.classList.remove("price-tick","price-up","price-down");
-     priceEl.classList.add(next>previous?"price-up":"price-down");
-     void priceEl.offsetWidth;priceEl.classList.add("price-tick");
-    }
-    previousLivePrices[symbol]=next;
-   }catch(e){}
-  }));
- }finally{livePriceBusy=false}
-}
-let lastCountdownSlots={m30:Math.floor(Date.now()/1800000),h1:Math.floor(Date.now()/3600000)};
-function updateCandleCountdowns(){
- const now=Date.now(),intervals={"30m":1800000,"1h":3600000};
- let boundaryChanged=false;
- for(const tf of ["30m","1h"]){
-  const interval=intervals[tf],slot=Math.floor(now/interval),key=tf==="30m"?"m30":"h1";
-  if(slot>lastCountdownSlots[key]){boundaryChanged=true;lastCountdownSlots[key]=slot;}
-  let remaining=interval-(now%interval);if(remaining===interval)remaining=0;
-  const seconds=Math.ceil(remaining/1000),minutes=Math.floor(seconds/60),secs=seconds%60;
-  const text=String(minutes).padStart(2,"0")+":"+String(secs).padStart(2,"0");
-  for(const symbol of symbols){
-   const el=document.getElementById("countdown-"+symbol+"-"+tf),bar=document.getElementById("countdown-bar-"+symbol+"-"+tf);
-   if(el)el.textContent=text;
-   if(bar){const progress=(remaining/interval)*100;bar.style.width=progress.toFixed(2)+"%";}
-  }
- }
- if(boundaryChanged&&!refreshing){setTimeout(()=>{if(!refreshing)refreshAll();},2500);}
-}
-updateCandleCountdowns();setInterval(updateCandleCountdowns,1000);
-refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval(refreshAll,60000);renderHistory();
 </script>
 <script>
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
