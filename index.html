@@ -587,8 +587,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
  <p class="muted" id="updated" hidden>সর্বশেষ মার্কেট ডেটা: অপেক্ষমাণ</p>
  <button id="refreshButton" onclick="refreshAll()">এখনই আপডেট</button>
 </div>
-<nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button><button type="button" class="coin-tab" id="tabPerformance" onclick="showPerformance()">১০ দিনের রিপোর্ট</button><button type="button" class="notify-btn" id="notifyButton" onclick="enableNotifications()" aria-label="নোটিফিকেশন চালু">🔔</button></nav>
-<section class="card" id="performanceView"><div class="row"><h2>১০ দিনের LONG/SHORT রিপোর্ট</h2><span class="tag" id="perfUpdated">লোড হচ্ছে</span></div><p class="muted">এখানে শুধু LONG/SHORT সিদ্ধান্তের সময়, কয়েন, টাইমফ্রেম ও সিদ্ধান্তের সময়কার দাম দেখানো হবে। WAIT এবং লাইভ বাজারদর দেখানো হবে না।</p><div class="perf-grid" id="perfStats"></div><h2 style="margin-top:14px">দিন অনুযায়ী সিদ্ধান্ত</h2><div id="perfRecords" class="muted">রেকর্ড লোড হচ্ছে…</div></section>
+<nav id="coinNav" aria-label="কয়েন নির্বাচন"><button type="button" class="coin-tab active" id="tabBTC" onclick="showCoin(0)">BTC</button><button type="button" class="coin-tab" id="tabSOL" onclick="showCoin(1)">SOL</button><a class="coin-tab" id="tabPerformance" href="/performance.html">১০ দিনের পর্যবেক্ষণ</a><button type="button" class="notify-btn" id="notifyButton" onclick="enableNotifications()" aria-label="নোটিফিকেশন চালু">🔔</button></nav>
 <div id="markets">
 <section class="card"><div class="row"><h2>BTC / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
 <section class="card"><div class="row"><h2>SOL / USDT</h2><span class="tag">৩০ মিনিট · ১ ঘণ্টা</span></div><p class="status">ডেটা লোড হচ্ছে…</p></section>
@@ -759,7 +758,7 @@ async function retryAi(symbol,tf){
 }
 
 function showCoin(index){
- if(performanceVisible)showMarket();
+ 
  const el=document.getElementById("markets");if(!el)return;
  el.scrollTo({left:index*el.clientWidth,behavior:"smooth"});
  updateCoinTab(index);
@@ -775,51 +774,6 @@ function updateCoinTab(index){
  el.addEventListener("scroll",()=>{if(ticking)return;ticking=true;requestAnimationFrame(()=>{updateCoinTab(Math.round(el.scrollLeft/Math.max(1,el.clientWidth)));ticking=false;});},{passive:true});
 })();
 
-let performanceVisible=false;
-function showPerformance(){
- performanceVisible=true;
- document.getElementById("markets").style.display="none";
- document.getElementById("performanceView").style.display="block";
- document.getElementById("historyCard").style.display="none";
- document.getElementById("warningCard").style.display="none";
- document.getElementById("tabBTC").classList.remove("active");
- document.getElementById("tabSOL").classList.remove("active");
- document.getElementById("tabPerformance").classList.add("active");
- loadPerformance();
-}
-function showMarket(){
- performanceVisible=false;
- document.getElementById("markets").style.display="flex";
- document.getElementById("performanceView").style.display="none";
- document.getElementById("historyCard").style.display="";
- document.getElementById("warningCard").style.display="";
- document.getElementById("tabPerformance").classList.remove("active");
- updateCoinTab(0);
-}
-async function loadPerformance(){
- const stats=document.getElementById("perfStats"),recordsEl=document.getElementById("perfRecords");
- try{
-  const res=await fetch("/api/performance",{cache:"no-store",signal:AbortSignal.timeout(12000)});
-  const data=await res.json().catch(()=>({error:"সার্ভার থেকে বৈধ JSON রিপোর্ট পাওয়া যায়নি"}));
-  if(!res.ok)throw new Error(data.error||"রিপোর্ট পাওয়া যায়নি");
-  const s=data.summary||{},v=s.last24||{};
-  const tiles=[["গত ১০ দিনে মোট সিদ্ধান্ত",s.total??0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",v.total??0]];
-  stats.innerHTML=tiles.map(x=>'<div class="perf-stat"><span class="muted">'+x[0]+'</span><b>'+safeText(x[1])+'</b></div>').join("");
-  document.getElementById("perfUpdated").textContent="সর্বশেষ আপডেট "+new Date().toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"});
-  const daily=data.daily||[];
-  recordsEl.innerHTML=daily.length?daily.map(d=>{
-   const rows=(d.records||[]).filter(r=>r.decision==="LONG"||r.decision==="SHORT").map(r=>{
-    const t=new Date(r.decidedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"});
-    return '<div class="perf-row"><b>'+safeText(t)+' · '+safeText(r.symbol)+' / '+safeText(r.timeframe)+' · <span class="'+(r.decision==="LONG"?"perf-ok":"perf-bad")+'">'+safeText(r.decision)+'</span></b><br>সিদ্ধান্তের সময়কার দাম: $'+fmt(r.entryPrice)+'</div>';
-   }).join("");
-   return rows?'<div class="perf-day"><h3>'+safeText(d.date)+'</h3><p class="muted">সিদ্ধান্তের সংখ্যা: '+(d.records||[]).filter(r=>r.decision==="LONG"||r.decision==="SHORT").length+'</p>'+rows+'</div>':"";
-  }).join("")||'এখনো কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি.':'এখনো কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।';
- }catch(e){
-  const message=safeText(e?.message||"অজানা নেটওয়ার্ক সমস্যা");
-  stats.innerHTML='<div class="perf-row">রিপোর্ট লোড হয়নি: '+message+'</div>';
-  recordsEl.innerHTML='<div class="perf-row">সার্ভার/API ত্রুটি: '+message+'। আবার চেষ্টা করুন; সমস্যা থাকলে এই বার্তাটি আমাকে পাঠান।</div>';
- }
-}
 async function fetchWithRetry(symbol){
  let lastError;
  for(let attempt=0;attempt<2;attempt++){
