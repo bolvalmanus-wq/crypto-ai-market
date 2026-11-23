@@ -382,6 +382,11 @@ async function runOne(env, symbol, tf) {
     } catch (_) {}
   }
 
+  // Feed verified 10-day outcomes to BOTH AI reviewers; this is prompt feedback, not model retraining.
+  let performanceFeedback = null;
+  try { performanceFeedback = await getDecisionFeedback(env, symbol, tf); }
+  catch (feedbackError) { console.warn("Decision feedback unavailable", String(feedbackError)); }
+  market.performanceFeedback = performanceFeedback;
   const aiResponse = await fetch(PAGE_URL + "/api/ai", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ symbol, timeframe: tf, market })
@@ -393,9 +398,6 @@ async function runOne(env, symbol, tf) {
   let reviewer = null;
   let reviewerStatus = "REVIEW_FAILED";
   try {
-    let performanceFeedback = null;
-    try { performanceFeedback = await getDecisionFeedback(env, symbol, tf); }
-    catch (feedbackError) { console.warn("Decision feedback unavailable", String(feedbackError)); }
     reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis, performanceFeedback);
     reviewerStatus = "REVIEWED";
   } catch (error) {
