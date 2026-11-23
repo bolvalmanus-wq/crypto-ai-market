@@ -98,23 +98,23 @@ ${JSON.stringify(market)}
 
 JSON: {"decision":"LONG|SHORT|WAIT","direction":"UPWARD|DOWNWARD|SIDEWAYS","reason":"বাংলায় সংক্ষিপ্ত কারণ","risk":"বাংলায় সংক্ষিপ্ত ঝুঁকি","dataQuality":"GOOD|LIMITED"}`;
 
-  const failures = [];
-  for (const model of models) {
-    try {
-      const result = await callModel(model, prompt, env.GEMINI_API_KEY);
-      return Response.json({
-        symbol: body.symbol,
-        timeframe: body.timeframe,
-        provider: "Google Gemini",
-        model: result.model,
-        analysis: result.analysis,
-        generatedAt: new Date().toISOString()
-      }, { headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
-    } catch (error) {
-      failures.push(`${model}: ${error instanceof Error ? error.message : "unknown error"}`);
-      // Invalid key/project access is not fixed by trying another model.
-      if ([401, 403].includes(error?.status)) break;
-    }
+  const settled = await Promise.allSettled(models.map(model => callModel(model, prompt, env.GEMINI_API_KEY)));
+  const successes = settled.flatMap((item, index) => item.status === "fulfilled"
+    ? [{ ...item.value, agent: "Gemini " + item.value.model }]
+    : []);
+  const failures = settled.flatMap((item, index) => item.status === "rejected"
+    ? [`${models[index]}: ${item.reason instanceof Error ? item.reason.message : "unknown error"}`]
+    : []);
+  if (successes.length) {
+    return Response.json({
+      symbol: body.symbol,
+      timeframe: body.timeframe,
+      provider: "Google Gemini Council",
+      model: successes.map(item => item.model).join(" + "),
+      analysis: successes[0].analysis,
+      councilOpinions: successes.map(item => ({ agent: item.agent, model: item.model, ...item.analysis })),
+      generatedAt: new Date().toISOString()
+    }, { headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   }
   const detail = failures.join(" | ") || "Gemini service unavailable";
   return Response.json({
