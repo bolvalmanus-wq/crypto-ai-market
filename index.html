@@ -898,7 +898,7 @@ function updateCandleCountdowns(){
  if(boundaryChanged&&!refreshing){setTimeout(()=>{if(!refreshing)refreshAll();},2500);}
 }
 updateCandleCountdowns();setInterval(updateCandleCountdowns,1000);
-refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval(refreshAll,60000);renderHistory();
+refreshAll();refreshLivePrices();setInterval(refreshLivePrices,1000);setInterval(refreshAll,60000);setInterval(()=>{if(performanceVisible)loadPerformance();},60000);renderHistory();
 </script>
 <script>
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {})); }
