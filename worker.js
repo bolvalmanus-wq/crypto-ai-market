@@ -194,10 +194,10 @@ function parseModelJson(output) {
   }
   if (typeof raw !== "string") throw new Error("Cloudflare AI returned an unsupported response");
   const cleaned = raw
-    .replace(/<think>[\\s\\S]*?(?:<\\/think>|$)/gi, "")
-    .replace(/<\\|(?:im_start|im_end|fim_prefix|fim_middle|fim_suffix|ghissue|ghreview)\\|>/g, "")
-    .replace(/^\\s*\x60\x60\x60(?:json)?\\s*/i, "")
-    .replace(/\\s*\x60\x60\x60\\s*$/i, "")
+    .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "")
+    .replace(/<\|(?:im_start|im_end|fim_prefix|fim_middle|fim_suffix|ghissue|ghreview)\|>/g, "")
+    .replace(/^\s*\x60\x60\x60(?:json)?\s*/i, "")
+    .replace(/\s*\x60\x60\x60\s*$/i, "")
     .trim();
   const start = cleaned.indexOf("{");
   if (start < 0) throw new Error("Cloudflare AI returned no JSON object");
@@ -206,7 +206,7 @@ function parseModelJson(output) {
     const ch = cleaned[i];
     if (inString) {
       if (escaped) escaped = false;
-      else if (ch === "\\\\") escaped = true;
+      else if (ch === "\\") escaped = true;
       else if (ch === '"') inString = false;
     } else if (ch === '"') inString = true;
     else if (ch === "{") depth++;
