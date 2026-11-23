@@ -799,8 +799,8 @@ function showMarket(){
 async function loadPerformance(){
  const stats=document.getElementById("perfStats"),recordsEl=document.getElementById("perfRecords");
  try{
-  const res=await fetch("/api/performance",{cache:"no-store"});
-  const data=await res.json();
+  const res=await fetch("/api/performance",{cache:"no-store",signal:AbortSignal.timeout(12000)});
+  const data=await res.json().catch(()=>({error:"সার্ভার থেকে বৈধ JSON রিপোর্ট পাওয়া যায়নি"}));
   if(!res.ok)throw new Error(data.error||"রিপোর্ট পাওয়া যায়নি");
   const s=data.summary||{},v=s.last24||{};
   const tiles=[["১০ দিনে LONG/SHORT",s.total??0],["সঠিক",s.correct??0],["ভুল",s.wrong??0],["২৪ ঘণ্টা যাচাই বাকি",s.pending??0],["সাফল্যের হার",s.accuracy==null?"—":s.accuracy+"%"]];
@@ -818,7 +818,11 @@ async function loadPerformance(){
    }).join("");
    return '<div class="perf-day"><h3>'+safeText(d.date)+'</h3><p class="muted">মোট '+d.total+' · <span class="perf-ok">সঠিক '+d.correct+'</span> · <span class="perf-bad">ভুল '+d.wrong+'</span> · <span class="perf-pending">বাকি '+d.pending+'</span></p>'+rows+'</div>';
   }).join(""):'এখনো কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।';
- }catch(e){stats.innerHTML='<div class="perf-row">রিপোর্ট লোড হয়নি: '+safeText(e.message)+'</div>';}
+ }catch(e){
+  const message=safeText(e?.message||"অজানা নেটওয়ার্ক সমস্যা");
+  stats.innerHTML='<div class="perf-row">রিপোর্ট লোড হয়নি: '+message+'</div>';
+  recordsEl.innerHTML='<div class="perf-row">সার্ভার/API ত্রুটি: '+message+'। আবার চেষ্টা করুন; সমস্যা থাকলে এই বার্তাটি আমাকে পাঠান।</div>';
+ }
 }
 async function fetchWithRetry(symbol){
  let lastError;
