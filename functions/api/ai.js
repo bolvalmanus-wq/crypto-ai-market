@@ -76,7 +76,8 @@ export async function onRequestPost({ request, env }) {
   const market = body.market;
   const primaryModel = (env.GEMINI_MODEL || "gemini-2.5-flash").trim();
   const fallbackModel = (env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash-lite").trim();
-  const models = [...new Set([primaryModel, fallbackModel].filter(Boolean))];
+  // Keep configured choices, then retain two documented free-tier fallbacks if an old model ID is retired.
+  const models = [...new Set([primaryModel, fallbackModel, "gemini-2.5-flash", "gemini-2.5-flash-lite"].filter(Boolean))];
   const prompt = `তুমি একটি সতর্ক, তথ্য-ভিত্তিক ক্রিপ্টো পারপেচুয়াল ফিউচার্স বিশ্লেষক। ${body.symbol}/USDT-এর ${body.timeframe} সময়সীমা বিশ্লেষণ করো।
 
 কাজের নিয়ম:
