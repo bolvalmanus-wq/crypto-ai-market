@@ -1,6 +1,7 @@
 export async function onRequest({ request, env }) {
-  if (!env.SCHEDULER_URL) {
-    return Response.json({ error: "Push scheduler is not configured" }, { status: 503 });
+  const schedulerUrl = env.SCHEDULER_URL || env.SCHEDULER_URL1;
+  if (!schedulerUrl) {
+    return Response.json({ error: "Push scheduler is not configured; set SCHEDULER_URL in Pages runtime variables" }, { status: 503 });
   }
   const incoming = new URL(request.url);
   const action = incoming.searchParams.get("action");
@@ -14,7 +15,7 @@ export async function onRequest({ request, env }) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   try {
-    const target = new URL("/push/" + action, env.SCHEDULER_URL);
+    const target = new URL("/push/" + action, schedulerUrl);
     const init = { method: request.method, headers: { Accept: "application/json" } };
     if (request.method === "POST") {
       init.headers["Content-Type"] = "application/json";
