@@ -105,7 +105,7 @@ async function sendSignalPush(env,result) {
     } catch(error) { console.error("Push send error",String(error)); }
   }));
 }
-const INTERVALS = { "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000 };
+const INTERVALS = { "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
 const REVIEW_MODEL = "@cf/zai-org/glm-4.7-flash";
 
 function ema(values, period) {
@@ -144,12 +144,12 @@ function analyze(data, tf) {
   const rsiBias = clamp((rv - 50) / 22);
   let rawScore = .38*trend + .32*priceTrend + .22*momentum + .08*rsiBias;
   const derivatives = data.derivatives || {};
-  const oi = tf === "30m" ? derivatives.openInterest30m : derivatives.openInterest1h;
+  const oi = tf === "30m" ? derivatives.openInterest30m : tf === "1h" ? derivatives.openInterest1h : null;
   if (Array.isArray(oi) && oi.length >= 2 && Number(oi[0].value) > 0) {
     const delta = Number(oi[oi.length - 1].value) / Number(oi[0].value) - 1;
     rawScore += clamp(delta * 18) * .08;
   }
-  const ratios = tf === "30m" ? derivatives.longShort30m : derivatives.longShort1h;
+  const ratios = tf === "30m" ? derivatives.longShort30m : tf === "1h" ? derivatives.longShort1h : null;
   if (Array.isArray(ratios) && ratios.length) {
     const longRatio = Number(ratios[ratios.length - 1].long);
     if (Number.isFinite(longRatio)) rawScore += clamp((longRatio - .5) * 2) * .06;
@@ -232,6 +232,22 @@ function analyze(data, tf) {
   };
 }
 
+
+
+function buildFourHourCandles(data) {
+  const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
+  const buckets = new Map();
+  for (const candle of source) {
+    const bucket = Math.floor(candle.time / 14400000) * 14400000;
+    if (!buckets.has(bucket)) buckets.set(bucket, []);
+    buckets.get(bucket).push(candle);
+  }
+  return [...buckets.entries()].sort((a,b) => a[0] - b[0]).flatMap(([time, rows]) => {
+    rows.sort((a,b) => a.time - b.time);
+    if (rows.length !== 4 || rows.some((c,i) => i > 0 && c.time - rows[i-1].time !== 3600000)) return [];
+    return [{ time, open: rows[0].open, high: Math.max(...rows.map(c=>c.high)), low: Math.min(...rows.map(c=>c.low)), close: rows[3].close, volume: rows.reduce((sum,c)=>sum + (Number(c.volume)||0),0), confirmed: true }];
+  });
+}
 
 function buildFourHourContext(data) {
   const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
@@ -536,7 +552,8 @@ async function runOne(env, symbol, tf) {
   if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
   const data = await marketResponse.json();
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
-  const market = analyze(data, tf);
+  const analysisData = tf === "4h" ? { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } } : data;
+  const market = analyze(analysisData, tf);
   // Check adjacent and broader 4h market structure before accepting a direction.
   const fourHour = buildFourHourContext(data);
   if (tf === "30m") {
@@ -544,8 +561,10 @@ async function runOne(env, symbol, tf) {
       const other = analyze(data, "1h");
       market.higherTimeframe = { timeframe: "1h", signal: other.indicators.technicalSignal, score: other.indicators.technicalScore, rsi: other.indicators.rsi, ema9: other.indicators.ema9, ema21: other.indicators.ema21, fourHour };
     } catch (_) { market.higherTimeframe = { timeframe: "1h", signal: "WAIT", fourHour }; }
-  } else {
+  } else if (tf === "1h") {
     market.higherTimeframe = { timeframe: "4h", signal: fourHour.signal, fourHour };
+  } else {
+    market.higherTimeframe = { timeframe: "4h", signal: market.indicators.technicalSignal, fourHour };
   }
   market.riskEngine = { timeframe: "4h", available: fourHour.available === true, supportBreakdown: fourHour.supportBreakdown === true, resistanceBreakout: fourHour.resistanceBreakout === true, bearishWarning: fourHour.bearishWarning === true, bullishWarning: fourHour.bullishWarning === true, warnings: fourHour.warnings || (fourHour.warning ? [fourHour.warning] : []) };
 
@@ -802,7 +821,7 @@ export default {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
       const { symbol, timeframe } = body || {};
-      if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h"].includes(timeframe)) {
+      if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h", "4h"].includes(timeframe)) {
         return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
       }
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
@@ -826,7 +845,7 @@ export default {
     if (url.pathname !== "/latest") return Response.json({ error: "Not found" }, { status: 404 });
     const symbol = url.searchParams.get("symbol");
     const timeframe = url.searchParams.get("timeframe");
-    if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h"].includes(timeframe)) {
+    if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h", "4h"].includes(timeframe)) {
       return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
     }
     if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
@@ -842,6 +861,7 @@ export default {
     for (const symbol of ["BTC", "SOL"]) {
       tasks.push(runOne(env, symbol, "30m"));
       if (minute === 0) tasks.push(runOne(env, symbol, "1h"));
+      if (minute === 0 && new Date(controller.scheduledTime).getUTCHours() % 4 === 0) tasks.push(runOne(env, symbol, "4h"));
     }
     const outcomes = await Promise.allSettled(tasks);
     const failed = outcomes.filter(x => x.status === "rejected");
