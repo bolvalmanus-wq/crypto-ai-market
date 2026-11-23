@@ -180,20 +180,34 @@ function analyze(data, tf) {
   const currentVolume = Number(last.volume);
   const relativeVolume = avgVolume > 0 && Number.isFinite(currentVolume) ? currentVolume / avgVolume : null;
   const volumeBias = relativeVolume === null ? 0 : clamp((relativeVolume - 1) * 0.35) * Math.sign(price - last.open);
-  let plusDm = 0, minusDm = 0, trSum = 0;
+  const adxPeriod = 14;
+  let trSmoothed = 0, plusSmoothed = 0, minusSmoothed = 0;
   const dxValues = [];
-  for (let i = bars.length - 14; i < bars.length; i++) {
+  for (let i = 1; i <= adxPeriod; i++) {
+    const cur = bars[bars.length - adxPeriod - 1 + i], prev = bars[bars.length - adxPeriod - 2 + i];
+    const up = cur.high - prev.high, down = prev.low - cur.low;
+    if (up > down && up > 0) plusSmoothed += up;
+    if (down > up && down > 0) minusSmoothed += down;
+    trSmoothed += Math.max(cur.high - cur.low, Math.abs(cur.high - prev.close), Math.abs(cur.low - prev.close));
+  }
+  for (let i = bars.length - adxPeriod + 1; i < bars.length; i++) {
     const cur = bars[i], prev = bars[i - 1];
     const up = cur.high - prev.high, down = prev.low - cur.low;
-    if (up > down && up > 0) plusDm += up;
-    if (down > up && down > 0) minusDm += down;
-    trSum += Math.max(cur.high - cur.low, Math.abs(cur.high - prev.close), Math.abs(cur.low - prev.close));
-    const diSum = plusDm + minusDm;
-    if (diSum > 0) dxValues.push(Math.abs(plusDm - minusDm) / diSum * 100);
+    const plus = up > down && up > 0 ? up : 0;
+    const minus = down > up && down > 0 ? down : 0;
+    const tr = Math.max(cur.high - cur.low, Math.abs(cur.high - prev.close), Math.abs(cur.low - prev.close));
+    trSmoothed = trSmoothed - trSmoothed / adxPeriod + tr;
+    plusSmoothed = plusSmoothed - plusSmoothed / adxPeriod + plus;
+    minusSmoothed = minusSmoothed - minusSmoothed / adxPeriod + minus;
+    const plusNow = trSmoothed > 0 ? plusSmoothed / trSmoothed * 100 : 0;
+    const minusNow = trSmoothed > 0 ? minusSmoothed / trSmoothed * 100 : 0;
+    const diSum = plusNow + minusNow;
+    if (diSum > 0) dxValues.push(Math.abs(plusNow - minusNow) / diSum * 100);
   }
-  const plusDI = trSum > 0 ? plusDm / trSum * 100 : 0;
-  const minusDI = trSum > 0 ? minusDm / trSum * 100 : 0;
-  const adx = dxValues.length ? dxValues.reduce((sum, value) => sum + value, 0) / dxValues.length : 0;
+  const plusDI = trSmoothed > 0 ? plusSmoothed / trSmoothed * 100 : 0;
+  const minusDI = trSmoothed > 0 ? minusSmoothed / trSmoothed * 100 : 0;
+  let adx = dxValues.length >= adxPeriod ? dxValues.slice(0, adxPeriod).reduce((sum,value)=>sum+value,0) / adxPeriod : 0;
+  for (let i = adxPeriod; i < dxValues.length; i++) adx = (adx * (adxPeriod - 1) + dxValues[i]) / adxPeriod;
   const adxBias = adx >= 18 ? Math.sign(plusDI - minusDI) * clamp((adx - 18) / 25) : 0;
   rawScore = clamp(rawScore * 0.68 + macdBias * 0.14 + bbPosition * 0.08 + adxBias * 0.07 + volumeBias * 0.03);
   const score = clamp(rawScore);
