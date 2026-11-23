@@ -422,9 +422,35 @@ async function runOne(env, symbol, tf) {
   await env.ANALYSIS_KV.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
   const decisionId = symbol + ":" + tf + ":" + Date.parse(result.generatedAt);
   const decisionRecord = {
-    id: decisionId, symbol, timeframe: tf, decision: analysis.decision,
-    entryPrice: Number(market.ticker.last), decidedAt: result.generatedAt,
-    outcome: "PENDING"
+    id: decisionId,
+    symbol,
+    timeframe: tf,
+    decision: analysis.decision,
+    entryPrice: Number(market.ticker.last),
+    decidedAt: result.generatedAt,
+    expectedEvaluationAt: new Date(Date.parse(result.generatedAt) + 24 * 60 * 60 * 1000).toISOString(),
+    outcome: "PENDING",
+    reason: analysis.reason || "",
+    risk: analysis.risk || "",
+    direction: analysis.direction || "",
+    dataQuality: analysis.dataQuality || "",
+    provider: result.provider,
+    model: result.model,
+    gemini: result.debate.gemini ? {
+      decision: result.debate.gemini.decision || "",
+      reason: result.debate.gemini.reason || "",
+      risk: result.debate.gemini.risk || ""
+    } : null,
+    cloudflare: result.debate.cloudflare ? {
+      decision: result.debate.cloudflare.decision || "",
+      reason: result.debate.cloudflare.reason || "",
+      risk: result.debate.cloudflare.risk || ""
+    } : null,
+    technicalIndicators: result.debate.technicalIndicators,
+    technicalSignal: result.debate.technicalSignal,
+    higherTimeframeSignal: result.debate.higherTimeframeSignal,
+    marketSource: result.marketSource,
+    candleCloseTime: result.candleCloseTime
   };
   if (Number.isFinite(decisionRecord.entryPrice) && decisionRecord.entryPrice > 0) {
     await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), { expirationTtl: 60 * 60 * 24 * 11 });
@@ -432,6 +458,42 @@ async function runOne(env, symbol, tf) {
   await env.ANALYSIS_KV.put("history:" + symbol + ":" + tf + ":" + Date.now(), JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
   await sendSignalPush(env, result);
   return result;
+}
+
+async function evaluateMaturedDecisions(env) {
+  if (!env.ANALYSIS_KV) return;
+  const now = Date.now(), listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+  const due = [];
+  for (const item of listed.keys) {
+    const r = await env.ANALYSIS_KV.get(item.name, "json");
+    if (r && r.outcome === "PENDING" && now - Date.parse(r.decidedAt) >= 24 * 60 * 60 * 1000) due.push({ key: item.name, record: r });
+  }
+  const symbols = [...new Set(due.map(x => x.record.symbol))];
+  const prices = {};
+  await Promise.all(symbols.map(async symbol => {
+    try {
+      const response = await fetch(PAGE_URL + "/api/price?symbol=" + encodeURIComponent(symbol), { headers: { "Cache-Control": "no-cache" } });
+      if (!response.ok) return;
+      const data = await response.json();
+      const price = Number(data.last);
+      if (Number.isFinite(price) && price > 0) prices[symbol] = price;
+    } catch (_) {}
+  }));
+  for (const item of due) {
+    const r = item.record, exitPrice = prices[r.symbol];
+    if (!Number.isFinite(exitPrice)) continue;
+    r.exitPrice = exitPrice;
+    r.evaluatedAt = new Date(now).toISOString();
+    r.evaluationDelayMs = Math.max(0, now - Date.parse(r.expectedEvaluationAt || (Date.parse(r.decidedAt) + 86400000)));
+    if (r.decision === "LONG" || r.decision === "SHORT") {
+      r.pnlPct = (r.decision === "LONG" ? (exitPrice / r.entryPrice - 1) : (r.entryPrice / exitPrice - 1)) * 100;
+      r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
+    } else {
+      r.outcome = "NO_TRADE";
+      r.pnlPct = null;
+    }
+    await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 11 });
+  }
 }
 
 export default {
@@ -569,40 +631,6 @@ export default {
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }
     });
   },
-async function evaluateMaturedDecisions(env) {
-  if (!env.ANALYSIS_KV) return;
-  const now = Date.now(), listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
-  const due = [];
-  for (const item of listed.keys) {
-    const r = await env.ANALYSIS_KV.get(item.name, "json");
-    if (r && r.outcome === "PENDING" && now - Date.parse(r.decidedAt) >= 24 * 60 * 60 * 1000) due.push({ key: item.name, record: r });
-  }
-  const symbols = [...new Set(due.map(x => x.record.symbol))];
-  const prices = {};
-  await Promise.all(symbols.map(async symbol => {
-    try {
-      const response = await fetch(PAGE_URL + "/api/price?symbol=" + encodeURIComponent(symbol), { headers: { "Cache-Control": "no-cache" } });
-      if (!response.ok) return;
-      const data = await response.json();
-      const price = Number(data.last);
-      if (Number.isFinite(price) && price > 0) prices[symbol] = price;
-    } catch (_) {}
-  }));
-  for (const item of due) {
-    const r = item.record, exitPrice = prices[r.symbol];
-    if (!Number.isFinite(exitPrice)) continue;
-    r.exitPrice = exitPrice; r.evaluatedAt = new Date(now).toISOString();
-    if (r.decision === "LONG" || r.decision === "SHORT") {
-      r.pnlPct = (r.decision === "LONG" ? (exitPrice / r.entryPrice - 1) : (r.entryPrice / exitPrice - 1)) * 100;
-      r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
-    } else {
-      r.outcome = "NO_TRADE";
-      r.pnlPct = null;
-    }
-    await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 11 });
-  }
-}
-
   async scheduled(controller, env, ctx) {
     await evaluateMaturedDecisions(env);
     const minute = new Date(controller.scheduledTime).getUTCMinutes();
