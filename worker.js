@@ -345,50 +345,48 @@ const TRADING_FRAMEWORK_BN = `
 
 async function runCloudflareAgent(env, model, role, instructions, symbol, tf, market) {
   const compactMarket = {
-    source: market.source,
-    ticker: { last: market.ticker?.last, mark: market.ticker?.mark, bid: market.ticker?.bid, ask: market.ticker?.ask, volume24h: market.ticker?.volume24h, openInterest: market.ticker?.openInterest, fundingRate: market.ticker?.fundingRate },
-    indicators: market.indicators,
-    higherTimeframe: market.higherTimeframe,
-    riskEngine: market.riskEngine,
-    derivatives: market.derivatives ? {
-      openInterest: Array.isArray(market.derivatives.openInterest) ? market.derivatives.openInterest.slice(-3) : [],
-      longShort: Array.isArray(market.derivatives.longShort) ? market.derivatives.longShort.slice(-3) : [],
-      orderbook: {
-        bids: Array.isArray(market.derivatives.orderbook?.bids) ? market.derivatives.orderbook.bids.slice(0,5) : [],
-        asks: Array.isArray(market.derivatives.orderbook?.asks) ? market.derivatives.orderbook.asks.slice(0,5) : []
-      },
-      fundingHistory: Array.isArray(market.derivatives.fundingHistory) ? market.derivatives.fundingHistory.slice(-3) : []
-    } : null,
-    recentCandles: (market.candles || []).slice(-8).map(c => ({ open:c.open, high:c.high, low:c.low, close:c.close, volume:c.volume }))
+    source:market.source,
+    ticker:{last:market.ticker?.last,mark:market.ticker?.mark,bid:market.ticker?.bid,ask:market.ticker?.ask,volume24h:market.ticker?.volume24h,openInterest:market.ticker?.openInterest,fundingRate:market.ticker?.fundingRate},
+    indicators:market.indicators,
+    higherTimeframe:market.higherTimeframe,
+    riskEngine:market.riskEngine,
+    derivatives:market.derivatives ? {
+      openInterest:Array.isArray(market.derivatives.openInterest)?market.derivatives.openInterest.slice(-3):[],
+      longShort:Array.isArray(market.derivatives.longShort)?market.derivatives.longShort.slice(-3):[],
+      orderbook:{bids:Array.isArray(market.derivatives.orderbook?.bids)?market.derivatives.orderbook.bids.slice(0,5):[],asks:Array.isArray(market.derivatives.orderbook?.asks)?market.derivatives.orderbook.asks.slice(0,5):[]},
+      fundingHistory:Array.isArray(market.derivatives.fundingHistory)?market.derivatives.fundingHistory.slice(-3):[]
+    }:null,
+    recentCandles:(market.candles||[]).slice(-8).map(c=>({open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume}))
   };
-  const output = await env.AI.run(model, {
-    messages: [
-      { role:"system", content:"তুমি AI Council-এর স্বাধীন " + role + " বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। " + TRADING_FRAMEWORK_BN + " তোমার বিশেষ দায়িত্ব: " + instructions + " কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
-      { role:"user", content:JSON.stringify({ symbol, timeframe:tf, market:compactMarket }) }
-    ],
-    max_completion_tokens: 192,
-    response_format: { type: "json_object" },
-    temperature: 0
-  });
-  return { agent:role, model, ...parseModelJson(output) };
+  const messages=[
+    {role:"system",content:"তুমি AI Council-এর স্বাধীন "+role+" বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
+    {role:"user",content:JSON.stringify({symbol,timeframe:tf,market:compactMarket})}
+  ];
+  const models=[...new Set([model,"@cf/zai-org/glm-4.7-flash"].filter(Boolean))];
+  const failures=[];
+  for(const selectedModel of models){
+    try{
+      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:384,max_tokens:384,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
+      return {agent:role,model:selectedModel,...parseModelJson(output)};
+    }catch(error){failures.push(selectedModel+": "+String(error?.message||error).slice(0,140));}
+  }
+  throw new Error("সব Cloudflare বিশ্লেষক মডেল ব্যর্থ: "+failures.join(" | "));
 }
 
 async function runCouncilJudge(env, symbol, tf, market, opinions) {
-  const output = await env.AI.run(REVIEW_MODEL, {
-    messages: [
-      { role:"system", content:"তুমি AI Council-এর চূড়ান্ত বিচারক ও risk manager। " + TRADING_FRAMEWORK_BN + " স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; প্রতিটি মতামতের প্রমাণ, timeframe alignment, market structure, volume confirmation, invalidation ও risk-reward বিচার করবে। দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
-      { role:"user", content:JSON.stringify({
-        task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",
-        symbol,timeframe:tf,
-        market:{ source:market.source, ticker:market.ticker, indicators:market.indicators, higherTimeframe:market.higherTimeframe, riskEngine:market.riskEngine, derivatives:market.derivatives },
-        opinions
-      }) }
-    ],
-    max_completion_tokens: 192,
-    response_format: { type: "json_object" },
-    temperature: 0
-  });
-  return { agent:"Council Judge", model:REVIEW_MODEL, ...parseModelJson(output) };
+  const messages=[
+    {role:"system",content:"তুমি AI Council-এর চূড়ান্ত বিচারক ও risk manager। "+TRADING_FRAMEWORK_BN+" স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; প্রতিটি মতামতের প্রমাণ, timeframe alignment, market structure, volume confirmation, invalidation ও risk-reward বিচার করবে। দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
+    {role:"user",content:JSON.stringify({task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",symbol,timeframe:tf,market:{source:market.source,ticker:market.ticker,indicators:market.indicators,higherTimeframe:market.higherTimeframe,riskEngine:market.riskEngine,derivatives:market.derivatives},opinions})}
+  ];
+  const models=[...new Set([REVIEW_MODEL,"@cf/google/gemma-4-26b-a4b-it"].filter(Boolean))];
+  const failures=[];
+  for(const selectedModel of models){
+    try{
+      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:384,max_tokens:384,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
+      return {agent:"Council Judge",model:selectedModel,...parseModelJson(output)};
+    }catch(error){failures.push(selectedModel+": "+String(error?.message||error).slice(0,140));}
+  }
+  throw new Error("চূড়ান্ত বিচারক ও fallback মডেল ব্যর্থ: "+failures.join(" | "));
 }
 
 async function runAICouncil(env, symbol, tf, market, gemini) {
