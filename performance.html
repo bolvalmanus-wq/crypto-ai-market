@@ -1,50 +1,62 @@
 <!doctype html>
-<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080e1b"><title>১০ দিনের সিদ্ধান্ত পর্যবেক্ষণ · Crypto AI Market</title>
+<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080e1b"><title>১০ দিনের সিদ্ধান্ত পর্যবেক্ষণ · UTC</title>
 <style>
 :root{color-scheme:dark;--bg:#080e1b;--panel:#111c2e;--line:#2a405d;--muted:#a9bad1;--text:#f3f7ff;--green:#31d69a;--red:#ff7185;--amber:#f5c768}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;padding:14px;background:radial-gradient(ellipse at 50% -15%,#1d3c68 0%,#0b1425 42%,var(--bg) 78%);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:760px;margin-inline:auto}
 header,.panel{background:linear-gradient(145deg,#15243aee,#101a2bee);border:1px solid var(--line);border-radius:15px;padding:14px;margin:0 0 12px;box-shadow:0 12px 34px #0003}
 header a{color:#9bcaff;text-decoration:none;font-size:13px}h1{font-size:21px;margin:9px 0 4px}h2{font-size:16px;margin:0 0 10px}.muted{color:var(--muted);font-size:12px;line-height:1.55}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.stat{background:#14263e;border:1px solid #355171;border-radius:10px;padding:11px}.stat span{display:block;color:var(--muted);font-size:11px}.stat b{display:block;font-size:24px;margin-top:4px;font-variant-numeric:tabular-nums}
-.day{margin-top:16px}.day h3{font-size:14px;margin:0 0 3px}.day-summary{font-size:11px;color:var(--muted);margin-bottom:8px}.decision{padding:12px 0;border-bottom:1px solid #2a3d56;font-size:12px;line-height:1.7}.decision-head{font-weight:850;font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.long,.correct{color:var(--green)}.short,.wrong{color:var(--red)}.pending{color:var(--amber)}.price{font-variant-numeric:tabular-nums}.pill{border:1px solid #405674;border-radius:20px;padding:2px 8px;font-size:10px}.detail{margin-top:5px;color:#d4dfef}.result{margin-top:5px;padding:7px 9px;border-radius:8px;background:#0e1929;border:1px solid #2a405d}
-button{display:block;margin:10px auto 0;border:0;border-radius:10px;padding:11px 20px;background:#286fd1;color:white;font-weight:750;font-size:13px}
+.tabs{display:flex;gap:7px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin}.tab{flex:0 0 auto;background:#14263e;border:1px solid #355171;color:#dce9fa;border-radius:9px;padding:8px 11px;font-size:12px;font-weight:700}.tab.active{background:#245b9d;border-color:#65a9ff;color:white}
+.day h3{font-size:14px;margin:0 0 3px}.day-summary{font-size:11px;color:var(--muted);margin-bottom:8px}.decision{padding:12px 0;border-bottom:1px solid #2a3d56;font-size:12px;line-height:1.7}.decision-head{font-weight:850;font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.long,.correct{color:var(--green)}.short,.wrong{color:var(--red)}.pending{color:var(--amber)}.price{font-variant-numeric:tabular-nums}.pill{border:1px solid #405674;border-radius:20px;padding:2px 8px;font-size:10px}.detail{margin-top:5px;color:#d4dfef}.result{margin-top:5px;padding:7px 9px;border-radius:8px;background:#0e1929;border:1px solid #2a405d}
+button.refresh{display:block;margin:10px auto 0;border:0;border-radius:10px;padding:11px 20px;background:#286fd1;color:white;font-weight:750;font-size:13px}
 @media(max-width:420px){body{padding:9px}.stat{padding:9px}.stat b{font-size:21px}}
 </style></head><body>
-<header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>১০ দিনের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">মূল মার্কেট স্ক্রিন থেকে আলাদা রিপোর্ট। প্রতিটি চূড়ান্ত LONG/SHORT সিদ্ধান্ত আলাদা রেকর্ড হিসেবে দেখানো হবে—তারিখ, সময়, কয়েন, টাইমফ্রেম, সিদ্ধান্ত ও এন্ট্রি মূল্যসহ। সিদ্ধান্তের ২৪ ঘণ্টা পর বাজারদর দিয়ে ফল যাচাই হবে। WAIT এই ট্রেড-ফলাফলের তালিকায় রাখা হয় না।</div></header>
-<section class="panel"><h2>সার্বিক ফলাফল · সর্বশেষ ১০ দিন</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div><div class="muted" id="accuracy" style="margin-top:9px">সঠিকতার হিসাব লোড হচ্ছে…</div></section>
-<section class="panel"><h2>প্রতিটি চূড়ান্ত সিদ্ধান্ত · দিন অনুযায়ী</h2><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button id="refresh" onclick="loadReport()">রিপোর্ট রিফ্রেশ</button></section>
+<header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>১০ দিনের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">সমস্ত তারিখ ও ঘড়ির সময় UTC (আন্তর্জাতিক সময়) অনুযায়ী। প্রতিটি সিদ্ধান্তের নিজস্ব সময় থেকে ঠিক ২৪ ঘণ্টা elapsed হলে ফল যাচাইয়ের জন্য eligible হবে; Worker-এর নির্ধারিত পরবর্তী scheduler run-এ বাজারদর নেওয়া হবে। ১০টি আলাদা দৈনিক শিট এবং ২৪ ঘণ্টার ফলাফলের জন্য আলাদা শিট রয়েছে।</div></header>
+<section class="panel"><h2>সার্বিক ফলাফল · UTC ভিত্তিক সর্বশেষ ১০ দিন</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div><div class="muted" id="accuracy" style="margin-top:9px">সঠিকতার হিসাব লোড হচ্ছে…</div></section>
+<section class="panel"><h2>দৈনিক শিট / ২৪ ঘণ্টার ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" onclick="loadReport()">রিপোর্ট রিফ্রেশ</button></section>
 <script>
-let reportData=null;
+let reportData=null,activeSheet="results";
 const fmt=n=>Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function time(s){return new Date(s).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});}
-function date(s){return new Date(s+"T00:00:00").toLocaleDateString("bn-BD",{weekday:"long",day:"numeric",month:"long",year:"numeric"});}
-function renderRecords(){
- const records=document.getElementById("records"),daily=reportData?.daily||[];
- const groups=daily.map(d=>{
-  const decisions=(d.records||[]).filter(r=>["LONG","SHORT"].includes(r.decision)).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
-  const rows=decisions.map(r=>{
-   const good=r.outcome==="CORRECT",bad=r.outcome==="WRONG",state=good?'<span class="correct">সঠিক</span>':bad?'<span class="wrong">ভুল</span>':'<span class="pending">২৪ ঘণ্টা পূর্ণ হলে যাচাই হবে</span>';
-   const direction=r.decision==="LONG"?"long":"short";
-   const exit=Number.isFinite(Number(r.exitPrice))?'<div>২৪ ঘণ্টা পরের মূল্য: <b class="price">$'+fmt(r.exitPrice)+'</b></div>':'';
-   const pnl=Number.isFinite(Number(r.pnlPct))?'<div>পরিবর্তন: <b class="'+(Number(r.pnlPct)>=0?"correct":"wrong")+'">'+(Number(r.pnlPct)>0?"+":"")+Number(r.pnlPct).toFixed(3)+'%</b></div>':'';
-   const evaluated=r.evaluatedAt?'<div>যাচাইয়ের সময়: '+time(r.evaluatedAt)+'</div>':'';
-   return '<article class="decision"><div class="decision-head"><span>'+time(r.decidedAt)+'</span><span class="pill">'+safe(r.symbol)+'</span><span class="pill">'+safe(r.timeframe)+'</span><b class="'+direction+'">'+r.decision+'</b></div><div class="detail">এন্ট্রি মূল্য: <b class="price">$'+fmt(r.entryPrice)+'</b></div><div class="result">'+state+exit+pnl+evaluated+'</div></article>';
-  }).join("");
-  const correct=decisions.filter(r=>r.outcome==="CORRECT").length,wrong=decisions.filter(r=>r.outcome==="WRONG").length,pending=decisions.filter(r=>r.outcome==="PENDING").length;
-  return rows?'<div class="day"><h3>'+date(d.date)+'</h3><div class="day-summary">মোট '+decisions.length+'টি · সঠিক '+correct+' · ভুল '+wrong+' · অপেক্ষমাণ '+pending+'</div>'+rows+'</div>':"";
- }).filter(Boolean).join("");
- records.innerHTML=groups||"গত ১০ দিনে এখনো কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি। নতুন সিদ্ধান্ত তৈরি হলে এখানে স্বয়ংক্রিয়ভাবে আলাদা রেকর্ড দেখা যাবে।";
+const utcTime=s=>new Date(s).toLocaleTimeString("en-GB",{timeZone:"UTC",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+" UTC";
+const utcDate=d=>new Date(d+"T00:00:00Z").toLocaleDateString("en-GB",{timeZone:"UTC",weekday:"short",day:"2-digit",month:"short",year:"numeric"});
+function utcDays(){const today=new Date();const d=Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate());return Array.from({length:10},(_,i)=>new Date(d-i*86400000).toISOString().slice(0,10));}
+function allRecords(){return reportData?.records||[];}
+function renderTabs(){
+ const days=utcDays(),tabs=[{id:"results",label:"২৪ ঘণ্টার ফলাফল"},...days.map(d=>({id:d,label:utcDate(d)}))];
+ document.getElementById("tabs").innerHTML=tabs.map(t=>'<button class="tab '+(activeSheet===t.id?"active":"")+'" data-sheet="'+t.id+'">'+t.label+'</button>').join("");
+ document.querySelectorAll("[data-sheet]").forEach(b=>b.addEventListener("click",()=>{activeSheet=b.dataset.sheet;renderTabs();renderSheet();}));
+}
+function recordCard(r,showOutcome){
+ const good=r.outcome==="CORRECT",bad=r.outcome==="WRONG",state=good?'<span class="correct">সঠিক</span>':bad?'<span class="wrong">ভুল</span>':'<span class="pending">২৪ ঘণ্টা পূর্ণ হলে যাচাই হবে</span>';
+ const dir=r.decision==="LONG"?"long":"short";
+ const exit=Number.isFinite(Number(r.exitPrice))&&r.exitPrice!==null?'<div>২৪ ঘণ্টা পরের মূল্য: <b class="price">$'+fmt(r.exitPrice)+'</b></div>':"";
+ const pnl=Number.isFinite(Number(r.pnlPct))&&r.pnlPct!==null?'<div>পরিবর্তন: <b class="'+(Number(r.pnlPct)>=0?"correct":"wrong")+'">'+(Number(r.pnlPct)>0?"+":"")+Number(r.pnlPct).toFixed(3)+'%</b></div>':"";
+ const evaluated=r.evaluatedAt?'<div>ফল যাচাইয়ের UTC সময়: '+utcTime(r.evaluatedAt)+' · '+r.evaluatedAt.slice(0,10)+'</div>':"";
+ const expected=r.expectedEvaluationAt?'<div>২৪ ঘণ্টা পূর্ণ হবে: '+r.expectedEvaluationAt.slice(0,10)+' '+utcTime(r.expectedEvaluationAt)+'</div>':"";
+ return '<article class="decision"><div class="decision-head"><span>'+utcTime(r.decidedAt)+'</span><span class="pill">'+safe(r.symbol)+'</span><span class="pill">'+safe(r.timeframe)+'</span><b class="'+dir+'">'+r.decision+'</b></div><div class="detail">এন্ট্রি মূল্য: <b class="price">$'+fmt(r.entryPrice)+'</b></div>'+(showOutcome?'<div class="result">'+state+exit+pnl+evaluated+'</div>':'<div class="detail">'+expected+'</div><div class="result">'+state+exit+pnl+evaluated+'</div>')+'</article>';
+}
+function renderSheet(){
+ const target=document.getElementById("records"),rows=allRecords().slice().sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
+ if(activeSheet==="results"){
+  const settled=rows.filter(r=>r.outcome==="CORRECT"||r.outcome==="WRONG");
+  target.innerHTML=settled.length?'<div class="day-summary">২৪ ঘণ্টা পার হয়ে ফল যাচাই সম্পন্ন হয়েছে এমন সিদ্ধান্ত: '+settled.length+'টি। নতুন ফল এখানে যোগ হবে।</div>'+settled.map(r=>recordCard(r,true)).join(""):"এখনো ২৪ ঘণ্টা পূর্ণ করে ফল যাচাই সম্পন্ন হয়েছে—এমন সিদ্ধান্ত নেই।";
+  return;
+ }
+ const daily=rows.filter(r=>r.decidedAt&&r.decidedAt.slice(0,10)===activeSheet);
+ const correct=daily.filter(r=>r.outcome==="CORRECT").length,wrong=daily.filter(r=>r.outcome==="WRONG").length,pending=daily.filter(r=>r.outcome==="PENDING").length;
+ target.innerHTML='<div class="day-summary">'+utcDate(activeSheet)+' · মোট '+daily.length+'টি সিদ্ধান্ত · সঠিক '+correct+' · ভুল '+wrong+' · অপেক্ষমাণ '+pending+'</div>'+(daily.length?daily.map(r=>recordCard(r,false)).join(""):"এই UTC দিনে কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।");
 }
 async function loadReport(){
  const stats=document.getElementById("stats"),records=document.getElementById("records"),btn=document.getElementById("refresh");btn.disabled=true;
  try{
   const res=await fetch("/api/performance",{cache:"no-store"}),data=await res.json();if(!res.ok)throw Error(data.error||"রিপোর্ট পাওয়া যায়নি");
-  const s=data.summary||{},evaluated=(s.correct||0)+(s.wrong||0),accuracy=evaluated?((s.correct||0)/evaluated*100).toFixed(1):"—";
+  reportData=data;const s=data.summary||{},evaluated=(s.correct||0)+(s.wrong||0),accuracy=evaluated?((s.correct||0)/evaluated*100).toFixed(1):"—";
   const tiles=[["মোট সিদ্ধান্ত",s.total||0],["যাচাই সম্পন্ন",evaluated],["সঠিক সিদ্ধান্ত",s.correct||0],["ভুল সিদ্ধান্ত",s.wrong||0],["২৪ ঘণ্টা অপেক্ষমাণ",s.pending||0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",(s.last24||{}).total||0]];
   stats.innerHTML=tiles.map(([k,n])=>'<div class="stat"><span>'+k+'</span><b>'+safe(n)+'</b></div>').join("");
-  document.getElementById("accuracy").textContent="যাচাইকৃত সিদ্ধান্তের সঠিকতার হার: "+accuracy+(accuracy==="—"?"":"%")+" · কেবল ২৪ ঘণ্টা পূর্ণ হওয়া সিদ্ধান্ত গণনা করা হয়েছে।";
-  reportData=data;renderRecords();
+  document.getElementById("accuracy").textContent="যাচাইকৃত সিদ্ধান্তের সঠিকতার হার: "+accuracy+(accuracy==="—"?"":"%")+" · UTC সময় অনুযায়ী ২৪ ঘণ্টা পূর্ণ হওয়া রেকর্ডই ফলাফলে গণনা করা হয়েছে।";
+  if(activeSheet!=="results"&&!utcDays().includes(activeSheet))activeSheet="results";
+  renderTabs();renderSheet();
  }catch(err){stats.innerHTML='<div class="muted">রিপোর্ট লোড হয়নি: '+safe(err.message)+'</div>';records.textContent="সার্ভার/API সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।";}
  finally{btn.disabled=false;}
 }
