@@ -90,7 +90,7 @@ async function sendSignalPush(env,result) {
   const listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});
   const payload={
     title:decision,
-    body:result.symbol+" · "+(result.timeframe==="30m"?"৩০ মিনিট":"১ ঘণ্টা"),
+    body:result.symbol+" · "+(result.timeframe==="30m"?"৩০ মিনিট":result.timeframe==="1h"?"১ ঘণ্টা":"৪ ঘণ্টা"),
     url:"/",
     tag:result.symbol+"-"+result.timeframe+"-"+decision,
     decision,symbol:result.symbol,timeframe:result.timeframe
