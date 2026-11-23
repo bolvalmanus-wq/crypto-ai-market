@@ -391,12 +391,15 @@ async function runCouncilJudge(env, symbol, tf, market, opinions) {
 
 async function runAICouncil(env, symbol, tf, market, gemini) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
-  const geminiOpinions = Array.isArray(gemini.councilOpinions) && gemini.councilOpinions.length
-    ? gemini.councilOpinions
-    : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }];
-  if (gemini.unavailableError) throw new Error("Gemini unavailable: " + gemini.unavailableError);
+  // Gemini is an optional independent vote: a Pages deployment/model outage must not disable the entire council.
+  const geminiOpinions = !gemini.unavailableError
+    ? (Array.isArray(gemini.councilOpinions) && gemini.councilOpinions.length
+      ? gemini.councilOpinions
+      : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }])
+    : [];
   const specialistModels = [
-    { model:"@cf/google/gemma-4-26b-a4b-it", role:"Independent Technical & Risk Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe, candle structure, false breakout ও downside/upside risk একসঙ্গে বিচার করো।" }
+    { model:"@cf/google/gemma-4-26b-a4b-it", role:"Independent Technical & Risk Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe, candle structure, false breakout ও downside/upside risk একসঙ্গে বিচার করো।" },
+    { model:"@cf/zai-org/glm-4.7-flash", role:"Independent Market Structure & Risk Analyst", instructions:"নিজস্বভাবে market regime, support/resistance, volume, multi-timeframe alignment, derivatives context, false breakout এবং বিপরীত দিকের ঝুঁকি বিচার করো।" }
   ];
   const settled = await Promise.allSettled(specialistModels.map(agent =>
     runCloudflareAgent(env, agent.model, agent.role, agent.instructions, symbol, tf, market)
@@ -409,7 +412,9 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge); }
   catch(error) { judgeError = String(error).slice(0,180); }
   const opinions = judge ? [...preJudge, judge] : preJudge;
-  return { opinions, judge, errors, judgeError, status:judge && preJudge.length >= 2 ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
+  return { opinions, judge, errors, judgeError,
+    geminiUnavailable:gemini.unavailableError || null,
+    status:judge && preJudge.length >= 2 ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
 }
 
 function finalDecision(market, council) {
