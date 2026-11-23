@@ -74,8 +74,8 @@ export async function onRequestPost({ request, env }) {
   }
 
   const market = body.market;
-  const primaryModel = (env.GEMINI_MODEL || "gemini-3.8-flash").trim();
-  const fallbackModel = (env.GEMINI_FALLBACK_MODEL || "gemini-3.5-flash-lite").trim();
+  const primaryModel = (env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+  const fallbackModel = (env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash-lite").trim();
   const models = [...new Set([primaryModel, fallbackModel].filter(Boolean))];
   const prompt = `তুমি একটি সতর্ক, তথ্য-ভিত্তিক ক্রিপ্টো পারপেচুয়াল ফিউচার্স বিশ্লেষক। ${body.symbol}/USDT-এর ${body.timeframe} সময়সীমা বিশ্লেষণ করো।
 
@@ -98,21 +98,17 @@ ${JSON.stringify(market)}
 
 JSON: {"decision":"LONG|SHORT|WAIT","direction":"UPWARD|DOWNWARD|SIDEWAYS","reason":"বাংলায় সংক্ষিপ্ত কারণ","risk":"বাংলায় সংক্ষিপ্ত ঝুঁকি","dataQuality":"GOOD|LIMITED"}`;
 
-  const settled = await Promise.allSettled(models.map(model => callModel(model, prompt, env.GEMINI_API_KEY)));
-  const successes = settled.flatMap((item, index) => item.status === "fulfilled"
-    ? [{ ...item.value, agent: "Gemini " + item.value.model }]
-    : []);
-  const failures = settled.flatMap((item, index) => item.status === "rejected"
-    ? [`${models[index]}: ${item.reason instanceof Error ? item.reason.message : "unknown error"}`]
-    : []);
-  if (successes.length) {
+  let success = null;
+  const failures = [];
+  for (const model of models) {
+    try { success = await callModel(model, prompt, env.GEMINI_API_KEY); break; }
+    catch (error) { failures.push(`${model}: ${error instanceof Error ? error.message : "unknown error"}`); }
+  }
+  if (success) {
     return Response.json({
-      symbol: body.symbol,
-      timeframe: body.timeframe,
-      provider: "Google Gemini Council",
-      model: successes.map(item => item.model).join(" + "),
-      analysis: successes[0].analysis,
-      councilOpinions: successes.map(item => ({ agent: item.agent, model: item.model, ...item.analysis })),
+      symbol: body.symbol, timeframe: body.timeframe, provider: "Google Gemini",
+      model: success.model, analysis: success.analysis,
+      councilOpinions: [{ agent: "Gemini " + success.model, model: success.model, ...success.analysis }],
       generatedAt: new Date().toISOString()
     }, { headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   }
