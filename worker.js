@@ -184,13 +184,13 @@ function analyze(data, tf) {
   let trSmoothed = 0, plusSmoothed = 0, minusSmoothed = 0;
   const dxValues = [];
   for (let i = 1; i <= adxPeriod; i++) {
-    const cur = bars[bars.length - adxPeriod - 1 + i], prev = bars[bars.length - adxPeriod - 2 + i];
+    const cur = bars[i], prev = bars[i - 1];
     const up = cur.high - prev.high, down = prev.low - cur.low;
     if (up > down && up > 0) plusSmoothed += up;
     if (down > up && down > 0) minusSmoothed += down;
     trSmoothed += Math.max(cur.high - cur.low, Math.abs(cur.high - prev.close), Math.abs(cur.low - prev.close));
   }
-  for (let i = bars.length - adxPeriod + 1; i < bars.length; i++) {
+  for (let i = adxPeriod + 1; i < bars.length; i++) {
     const cur = bars[i], prev = bars[i - 1];
     const up = cur.high - prev.high, down = prev.low - cur.low;
     const plus = up > down && up > 0 ? up : 0;
