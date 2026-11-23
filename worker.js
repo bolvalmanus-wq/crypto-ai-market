@@ -453,8 +453,14 @@ function finalDecision(market, council) {
   const technical = market.indicators.technicalSignal;
   const score = Number(market.indicators.technicalScore) || 0;
   const technicalSupports = candidate === "LONG" ? score >= 0.48 : score <= -0.48;
-  const higherSignals = [market.higherTimeframe?.signal, market.higherTimeframe?.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT");
-  const higherConflict = higherSignals.some(x=>x!==candidate);
+  // Require directional agreement from every higher timeframe:
+  // 30m entries need both 1h structure and 4h trend; 1h setups need 4h trend.
+  const higher = market.higherTimeframe || {};
+  const requiredHigherSignals = higher.timeframe === "1h"
+    ? [higher.signal, higher.fourHour?.signal]
+    : [higher.signal];
+  const higherAligned = requiredHigherSignals.length > 0 &&
+    requiredHigherSignals.every(signal => signal === candidate);
   const hardRisk = candidate === "LONG"
     ? (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)
     : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
@@ -473,8 +479,8 @@ function finalDecision(market, council) {
     candleData.every(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0) &&
     fourHourContext?.available === true
   );
-  const strongEnough = enough && technicalSupports && !hardRisk && judgeSupports && dataQualityGood;
-  if (strongEnough && (!higherConflict || (counts[candidate] >= 4 && margin >= 3))) {
+  const strongEnough = enough && technicalSupports && higherAligned && !hardRisk && judgeSupports && dataQualityGood;
+  if (strongEnough) {
     const judgeReason = council.judge?.reason || "AI Council-এর অধিকাংশ স্বাধীন বিশ্লেষণ একমত।";
     return {
       decision:candidate,
@@ -489,7 +495,7 @@ function finalDecision(market, council) {
     : !technicalSupports ? "টেকনিক্যাল স্কোর প্রস্তাবিত দিককে যথেষ্ট সমর্থন করছে না"
     : hardRisk ? "গুরুত্বপূর্ণ সাপোর্ট/রেজিস্ট্যান্স ঝুঁকি বিপরীত"
     : !dataQualityGood ? "বাজারের যাচাইকৃত ডেটা বা ৪ ঘণ্টার প্রেক্ষাপট অপর্যাপ্ত"
-    : higherConflict ? "বড় টাইমফ্রেমে বিপরীত প্রবণতা রয়েছে"
+    : !higherAligned ? "৪ ঘণ্টা ও ১ ঘণ্টার উচ্চতর টাইমফ্রেমে একই দিকে নিশ্চিত সমর্থন নেই"
     : "নিরাপদ সিদ্ধান্তের শর্ত পূরণ হয়নি";
   return {
     decision:"WAIT",
