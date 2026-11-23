@@ -595,11 +595,15 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
 <div class="card" id="historyCard"><h2>সিগন্যাল ইতিহাস</h2><div id="history" class="muted">এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।</div></div>
 <div class="card" id="warningCard"><h2>গুরুত্বপূর্ণ সতর্কতা</h2><p class="muted">এটি পরীক্ষামূলক কারিগরি বিশ্লেষণ, নিশ্চিত ভবিষ্যদ্বাণী নয়। OKX-এর বাজারদর ও Bybit-এর কার্যকর দর/মার্ক প্রাইস আলাদা হতে পারে। Bybit-এ অর্ডার দেওয়ার আগে নিজে দর মিলিয়ে নিন। ডেটা পুরোনো, অসম্পূর্ণ বা অস্বাভাবিক হলে অ্যাপ WAIT দেখাবে। আপাতত কোনো AI মডেল বা ব্যাকটেস্ট-যাচাইকৃত জয়ের সম্ভাবনা ব্যবহার করা হচ্ছে না।</p></div>
 <footer>Crypto AI Market | পরীক্ষামূলক সংস্করণ 2.1</footer>
-<script>
+<style>
+.timeframe-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.timeframe-tab{min-width:0!important;padding-left:4px!important;padding-right:4px!important;font-size:clamp(11px,3.3vw,16px)!important}
+</style>
+<script><script>
 const symbols=["BTC","SOL"];
 function updateLiveClock(){const el=document.getElementById("liveClock");if(!el)return;const now=new Date();const date=now.toLocaleDateString("bn-BD",{weekday:"short",day:"numeric",month:"short",year:"numeric"});const time=now.toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});el.innerHTML='<span class="clock-dot"></span><span>LIVE · '+date+' · '+time+'</span>'}
 updateLiveClock();setInterval(updateLiveClock,1000);
-const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা"};
+const labels={"30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"};
 const fmt=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:4}):"—";
 function safeText(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
 function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
@@ -639,15 +643,27 @@ function analyse(candles,price,maxAgeMs,intervalMs,derivatives,tf){
  if(signal!=="WAIT"){result.entry=price;result.stop=signal==="LONG"?price-1.5*atr:price+1.5*atr;result.target=signal==="LONG"?price+2*atr:price-2*atr}
  return result;
 }
+
+function buildFourHourCandles(candles){
+ const source=(candles||[]).filter(c=>c.confirmed&&[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.close>0).sort((a,b)=>a.time-b.time);
+ const buckets=new Map();
+ for(const candle of source){const bucket=Math.floor(candle.time/14400000)*14400000;if(!buckets.has(bucket))buckets.set(bucket,[]);buckets.get(bucket).push(candle)}
+ return [...buckets.entries()].sort((a,b)=>a[0]-b[0]).flatMap(([time,rows])=>{
+  rows.sort((a,b)=>a.time-b.time);
+  if(rows.length!==4||rows.some((c,i)=>i>0&&c.time-rows[i-1].time!==3600000))return [];
+  return [{time,open:rows[0].open,high:Math.max(...rows.map(c=>c.high)),low:Math.min(...rows.map(c=>c.low)),close:rows[3].close,volume:rows.reduce((sum,c)=>sum+(Number(c.volume)||0),0),confirmed:true}];
+ });
+}
 function card(symbol,data){
  const price=Number(data.ticker.last),change=(price/Number(data.ticker.open24h)-1)*100,age=data.ageSeconds;
  let html='<section class="card market-card" id="market-'+symbol+'"><div class="row market-title"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row price-live-row"><div class="price" id="live-price-'+symbol+'">$ '+fmt(price)+'</div><div class="fresh '+((age>180||!Number.isFinite(price)||price<=0)?"offline":"")+'">'+(age>180||!Number.isFinite(price)||price<=0?'<span class="live-dot"></span>ডেটা পুরোনো বা অপ্রাপ্য':'<span class="live-dot"></span>লাইভ মার্কেট ডেটা সচল')+'</div></div>';
  if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
-  html+='<nav class="timeframe-tabs" aria-label="সময় নির্বাচন"><button type="button" class="timeframe-tab active" id="tf-tab-'+symbol+'-30m" onclick="showTimeframe(\''+symbol+'\',\'30m\')">৩০ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1h" onclick="showTimeframe(\''+symbol+'\',\'1h\')">১ ঘণ্টা</button></nav><div class="timeframe-panels">';
-  for(const tf of ["30m","1h"]){
-   const interval=tf==="30m"?30*60*1000:60*60*1000;
-   const a=analyse(data.candles[tf],price,tf==="30m"?45*60*1000:90*60*1000,interval,data.derivatives,tf);
+  html+='<nav class="timeframe-tabs" aria-label="সময় নির্বাচন"><button type="button" class="timeframe-tab active" id="tf-tab-'+symbol+'-30m" onclick="showTimeframe(\''+symbol+'\',\'30m\')">৩০ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1h" onclick="showTimeframe(\''+symbol+'\',\'1h\')">১ ঘণ্টা</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-4h" onclick="showTimeframe(\''+symbol+'\',\'4h\')">৪ ঘণ্টা</button></nav><div class="timeframe-panels">';
+  for(const tf of ["30m","1h","4h"]){
+   const interval=tf==="30m"?1800000:tf==="1h"?3600000:14400000;
+   const candles=tf==="4h"?buildFourHourCandles(data.candles["1h"]):data.candles[tf];
+   const a=analyse(candles,price,tf==="30m"?2700000:tf==="1h"?5400000:21600000,interval,data.derivatives,tf);
    const score=Number.isFinite(a.score)?a.score:null;
    const longScore=score===null?null:Math.round((score+1)*50);
    const shortScore=score===null?null:100-longScore;
@@ -659,7 +675,7 @@ function card(symbol,data){
  html+='</section>';return html;
 }
 function showTimeframe(symbol,tf){
- for(const item of ["30m","1h"]){
+ for(const item of ["30m","1h","4h"]){
   const panel=document.getElementById("tf-panel-"+symbol+"-"+item);
   const tab=document.getElementById("tf-tab-"+symbol+"-"+item);
   if(panel)panel.hidden=item!==tf;
@@ -679,7 +695,7 @@ function renderHistory(){
  el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
 }
 
-const aiCacheTtl={"30m":1800000,"1h":3600000};
+const aiCacheTtl={"30m":1800000,"1h":3600000,"4h":14400000};
 function aiPanel(symbol,tf){return document.getElementById("ai-"+symbol+"-"+tf)}
 function showAi(symbol,tf,result){
  const el=aiPanel(symbol,tf);if(!el)return;
@@ -710,12 +726,13 @@ function showAi(symbol,tf,result){
   '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
 }
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
- for(const tf of ["30m","1h"]){
+ for(const tf of ["30m","1h","4h"]){
   if(onlyTf&&tf!==onlyTf)continue;
-  const key="duel_v1_"+symbol+"_"+tf;
-  const lastClosed=(data.candles[tf]||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
+  const key="duel_v2_"+symbol+"_"+tf;
+  const tfCandles=tf==="4h"?buildFourHourCandles(data.candles["1h"]):data.candles[tf];
+  const lastClosed=(tfCandles||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
   const candleKey=lastClosed?Number(lastClosed.time):null;
-  const expectedClose=candleKey===null?null:candleKey+(tf==="30m"?1800000:3600000);
+  const expectedClose=candleKey===null?null:candleKey+(tf==="30m"?1800000:tf==="1h"?3600000:14400000);
   const panel=aiPanel(symbol,tf);
   const decision=document.getElementById("decision-"+symbol+"-"+tf);
   try{
@@ -846,12 +863,12 @@ async function refreshLivePrices(){
   }));
  }finally{livePriceBusy=false}
 }
-let lastCountdownSlots={m30:Math.floor(Date.now()/1800000),h1:Math.floor(Date.now()/3600000)};
+let lastCountdownSlots={m30:Math.floor(Date.now()/1800000),h1:Math.floor(Date.now()/3600000),h4:Math.floor(Date.now()/14400000)};
 function updateCandleCountdowns(){
- const now=Date.now(),intervals={"30m":1800000,"1h":3600000};
+ const now=Date.now(),intervals={"30m":1800000,"1h":3600000,"4h":14400000};
  let boundaryChanged=false;
- for(const tf of ["30m","1h"]){
-  const interval=intervals[tf],slot=Math.floor(now/interval),key=tf==="30m"?"m30":"h1";
+ for(const tf of ["30m","1h","4h"]){
+  const interval=intervals[tf],slot=Math.floor(now/interval),key=tf==="30m"?"m30":tf==="1h"?"h1":"h4";
   if(slot>lastCountdownSlots[key]){boundaryChanged=true;lastCountdownSlots[key]=slot;}
   let remaining=interval-(now%interval);if(remaining===interval)remaining=0;
   const seconds=Math.ceil(remaining/1000),minutes=Math.floor(seconds/60),secs=seconds%60;
