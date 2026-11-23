@@ -336,10 +336,14 @@ function parseModelJson(output) {
 }
 
 function validateReviewerAnswer(parsed) {
-  const decision = String(parsed && parsed.decision || "").trim().toUpperCase();
-  const reason = typeof (parsed && parsed.reason) === "string" ? parsed.reason.trim() : "";
-  const risk = typeof (parsed && parsed.risk) === "string" ? parsed.risk.trim() : "";
-  if (!["LONG","SHORT","WAIT"].includes(decision) || !reason || !risk) {
+  const decision = String(parsed && (parsed.decision || parsed.signal || parsed.recommendation) || "").trim().toUpperCase();
+  const reasonValue = parsed && (parsed.reason || parsed.rationale || parsed.summary || parsed.explanation);
+  const reason = typeof reasonValue === "string" ? reasonValue.trim() : "";
+  const riskValue = parsed && (parsed.risk || parsed.riskWarning || parsed.caution);
+  const risk = typeof riskValue === "string" && riskValue.trim()
+    ? riskValue.trim()
+    : "সিগন্যাল ভুল হতে পারে; বড় টাইমফ্রেম ও ইনভ্যালিডেশন নিশ্চিত না হলে ট্রেড নয়।";
+  if (!["LONG","SHORT","WAIT"].includes(decision) || !reason) {
     throw new Error("Cloudflare AI answer failed validation");
   }
   return { decision, reason: reason.slice(0, 500), risk: risk.slice(0, 500) };
