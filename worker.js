@@ -327,6 +327,22 @@ function validateReviewerAnswer(parsed) {
   return { decision, reason: reason.slice(0, 500), risk: risk.slice(0, 500) };
 }
 
+const TRADING_FRAMEWORK_BN = `
+ট্রেডিং জ্ঞান ও বাধ্যতামূলক বিশ্লেষণ-পদ্ধতি:
+১) বাজারের অবস্থা আগে শ্রেণিবদ্ধ করো: uptrend, downtrend, range, breakout, pullback, নাকি high-volatility/choppy market। প্রতিটি অবস্থায় একই কৌশল প্রয়োগ করবে না।
+২) Market structure: swing high/low, higher-high/higher-low, lower-high/lower-low, support/resistance এবং breakout-এর পর retest যাচাই করো। শুধু একটি candle বা wick-কে breakout ধরবে না; candle close ও volume confirmation দেখো।
+৩) Multi-timeframe: ৪ ঘণ্টা = প্রধান trend/context, ১ ঘণ্টা = intermediate structure, ৩০ মিনিট = entry timing। ছোট timeframe-এর signal বড় timeframe-এর বিপরীত হলে confidence কমাও; জোর করে trade নিও না।
+৪) Indicator-গুলোকে আলাদা ভোটের মতো গুনবে না। EMA trend, MACD momentum, RSI momentum/overbought-oversold context, ADX trend strength, Bollinger volatility/mean-reversion context, relative volume confirmation—এগুলো একই price action-এর সম্পর্কিত প্রমাণ। একই তথ্যকে বারবার double-count করবে না।
+৫) Derivatives: open interest বাড়া/কমা, long-short ratio, funding এবং orderbook imbalance-কে context হিসেবে দেখো; এগুলো একা price direction নিশ্চিত করে না। crowded positioning হলে squeeze/liq risk উল্লেখ করো।
+৬) LONG-এর পক্ষে: structure ও higher timeframe bullish, price/EMA trend সহায়ক, momentum ও volume confirmation আছে, resistance-এর ঠিক নিচে late entry নয়, এবং invalidation level যুক্তিসঙ্গত।
+৭) SHORT-এর পক্ষে: structure ও higher timeframe bearish, lower-high/lower-low বা confirmed support breakdown, momentum ও volume সহায়ক, support-এর একেবারে কাছে late entry নয়, এবং invalidation level যুক্তিসঙ্গত।
+৮) WAIT-এর কারণ: mixed timeframe, range/chop, দুর্বল volume, false breakout, অতিরিক্ত stretched move, গুরুত্বপূর্ণ level-এর মাঝখানে অস্পষ্ট price, data missing/stale, অথবা risk-reward অনুকূল নয়। WAIT একটি বৈধ ও পেশাদার সিদ্ধান্ত।
+৯) Risk management: আগে trade invalidation কোথায় হবে তা ভাবো; stop-loss ছাড়া trade নয়। সম্ভাব্য reward যদি সম্ভাব্য risk-এর তুলনায় যথেষ্ট না হয় তবে WAIT। leverage, position size বা নিশ্চিত লাভের দাবি বানাবে না। ATR/volatility বেশি হলে risk বাড়ে।
+১০) সিদ্ধান্ত দেওয়ার আগে বিপরীত দিকের সবচেয়ে শক্তিশালী যুক্তি খোঁজো (pre-mortem)। নিজের প্রাথমিক মত ভুল প্রমাণ করতে পারে—এমন ডেটা স্পষ্টভাবে বিবেচনা করো।
+১১) কেবল সরবরাহ করা ডেটা ব্যবহার করো। সংবাদ, liquidation map, funding, open interest, support বা price level দেওয়া না থাকলে সেগুলো আছে বলে দাবি করবে না। কোনো সংখ্যা অনুমান করবে না।
+১২) confidence score বা win-rate বানাবে না। সিদ্ধান্তের সঙ্গে সংক্ষিপ্ত evidence এবং সবচেয়ে বড় risk উল্লেখ করো। অতীতের performance feedback ছোট sample হলে সেটিকে দুর্বল ইঙ্গিত হিসেবে ধরো, নিশ্চয়তা হিসেবে নয়।
+`; 
+
 async function runCloudflareAgent(env, model, role, instructions, symbol, tf, market) {
   const compactMarket = {
     source: market.source,
@@ -347,7 +363,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
   };
   const output = await env.AI.run(model, {
     messages: [
-      { role:"system", content:"তুমি AI Council-এর স্বাধীন " + role + " বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। " + instructions + " কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
+      { role:"system", content:"তুমি AI Council-এর স্বাধীন " + role + " বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। " + TRADING_FRAMEWORK_BN + " তোমার বিশেষ দায়িত্ব: " + instructions + " কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
       { role:"user", content:JSON.stringify({ symbol, timeframe:tf, market:compactMarket }) }
     ],
     max_completion_tokens: 192,
@@ -360,7 +376,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
 async function runCouncilJudge(env, symbol, tf, market, opinions) {
   const output = await env.AI.run(REVIEW_MODEL, {
     messages: [
-      { role:"system", content:"তুমি AI Council-এর চূড়ান্ত বিচারক। স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
+      { role:"system", content:"তুমি AI Council-এর চূড়ান্ত বিচারক ও risk manager। " + TRADING_FRAMEWORK_BN + " স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; প্রতিটি মতামতের প্রমাণ, timeframe alignment, market structure, volume confirmation, invalidation ও risk-reward বিচার করবে। দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
       { role:"user", content:JSON.stringify({
         task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",
         symbol,timeframe:tf,
