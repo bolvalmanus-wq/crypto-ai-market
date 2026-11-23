@@ -562,7 +562,7 @@ async function runOne(env, symbol, tf) {
       };
   const result = {
     symbol, timeframe: tf,
-    provider: council ? "Gemini + Gemma 4 + GLM Judge" : "AI unavailable / WAIT",
+    provider: council ? (ai.unavailableError ? "Cloudflare AI Council (Gemma 4 + GLM Judge)" : "Gemini + Gemma 4 + GLM Judge") : "AI unavailable / WAIT",
     model: (ai.model || "Gemini unavailable") + (council ? " + Gemma 4 + Judge " + REVIEW_MODEL : ""),
     analysis,
     debate: {
