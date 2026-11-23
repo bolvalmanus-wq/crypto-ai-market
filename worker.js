@@ -219,6 +219,35 @@ function analyze(data, tf) {
 }
 
 
+function buildFourHourContext(data) {
+  const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
+  const buckets = new Map();
+  for (const candle of source) {
+    const bucket = Math.floor(candle.time / 14400000) * 14400000;
+    if (!buckets.has(bucket)) buckets.set(bucket, []);
+    buckets.get(bucket).push(candle);
+  }
+  const bars = [...buckets.entries()].sort((a,b) => a[0] - b[0]).flatMap(([time, rows]) => {
+    rows.sort((a,b) => a.time - b.time);
+    if (rows.length !== 4 || rows.some((c,i) => i > 0 && c.time - rows[i-1].time !== 3600000)) return [];
+    return [{ time, open: rows[0].open, high: Math.max(...rows.map(c=>c.high)), low: Math.min(...rows.map(c=>c.low)), close: rows[3].close, volume: rows.reduce((sum,c)=>sum + (Number(c.volume)||0),0) }];
+  });
+  if (bars.length < 50) return { timeframe: "4h", signal: "WAIT", available: false, warning: "৪ ঘণ্টার পর্যাপ্ত সম্পূর্ণ ক্যান্ডেল নেই" };
+  const closes = bars.map(c=>c.close), last = bars[bars.length-1];
+  const ema20 = ema(closes.slice(-80),20), ema50 = ema(closes.slice(-100),50), strength = rsi(closes,14);
+  const prior = bars.slice(-21,-1), support = Math.min(...prior.map(c=>c.low)), resistance = Math.max(...prior.map(c=>c.high));
+  const supportBreakdown = last.close < support * 0.998, resistanceBreakout = last.close > resistance * 1.002;
+  const bearish = ema20 < ema50 && last.close < ema20 && strength < 50;
+  const bullish = ema20 > ema50 && last.close > ema20 && strength > 50;
+  const warnings = [];
+  if (ema20 < ema50) warnings.push("৪ ঘণ্টায় EMA20, EMA50-এর নিচে: বড় প্রবণতা দুর্বল");
+  if (last.close < ema20 && strength < 45) warnings.push("৪ ঘণ্টায় দাম EMA20-এর নিচে এবং RSI দুর্বল");
+  if (supportBreakdown) warnings.push("সাম্প্রতিক ৪ ঘণ্টার সাপোর্ট ভেঙেছে");
+  if (ema20 > ema50 && last.close > ema20 && strength > 55) warnings.push("৪ ঘণ্টায় ঊর্ধ্বমুখী প্রবণতার সমর্থন আছে");
+  if (resistanceBreakout) warnings.push("সাম্প্রতিক ৪ ঘণ্টার রেজিস্ট্যান্স অতিক্রম করেছে");
+  return { timeframe: "4h", available: true, signal: bearish || supportBreakdown ? "SHORT" : bullish || resistanceBreakout ? "LONG" : "WAIT", ema20, ema50, rsi: strength, close: last.close, support, resistance, supportBreakdown, resistanceBreakout, bearishWarning: ema20 < ema50 || (last.close < ema20 && strength < 45), bullishWarning: ema20 > ema50 || (last.close > ema20 && strength > 55), warnings, candleTime: new Date(last.time + 14400000).toISOString() };
+}
+
 function parseModelJson(output) {
   let raw = output && output.response;
   if (raw == null && output && output.choices && output.choices[0] && output.choices[0].message) raw = output.choices[0].message.content;
@@ -282,6 +311,7 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini, performance
     indicators: market.indicators,
     performanceFeedback,
     higherTimeframe: market.higherTimeframe,
+    riskEngine: market.riskEngine,
     derivatives: market.derivatives ? {
       longShort: market.derivatives.longShort,
       openInterest: market.derivatives.openInterest,
@@ -311,10 +341,11 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini, performance
 function finalDecision(market, gemini, reviewer) {
   const technical = market.indicators.technicalSignal;
   const a = gemini.decision, b = reviewer.decision;
-  const higher = market.higherTimeframe?.signal;
+  const higherSignals = [market.higherTimeframe?.signal, market.higherTimeframe?.fourHour?.signal].filter(signal => signal === "LONG" || signal === "SHORT");
   const sameAI = a === b && (a === "LONG" || a === "SHORT");
   const sameTechnical = technical === a;
-  const higherConflicts = higher && higher !== "WAIT" && higher !== a;
+  const higherConflicts = higherSignals.some(signal => signal !== a);
+  const criticalRiskConflict = a === "LONG" && market.riskEngine?.supportBreakdown === true;
   if (sameAI && sameTechnical && !higherConflicts && gemini.dataQuality === "GOOD") {
     return {
       decision: a,
@@ -324,8 +355,10 @@ function finalDecision(market, gemini, reviewer) {
       dataQuality: gemini.dataQuality
     };
   }
-  const why = higherConflicts
-    ? "উচ্চতর সময়সীমার সংকেত বিপরীত"
+  const why = criticalRiskConflict
+    ? "৪ ঘণ্টার গুরুত্বপূর্ণ সাপোর্ট ভেঙেছে; সম্ভাব্য পতনের ঝুঁকিতে LONG বাতিল"
+    : higherConflicts
+    ? "১ ঘণ্টা/৪ ঘণ্টার বড় প্রবণতা প্রস্তাবিত সিদ্ধান্তের বিপরীত"
     : !sameAI ? "দুই AI-এর সিদ্ধান্ত এক নয়"
     : !sameTechnical ? "ইন্ডিকেটর AI-দের সিদ্ধান্ত নিশ্চিত করছে না"
     : "ডেটার মান যথেষ্ট নিশ্চিত নয়";
@@ -369,18 +402,17 @@ async function runOne(env, symbol, tf) {
   const data = await marketResponse.json();
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
   const market = analyze(data, tf);
-  // Only 1h is a higher timeframe confirmation for the 30m setup.
-  // Do not incorrectly treat 30m as the higher timeframe for a 1h setup.
+  // Check adjacent and broader 4h market structure before accepting a direction.
+  const fourHour = buildFourHourContext(data);
   if (tf === "30m") {
     try {
       const other = analyze(data, "1h");
-      market.higherTimeframe = {
-        timeframe: "1h", signal: other.indicators.technicalSignal,
-        score: other.indicators.technicalScore, rsi: other.indicators.rsi,
-        ema9: other.indicators.ema9, ema21: other.indicators.ema21
-      };
-    } catch (_) {}
+      market.higherTimeframe = { timeframe: "1h", signal: other.indicators.technicalSignal, score: other.indicators.technicalScore, rsi: other.indicators.rsi, ema9: other.indicators.ema9, ema21: other.indicators.ema21, fourHour };
+    } catch (_) { market.higherTimeframe = { timeframe: "1h", signal: "WAIT", fourHour }; }
+  } else {
+    market.higherTimeframe = { timeframe: "4h", signal: fourHour.signal, fourHour };
   }
+  market.riskEngine = { timeframe: "4h", available: fourHour.available === true, supportBreakdown: fourHour.supportBreakdown === true, resistanceBreakout: fourHour.resistanceBreakout === true, bearishWarning: fourHour.bearishWarning === true, bullishWarning: fourHour.bullishWarning === true, warnings: fourHour.warnings || (fourHour.warning ? [fourHour.warning] : []) };
 
   // Feed verified 10-day outcomes to BOTH AI reviewers; this is prompt feedback, not model retraining.
   let performanceFeedback = null;
@@ -430,6 +462,8 @@ async function runOne(env, symbol, tf) {
       cloudflare: reviewerStatus === "REVIEWED" ? reviewer : null,
       technicalSignal: market.indicators.technicalSignal,
       higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE",
+      fourHourContext: market.higherTimeframe?.fourHour || null,
+      riskEngine: market.riskEngine,
       technicalIndicators: {
         rsi: market.indicators.rsi,
         ema9: market.indicators.ema9,
