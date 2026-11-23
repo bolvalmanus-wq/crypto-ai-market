@@ -739,7 +739,11 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    const response=await fetch("/api/scheduled?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf),{cache:"no-store"});
    const payload=await response.json().catch(()=>({}));
    const result=(payload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
-   if(response.ok&&result&&result.analysis&&expectedClose!==null&&Date.parse(result.candleCloseTime)===expectedClose){
+   // Show the latest valid server analysis even when the browser's candle
+   // timestamp differs (provider rounding, delayed refresh, or a newer candle).
+   // The exact timestamp gate previously hid valid Council JSON and left the UI
+   // stuck on "সার্ভারের অপেক্ষায়".
+   if(response.ok&&result&&result.analysis&&["LONG","SHORT","WAIT"].includes(result.analysis.decision)){
     result.model=(result.model||"Gemini + Cloudflare AI")+" · ক্লাউড";
     localStorage.setItem(key,JSON.stringify({...result,_candleTime:candleKey}));
     showAi(symbol,tf,result);
