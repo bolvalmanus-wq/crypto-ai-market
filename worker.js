@@ -420,6 +420,15 @@ async function runOne(env, symbol, tf) {
   };
   const key = "latest:" + symbol + ":" + tf;
   await env.ANALYSIS_KV.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
+  const decisionId = symbol + ":" + tf + ":" + Date.parse(result.generatedAt);
+  const decisionRecord = {
+    id: decisionId, symbol, timeframe: tf, decision: analysis.decision,
+    entryPrice: Number(market.ticker.last), decidedAt: result.generatedAt,
+    outcome: "PENDING"
+  };
+  if (Number.isFinite(decisionRecord.entryPrice) && decisionRecord.entryPrice > 0) {
+    await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), { expirationTtl: 60 * 60 * 24 * 11 });
+  }
   await env.ANALYSIS_KV.put("history:" + symbol + ":" + tf + ":" + Date.now(), JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
   await sendSignalPush(env, result);
   return result;
@@ -488,6 +497,41 @@ export default {
       }
       return Response.json({ ok: true });
     }
+    if (url.pathname === "/performance" && request.method === "GET") {
+      if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
+      const now = Date.now(), cutoff = now - 10 * 24 * 60 * 60 * 1000;
+      const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+      const records = [];
+      for (const item of listed.keys) {
+        const record = await env.ANALYSIS_KV.get(item.name, "json");
+        if (record && Date.parse(record.decidedAt) >= cutoff) records.push(record);
+      }
+      records.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
+      const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
+      const settled = records.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG");
+      const wins = settled.filter(x => x.outcome === "CORRECT").length;
+      const summary = { total: records.length, evaluated: settled.length, correct: wins,
+        wrong: settled.length - wins, pending: records.filter(x => x.outcome === "PENDING").length,
+        noTrade: records.filter(x => x.outcome === "NO_TRADE").length,
+        accuracy: settled.length ? Math.round(wins / settled.length * 1000) / 10 : null,
+        last24: { total: last24.length, evaluated: last24.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG").length,
+          correct: last24.filter(x => x.outcome === "CORRECT").length,
+          wrong: last24.filter(x => x.outcome === "WRONG").length,
+          pending: last24.filter(x => x.outcome === "PENDING").length,
+          noTrade: last24.filter(x => x.outcome === "NO_TRADE").length } };
+      const dailyMap = {};
+      for (const r of records) {
+        const day = new Date(r.decidedAt).toISOString().slice(0,10);
+        if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, noTrade: 0 };
+        const d = dailyMap[day]; d.total++;
+        if (r.outcome === "CORRECT") d.correct++;
+        else if (r.outcome === "WRONG") d.wrong++;
+        else if (r.outcome === "NO_TRADE") d.noTrade++;
+        else d.pending++;
+      }
+      return Response.json({ summary, daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)), records },
+        { headers: { "Cache-Control": "no-store" } });
+    }
     if (url.pathname === "/analyze" && request.method === "POST") {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
@@ -525,7 +569,42 @@ export default {
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }
     });
   },
+async function evaluateMaturedDecisions(env) {
+  if (!env.ANALYSIS_KV) return;
+  const now = Date.now(), listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+  const due = [];
+  for (const item of listed.keys) {
+    const r = await env.ANALYSIS_KV.get(item.name, "json");
+    if (r && r.outcome === "PENDING" && now - Date.parse(r.decidedAt) >= 24 * 60 * 60 * 1000) due.push({ key: item.name, record: r });
+  }
+  const symbols = [...new Set(due.map(x => x.record.symbol))];
+  const prices = {};
+  await Promise.all(symbols.map(async symbol => {
+    try {
+      const response = await fetch(PAGE_URL + "/api/price?symbol=" + encodeURIComponent(symbol), { headers: { "Cache-Control": "no-cache" } });
+      if (!response.ok) return;
+      const data = await response.json();
+      const price = Number(data.last);
+      if (Number.isFinite(price) && price > 0) prices[symbol] = price;
+    } catch (_) {}
+  }));
+  for (const item of due) {
+    const r = item.record, exitPrice = prices[r.symbol];
+    if (!Number.isFinite(exitPrice)) continue;
+    r.exitPrice = exitPrice; r.evaluatedAt = new Date(now).toISOString();
+    if (r.decision === "LONG" || r.decision === "SHORT") {
+      r.pnlPct = (r.decision === "LONG" ? (exitPrice / r.entryPrice - 1) : (r.entryPrice / exitPrice - 1)) * 100;
+      r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
+    } else {
+      r.outcome = "NO_TRADE";
+      r.pnlPct = null;
+    }
+    await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 11 });
+  }
+}
+
   async scheduled(controller, env, ctx) {
+    await evaluateMaturedDecisions(env);
     const minute = new Date(controller.scheduledTime).getUTCMinutes();
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
