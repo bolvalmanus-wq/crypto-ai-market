@@ -233,7 +233,16 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
   const compactMarket = {
     source: market.source,
-    price: market.ticker?.last,
+    ticker: {
+      last: market.ticker?.last,
+      mark: market.ticker?.mark,
+      index: market.ticker?.index,
+      bid: market.ticker?.bid,
+      ask: market.ticker?.ask,
+      volume24h: market.ticker?.volume24h,
+      openInterest: market.ticker?.openInterest,
+      fundingRate: market.ticker?.fundingRate
+    },
     indicators: market.indicators,
     higherTimeframe: market.higherTimeframe,
     derivatives: market.derivatives ? {
@@ -246,7 +255,7 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
     }))
   };
   const messages = [
-    { role: "system", content: "তুমি স্বাধীন ও কঠোর ঝুঁকি-পর্যালোচক ক্রিপ্টো পারপেচুয়াল বিশ্লেষক। প্রথম AI-এর সিদ্ধান্তকে অন্ধভাবে সমর্থন করবে না। প্রদত্ত ডেটা দিয়ে তার যুক্তির দুর্বলতা খুঁজবে, বিপরীত দিকের সম্ভাবনাও পরীক্ষা করবে। ডেটায় নেই এমন তথ্য বানাবে না। অস্পষ্টতা, মতবিরোধ বা দুর্বল ডেটা হলে WAIT বেছে নেবে। কেবল বৈধ JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"সংক্ষিপ্ত বাংলা যুক্তি\",\"risk\":\"সংক্ষিপ্ত বাংলা ঝুঁকি\"}. জয়ের সম্ভাবনার শতাংশ দেবে না।" },
+    { role: "system", content: "তুমি স্বাধীন ও কঠোর ঝুঁকি-পর্যালোচক ক্রিপ্টো পারপেচুয়াল বিশ্লেষক। প্রথম AI-এর সিদ্ধান্তকে অন্ধভাবে সমর্থন করবে না। প্রদত্ত ডেটা দিয়ে তার যুক্তির দুর্বলতা খুঁজবে, বিপরীত দিকের সম্ভাবনাও পরীক্ষা করবে। ডেটায় নেই এমন তথ্য বানাবে না। প্রথম AI-এর মতামত ছাড়াও RSI, EMA9/EMA21, ATR, technicalScore, technicalSignal, উচ্চতর সময়সীমা, open interest, long/short ratio, order book ও funding data একসঙ্গে যাচাই করবে। কোনো একটি সূচককে একা চূড়ান্ত সিদ্ধান্তের ভিত্তি করবে না। অস্পষ্টতা, মতবিরোধ বা দুর্বল ডেটা হলে WAIT বেছে নেবে। কোনো ব্যাখ্যা বা Markdown নয়, কেবল সম্পূর্ণ বৈধ JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"সংক্ষিপ্ত বাংলা যুক্তি\",\"risk\":\"সংক্ষিপ্ত বাংলা ঝুঁকি\"}. জয়ের সম্ভাবনার শতাংশ দেবে না।" },
     { role: "user", content: JSON.stringify({
       task: "প্রথম AI-এর সঙ্গে যুক্তি-পরীক্ষা করো। প্রয়োজন হলে তার সিদ্ধান্ত প্রত্যাখ্যান করো।",
       symbol, timeframe: tf, market: compactMarket,
@@ -352,7 +361,15 @@ async function runOne(env, symbol, tf) {
       gemini: ai.analysis,
       cloudflare: reviewerStatus === "REVIEWED" ? reviewer : null,
       technicalSignal: market.indicators.technicalSignal,
-      higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE"
+      higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE",
+      technicalIndicators: {
+        rsi: market.indicators.rsi,
+        ema9: market.indicators.ema9,
+        ema21: market.indicators.ema21,
+        atr: market.indicators.atr,
+        technicalScore: market.indicators.technicalScore,
+        technicalSignal: market.indicators.technicalSignal
+      }
     },
     generatedAt: new Date().toISOString(),
     candleCloseTime: market.candleCloseTime,
