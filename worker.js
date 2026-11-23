@@ -345,8 +345,9 @@ function finalDecision(market, gemini, reviewer) {
   const sameAI = a === b && (a === "LONG" || a === "SHORT");
   const sameTechnical = technical === a;
   const higherConflicts = higherSignals.some(signal => signal !== a);
-  const criticalRiskConflict = a === "LONG" && market.riskEngine?.supportBreakdown === true;
-  if (sameAI && sameTechnical && !higherConflicts && gemini.dataQuality === "GOOD") {
+  const higherContextMissing = market.riskEngine?.available !== true;
+  const criticalRiskConflict = (a === "LONG" && (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)) || (a === "SHORT" && market.riskEngine?.bullishWarning === true);
+  if (sameAI && sameTechnical && !higherConflicts && !criticalRiskConflict && !higherContextMissing && gemini.dataQuality === "GOOD") {
     return {
       decision: a,
       direction: a === "LONG" ? "UPWARD" : "DOWNWARD",
@@ -355,8 +356,10 @@ function finalDecision(market, gemini, reviewer) {
       dataQuality: gemini.dataQuality
     };
   }
-  const why = criticalRiskConflict
-    ? "৪ ঘণ্টার গুরুত্বপূর্ণ সাপোর্ট ভেঙেছে; সম্ভাব্য পতনের ঝুঁকিতে LONG বাতিল"
+  const why = higherContextMissing
+    ? "৪ ঘণ্টার বড় প্রবণতা যাচাইয়ের পর্যাপ্ত ডেটা নেই; নিরাপদে WAIT"
+    : criticalRiskConflict
+    ? "৪ ঘণ্টার ট্রেন্ড/সাপোর্ট প্রস্তাবিত দিকের বিপরীত; ঝুঁকি বেশি"
     : higherConflicts
     ? "১ ঘণ্টা/৪ ঘণ্টার বড় প্রবণতা প্রস্তাবিত সিদ্ধান্তের বিপরীত"
     : !sameAI ? "দুই AI-এর সিদ্ধান্ত এক নয়"
