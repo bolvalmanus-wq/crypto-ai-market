@@ -393,8 +393,8 @@ function finalDecision(market, council) {
   const higherSignals = [market.higherTimeframe?.signal, market.higherTimeframe?.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT");
   const higherConflict = higherSignals.some(x=>x!==candidate);
   const hardRisk = candidate === "LONG"
-    ? market.riskEngine?.supportBreakdown === true
-    : market.riskEngine?.resistanceBreakout === true;
+    ? (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)
+    : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
   const enough = counts[candidate] >= requiredVotes && margin >= 2 && candidate !== "WAIT";
   const judgeSupports = council.judge?.decision === candidate;
   const dataQualityGood = opinions.some(x=>x.agent?.startsWith("Gemini") && x.dataQuality==="GOOD");
