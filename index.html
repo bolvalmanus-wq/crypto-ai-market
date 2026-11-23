@@ -599,7 +599,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
 .timeframe-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}
 .timeframe-tab{min-width:0!important;padding-left:4px!important;padding-right:4px!important;font-size:clamp(11px,3.3vw,16px)!important}
 </style>
-<script><script>
+<script>
 const symbols=["BTC","SOL"];
 function updateLiveClock(){const el=document.getElementById("liveClock");if(!el)return;const now=new Date();const date=now.toLocaleDateString("bn-BD",{weekday:"short",day:"numeric",month:"short",year:"numeric"});const time=now.toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});el.innerHTML='<span class="clock-dot"></span><span>LIVE · '+date+' · '+time+'</span>'}
 updateLiveClock();setInterval(updateLiveClock,1000);
