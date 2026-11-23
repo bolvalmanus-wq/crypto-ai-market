@@ -334,8 +334,16 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
     indicators: market.indicators,
     higherTimeframe: market.higherTimeframe,
     riskEngine: market.riskEngine,
-    derivatives: market.derivatives,
-    recentCandles: (market.candles || []).slice(-12).map(c => ({ open:c.open, high:c.high, low:c.low, close:c.close, volume:c.volume }))
+    derivatives: market.derivatives ? {
+      openInterest: Array.isArray(market.derivatives.openInterest) ? market.derivatives.openInterest.slice(-3) : [],
+      longShort: Array.isArray(market.derivatives.longShort) ? market.derivatives.longShort.slice(-3) : [],
+      orderbook: {
+        bids: Array.isArray(market.derivatives.orderbook?.bids) ? market.derivatives.orderbook.bids.slice(0,5) : [],
+        asks: Array.isArray(market.derivatives.orderbook?.asks) ? market.derivatives.orderbook.asks.slice(0,5) : []
+      },
+      fundingHistory: Array.isArray(market.derivatives.fundingHistory) ? market.derivatives.fundingHistory.slice(-3) : []
+    } : null,
+    recentCandles: (market.candles || []).slice(-8).map(c => ({ open:c.open, high:c.high, low:c.low, close:c.close, volume:c.volume }))
   };
   const output = await env.AI.run(model, {
     messages: [
