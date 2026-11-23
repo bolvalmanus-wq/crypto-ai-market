@@ -372,9 +372,9 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   const geminiOpinions = Array.isArray(gemini.councilOpinions) && gemini.councilOpinions.length
     ? gemini.councilOpinions
     : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }];
+  if (gemini.unavailableError) throw new Error("Gemini unavailable: " + gemini.unavailableError);
   const specialistModels = [
-    { model:"@cf/google/gemma-4-26b-a4b-it", role:"Trend & Momentum Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe ও candle structure বিচার করো।" },
-    { model:"@cf/openai/gpt-oss-20b", role:"Contrarian & Risk Analyst", instructions:"প্রথমে বিপরীত দিকের শক্তিশালী যুক্তি খোঁজো; false breakout, liquidity, funding, open interest, support/resistance ও downside/upside risk যাচাই করো।" }
+    { model:"@cf/google/gemma-4-26b-a4b-it", role:"Independent Technical & Risk Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe, candle structure, false breakout ও downside/upside risk একসঙ্গে বিচার করো।" }
   ];
   const settled = await Promise.allSettled(specialistModels.map(agent =>
     runCloudflareAgent(env, agent.model, agent.role, agent.instructions, symbol, tf, market)
@@ -387,7 +387,7 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge); }
   catch(error) { judgeError = String(error).slice(0,180); }
   const opinions = judge ? [...preJudge, judge] : preJudge;
-  if (opinions.length < 3) throw new Error("AI Council quorum not reached: " + opinions.length + " valid opinions; " + errors.map(x=>x.error).join(" | "));
+  if (preJudge.length < 2 || !judge) throw new Error("AI Council quorum not reached: " + preJudge.length + " independent opinions; judge " + (judge ? "ready" : "unavailable") + (errors.length ? "; " + errors.map(x=>x.error).join(" | ") : "") + (judgeError ? "; " + judgeError : ""));
   return { opinions, judge, errors, judgeError, status:judge ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
 }
 
@@ -400,7 +400,7 @@ function finalDecision(market, council) {
   const ranked = ["LONG","SHORT"].sort((a,b)=>counts[b]-counts[a]);
   const candidate = ranked[0], opposing = ranked[1];
   const margin = counts[candidate] - counts[opposing];
-  const requiredVotes = Math.max(3, Math.ceil(valid * 0.6));
+  const requiredVotes = Math.max(2, Math.ceil(valid * 0.6));
   const technical = market.indicators.technicalSignal;
   const score = Number(market.indicators.technicalScore) || 0;
   const technicalSupports = candidate === "LONG" ? score >= 0.48 : score <= -0.48;
@@ -409,7 +409,7 @@ function finalDecision(market, council) {
   const hardRisk = candidate === "LONG"
     ? (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)
     : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
-  const enough = counts[candidate] >= requiredVotes && margin >= 2 && candidate !== "WAIT";
+  const enough = counts[candidate] >= requiredVotes && margin >= 1 && candidate !== "WAIT";
   const judgeSupports = council.judge?.decision === candidate;
   const dataQualityGood = opinions.some(x=>x.agent?.startsWith("Gemini") && x.dataQuality==="GOOD");
   const strongEnough = enough && technicalSupports && !hardRisk && judgeSupports && dataQualityGood;
@@ -424,7 +424,7 @@ function finalDecision(market, council) {
     };
   }
   let why = !council.judge ? "চূড়ান্ত বিচারক অনুপলব্ধ"
-    : counts[candidate] < requiredVotes || margin < 2 ? "AI মতামতে পর্যাপ্ত ঐকমত্য নেই"
+    : counts[candidate] < requiredVotes || margin < 1 ? "AI মতামতে পর্যাপ্ত ঐকমত্য নেই"
     : !technicalSupports ? "টেকনিক্যাল স্কোর প্রস্তাবিত দিককে যথেষ্ট সমর্থন করছে না"
     : hardRisk ? "গুরুত্বপূর্ণ সাপোর্ট/রেজিস্ট্যান্স ঝুঁকি বিপরীত"
     : !dataQualityGood ? "বাজার ডেটার মান যথেষ্ট নিশ্চিত নয়"
@@ -514,17 +514,17 @@ async function runOne(env, symbol, tf) {
       };
   const result = {
     symbol, timeframe: tf,
-    provider: council ? "Gemini + Cloudflare AI Council" : "Gemini + technical filters",
-    model: (ai.model || "Gemini") + (council ? " + Gemma 4 + Nemotron 3 + " + REVIEW_MODEL : ""),
+    provider: council ? "Gemini + Gemma 4 + GLM Judge" : "AI unavailable / WAIT",
+    model: (ai.model || "Gemini unavailable") + (council ? " + Gemma 4 + Judge " + REVIEW_MODEL : ""),
     analysis,
     debate: {
       status: council?.status || "COUNCIL_FAILED",
       gemini: ai.analysis,
       councilOpinions: council?.opinions || [],
       councilVoteCounts: council ? {
-        LONG:council.opinions.filter(x=>x.decision==="LONG").length,
-        SHORT:council.opinions.filter(x=>x.decision==="SHORT").length,
-        WAIT:council.opinions.filter(x=>x.decision==="WAIT").length
+        LONG:council.opinions.filter(x=>x.agent!=="Council Judge" && x.decision==="LONG").length,
+        SHORT:council.opinions.filter(x=>x.agent!=="Council Judge" && x.decision==="SHORT").length,
+        WAIT:council.opinions.filter(x=>x.agent!=="Council Judge" && x.decision==="WAIT").length
       } : null,
       councilErrors: council?.errors || [],
       judgeError: council?.judgeError || councilError,
