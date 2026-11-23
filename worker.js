@@ -223,8 +223,8 @@ function analyze(data, tf) {
     candles: bars.slice(-48),
     higherTimeframe: null,
     derivatives: data.derivatives ? {
-      openInterest: tf === "30m" ? data.derivatives.openInterest30m : data.derivatives.openInterest1h,
-      longShort: tf === "30m" ? data.derivatives.longShort30m : data.derivatives.longShort1h,
+      openInterest: tf === "30m" ? data.derivatives.openInterest30m : tf === "1h" ? data.derivatives.openInterest1h : null,
+      longShort: tf === "30m" ? data.derivatives.longShort30m : tf === "1h" ? data.derivatives.longShort1h : null,
       orderbook: data.derivatives.orderbook,
       fundingHistory: data.derivatives.fundingHistory
     } : null,
