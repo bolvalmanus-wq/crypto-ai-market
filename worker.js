@@ -265,7 +265,7 @@ function validateReviewerAnswer(parsed) {
   return { decision, reason: reason.slice(0, 500), risk: risk.slice(0, 500) };
 }
 
-async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
+async function reviewWithCloudflare(env, symbol, tf, market, gemini, performanceFeedback = null) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
   const compactMarket = {
     source: market.source,
@@ -280,6 +280,7 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
       fundingRate: market.ticker?.fundingRate
     },
     indicators: market.indicators,
+    performanceFeedback,
     higherTimeframe: market.higherTimeframe,
     derivatives: market.derivatives ? {
       longShort: market.derivatives.longShort,
@@ -294,7 +295,7 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
   const messages = [
     { role: "system", content: "তুমি স্বাধীন ও কঠোর ঝুঁকি-পর্যালোচক ক্রিপ্টো পারপেচুয়াল বিশ্লেষক। প্রথম AI-এর সিদ্ধান্তকে অন্ধভাবে সমর্থন করবে না। প্রদত্ত ডেটা দিয়ে তার যুক্তির দুর্বলতা খুঁজবে, বিপরীত দিকের সম্ভাবনাও পরীক্ষা করবে। ডেটায় নেই এমন তথ্য বানাবে না। প্রথম AI-এর মতামত ছাড়াও RSI, EMA9/EMA21, ATR, MACD histogram, ADX ও DI+/DI-, Bollinger অবস্থান, relative volume, technicalScore, technicalSignal, উচ্চতর সময়সীমা, open interest, long/short ratio, order book ও funding data একসঙ্গে যাচাই করবে। কোনো একটি সূচককে একা চূড়ান্ত সিদ্ধান্তের ভিত্তি করবে না। অস্পষ্টতা, মতবিরোধ বা দুর্বল ডেটা হলে WAIT বেছে নেবে। কোনো ব্যাখ্যা বা Markdown নয়, কেবল সম্পূর্ণ বৈধ JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"সংক্ষিপ্ত বাংলা যুক্তি\",\"risk\":\"সংক্ষিপ্ত বাংলা ঝুঁকি\"}. জয়ের সম্ভাবনার শতাংশ দেবে না।" },
     { role: "user", content: JSON.stringify({
-      task: "প্রথম AI-এর সঙ্গে যুক্তি-পরীক্ষা করো। প্রয়োজন হলে তার সিদ্ধান্ত প্রত্যাখ্যান করো।",
+      task: "প্রথম AI-এর সঙ্গে যুক্তি-পরীক্ষা করো। প্রয়োজন হলে তার সিদ্ধান্ত প্রত্যাখ্যান করো। অতীতের যাচাইকৃত সিদ্ধান্তের ফল থাকলে সেটি পর্যবেক্ষণ করে একই ধরনের ভুলের ঝুঁকি এড়াও; ছোট নমুনা থেকে নিশ্চিত নিয়ম ধরে নিও না।",
       symbol, timeframe: tf, market: compactMarket,
       firstAI: { decision: gemini.decision, direction: gemini.direction, reason: gemini.reason, risk: gemini.risk, dataQuality: gemini.dataQuality }
     }) }
@@ -337,6 +338,31 @@ function finalDecision(market, gemini, reviewer) {
   };
 }
 
+async function getDecisionFeedback(env, symbol, tf) {
+  if (!env.ANALYSIS_KV) return null;
+  const cutoff = Date.now() - 10 * 86400000;
+  const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+  const rows = [];
+  for (const item of listed.keys) {
+    const r = await env.ANALYSIS_KV.get(item.name, "json");
+    if (r && r.symbol === symbol && r.timeframe === tf &&
+        Date.parse(r.decidedAt) >= cutoff &&
+        (r.outcome === "CORRECT" || r.outcome === "WRONG")) rows.push(r);
+  }
+  rows.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
+  const correct = rows.filter(r => r.outcome === "CORRECT").length;
+  return {
+    sampleSize: rows.length,
+    correct,
+    wrong: rows.length - correct,
+    recentOutcomes: rows.slice(0, 8).map(r => ({
+      decision: r.decision, outcome: r.outcome,
+      entryPrice: r.entryPrice, exitPrice: r.exitPrice,
+      pnlPct: Number.isFinite(r.pnlPct) ? Number(r.pnlPct.toFixed(3)) : null
+    }))
+  };
+}
+
 async function runOne(env, symbol, tf) {
   const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" } });
   if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
@@ -367,7 +393,8 @@ async function runOne(env, symbol, tf) {
   let reviewer = null;
   let reviewerStatus = "REVIEW_FAILED";
   try {
-    reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis);
+    const performanceFeedback = await getDecisionFeedback(env, symbol, tf);
+    reviewer = await reviewWithCloudflare(env, symbol, tf, market, ai.analysis, performanceFeedback);
     reviewerStatus = "REVIEWED";
   } catch (error) {
     reviewer = {
@@ -555,6 +582,7 @@ export default {
       const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
       const settled = records.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG");
       const correct = settled.filter(x => x.outcome === "CORRECT").length;
+      const evaluatedLast24 = settled.filter(x => Date.parse(x.evaluatedAt || 0) >= now - 86400000);
       const summary = {
         total: records.length, correct, wrong: settled.length - correct,
         pending: records.filter(x => x.outcome === "PENDING").length,
@@ -564,6 +592,11 @@ export default {
           correct: last24.filter(x => x.outcome === "CORRECT").length,
           wrong: last24.filter(x => x.outcome === "WRONG").length,
           pending: last24.filter(x => x.outcome === "PENDING").length
+        },
+        evaluatedLast24: {
+          total: evaluatedLast24.length,
+          correct: evaluatedLast24.filter(x => x.outcome === "CORRECT").length,
+          wrong: evaluatedLast24.filter(x => x.outcome === "WRONG").length
         }
       };
       const dailyMap = {};
