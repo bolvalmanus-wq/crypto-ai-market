@@ -13,8 +13,8 @@ export async function onRequestGet({ request }) {
   const hosts = ["https://www.okx.com", "https://openapi.okx.com", "https://eea.okx.com"];
   const paths = [
     `/api/v5/market/ticker?instId=${instId}`,
-    `/api/v5/market/candles?instId=${instId}&bar=30m&limit=100`,
-    `/api/v5/market/candles?instId=${instId}&bar=1H&limit=100`,
+    `/api/v5/market/candles?instId=${instId}&bar=30m&limit=300`,
+    `/api/v5/market/candles?instId=${instId}&bar=1H&limit=300`,
   ];
 
   const requestJson = async (host, path) => {
@@ -46,8 +46,8 @@ export async function onRequestGet({ request }) {
     const symbolCode = symbol + "USDT";
     const [tickerResult, k30, k60, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
       bybitGet("/v5/market/tickers?category=linear&symbol=" + symbolCode),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=30&limit=200"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=200"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=30&limit=300"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=300"),
       bybitGet("/v5/market/open-interest?category=linear&symbol=" + symbolCode + "&intervalTime=30min&limit=2").catch(() => null),
       bybitGet("/v5/market/open-interest?category=linear&symbol=" + symbolCode + "&intervalTime=1h&limit=2").catch(() => null),
       bybitGet("/v5/market/account-ratio?category=linear&symbol=" + symbolCode + "&period=30min&limit=2").catch(() => null),
