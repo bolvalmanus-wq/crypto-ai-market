@@ -438,7 +438,19 @@ function finalDecision(market, council) {
     : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
   const enough = counts[candidate] >= requiredVotes && margin >= 1 && candidate !== "WAIT";
   const judgeSupports = council.judge?.decision === candidate;
-  const dataQualityGood = opinions.some(x=>x.agent?.startsWith("Gemini") && x.dataQuality==="GOOD");
+  // Directional decisions must depend on verified market data, not on Gemini being online.
+  // Gemini is an optional vote; its outage must not permanently force WAIT when the
+  // two independent Cloudflare analysts and the judge agree.
+  const candleData = Array.isArray(market.candles) ? market.candles : [];
+  const tickerPrice = Number(market.ticker?.last);
+  const fourHourContext = market.higherTimeframe?.fourHour;
+  const dataQualityGood = Boolean(
+    market.source &&
+    Number.isFinite(tickerPrice) && tickerPrice > 0 &&
+    candleData.length >= 30 &&
+    candleData.every(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0) &&
+    fourHourContext?.available === true
+  );
   const strongEnough = enough && technicalSupports && !hardRisk && judgeSupports && dataQualityGood;
   if (strongEnough && (!higherConflict || (counts[candidate] >= 4 && margin >= 3))) {
     const judgeReason = council.judge?.reason || "AI Council-এর অধিকাংশ স্বাধীন বিশ্লেষণ একমত।";
@@ -454,7 +466,7 @@ function finalDecision(market, council) {
     : counts[candidate] < requiredVotes || margin < 1 ? "AI মতামতে পর্যাপ্ত ঐকমত্য নেই"
     : !technicalSupports ? "টেকনিক্যাল স্কোর প্রস্তাবিত দিককে যথেষ্ট সমর্থন করছে না"
     : hardRisk ? "গুরুত্বপূর্ণ সাপোর্ট/রেজিস্ট্যান্স ঝুঁকি বিপরীত"
-    : !dataQualityGood ? "বাজার ডেটার মান যথেষ্ট নিশ্চিত নয়"
+    : !dataQualityGood ? "বাজারের যাচাইকৃত ডেটা বা ৪ ঘণ্টার প্রেক্ষাপট অপর্যাপ্ত"
     : higherConflict ? "বড় টাইমফ্রেমে বিপরীত প্রবণতা রয়েছে"
     : "নিরাপদ সিদ্ধান্তের শর্ত পূরণ হয়নি";
   return {
