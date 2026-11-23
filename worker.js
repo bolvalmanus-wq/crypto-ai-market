@@ -387,8 +387,7 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge); }
   catch(error) { judgeError = String(error).slice(0,180); }
   const opinions = judge ? [...preJudge, judge] : preJudge;
-  if (preJudge.length < 2 || !judge) throw new Error("AI Council quorum not reached: " + preJudge.length + " independent opinions; judge " + (judge ? "ready" : "unavailable") + (errors.length ? "; " + errors.map(x=>x.error).join(" | ") : "") + (judgeError ? "; " + judgeError : ""));
-  return { opinions, judge, errors, judgeError, status:judge ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
+  return { opinions, judge, errors, judgeError, status:judge && preJudge.length >= 2 ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
 }
 
 function finalDecision(market, council) {
