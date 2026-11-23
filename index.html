@@ -834,6 +834,7 @@ async function fetchWithRetry(symbol){
  }
  throw lastError||new Error("ডেটা পাওয়া যায়নি");
 }
+let refreshing=false;
 async function refreshAll(){
  if(refreshing)return;refreshing=true;
  const button=document.getElementById("refreshButton");if(button){button.disabled=true;button.textContent="আপডেট হচ্ছে..."}
