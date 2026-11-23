@@ -248,6 +248,7 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
     derivatives: market.derivatives ? {
       longShort: market.derivatives.longShort,
       openInterest: market.derivatives.openInterest,
+      orderbook: market.derivatives.orderbook,
       fundingHistory: market.derivatives.fundingHistory
     } : null,
     recentCandles: (market.candles || []).slice(-12).map(c => ({
