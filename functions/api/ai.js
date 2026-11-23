@@ -69,7 +69,7 @@ export async function onRequestPost({ request, env }) {
   catch { return Response.json({ error: "Invalid JSON request." }, { status: 400 }); }
 
   if (!["BTC", "SOL"].includes(body?.symbol) ||
-      !["30m", "1h"].includes(body?.timeframe) || !body?.market) {
+      !["30m", "1h", "4h"].includes(body?.timeframe) || !body?.market) {
     return Response.json({ error: "Invalid symbol, timeframe, or market data." }, { status: 400 });
   }
 
