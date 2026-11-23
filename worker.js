@@ -284,7 +284,7 @@ function parseModelJson(output) {
   if (Array.isArray(raw)) raw = raw.map(part => typeof part === "string" ? part : part && (part.text || part.content) || "").join("");
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     if (raw.decision) return validateReviewerAnswer(raw);
-    raw = raw.decision ? raw : (raw.response || raw.text || raw.content || raw.generated_text || "");
+    raw = raw.choices?.[0]?.message?.content || raw.response || raw.text || raw.content || raw.generated_text || "";
   }
   if (typeof raw !== "string" || !raw.trim()) {
     const keys = output && typeof output === "object" ? Object.keys(output).join(",") : typeof output;
@@ -342,9 +342,8 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
       { role:"system", content:"তুমি AI Council-এর স্বাধীন " + role + " বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। " + instructions + " কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
       { role:"user", content:JSON.stringify({ symbol, timeframe:tf, market:compactMarket }) }
     ],
-    max_tokens: 512,
-    ...(model.includes("gpt-oss") ? { response_format: { type: "json_object" } } : {}),
-    ...(model.includes("gemma") ? { chat_template_kwargs: { enable_thinking: false } } : {}),
+    max_completion_tokens: 192,
+    response_format: { type: "json_object" },
     temperature: 0
   });
   return { agent:role, model, ...parseModelJson(output) };
@@ -361,7 +360,8 @@ async function runCouncilJudge(env, symbol, tf, market, opinions) {
         opinions
       }) }
     ],
-    max_tokens: 512,
+    max_completion_tokens: 192,
+    response_format: { type: "json_object" },
     temperature: 0
   });
   return { agent:"Council Judge", model:REVIEW_MODEL, ...parseModelJson(output) };
@@ -487,12 +487,21 @@ async function runOne(env, symbol, tf) {
   try { performanceFeedback = await getDecisionFeedback(env, symbol, tf); }
   catch (feedbackError) { console.warn("Decision feedback unavailable", String(feedbackError)); }
   market.performanceFeedback = performanceFeedback;
-  const aiResponse = await fetch(PAGE_URL + "/api/ai", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ symbol, timeframe: tf, market })
-  });
-  const ai = await aiResponse.json().catch(() => ({}));
-  if (!aiResponse.ok || !ai.analysis) throw new Error(ai.error || "Gemini API HTTP " + aiResponse.status);
+  let ai = null;
+  try {
+    const aiResponse = await fetch(PAGE_URL + "/api/ai", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({symbol,timeframe:tf,market}), signal:AbortSignal.timeout(45000)
+    });
+    const payload = await aiResponse.json().catch(() => ({}));
+    if (aiResponse.ok && payload.analysis) ai = payload;
+    else ai = { unavailableError: payload.error || "Gemini API HTTP " + aiResponse.status };
+  } catch (error) { ai = { unavailableError: error instanceof Error ? error.message : "Gemini request failed" }; }
+  if (!ai.analysis) ai.analysis = {
+    decision:"WAIT", direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
+    reason:"Gemini থেকে যাচাইযোগ্য উত্তর পাওয়া যায়নি; কোনো ট্রেড সিদ্ধান্ত দেওয়া হয়নি।",
+    risk:ai.unavailableError || "AI সেবা সাময়িক অনুপলব্ধ", dataQuality:"LIMITED"
+  };
 
   // Multi-agent council: independent Gemini opinions, two specialist models, then a separate GLM judge.
   let council = null;
