@@ -11,11 +11,10 @@ button{display:block;margin:10px auto 0;border:0;border-radius:10px;padding:11px
 @media(max-width:420px){body{padding:9px}.stat{padding:9px}.stat b{font-size:21px}}
 </style></head><body>
 <header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>১০ দিনের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">এই রিপোর্টটি মূল BTC/SOL মার্কেট স্ক্রিন থেকে সম্পূর্ণ আলাদা। প্রতিটি LONG/SHORT সিদ্ধান্ত ২৪ ঘণ্টা পর সিদ্ধান্তের সময়কার দামের সঙ্গে তুলনা করে যাচাই করা হয়। যাচাইয়ের ফল ভবিষ্যৎ AI পর্যালোচনায় ফিডব্যাক হিসেবে ব্যবহৃত হয়; এটি মডেলকে নিজে থেকে পুনরায় প্রশিক্ষণ দেয় না।</div></header>
-<section class="panel"><h2>সিদ্ধান্ত বাছাই</h2><div class="filters"><button type="button" class="filter-btn long" id="longFilter" onclick="setFilter(&quot;LONG&quot;)">LONG</button><button type="button" class="filter-btn short" id="shortFilter" onclick="setFilter(&quot;SHORT&quot;)">SHORT</button></div><div class="muted">যেকোনো একটি বাটনে চাপলে শুধু সেই সিদ্ধান্তগুলোর সময় ও ডলারের দাম দেখা যাবে। একই বাটনে আবার চাপলে দুই ধরনের সিদ্ধান্তই দেখা যাবে।</div></section><section class="panel"><h2>সারাংশ</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div></section>
+<section class="panel"><h2>সারাংশ</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div></section>
 <section class="panel"><h2>প্রতিটি সিদ্ধান্ত · সর্বশেষ ১০ দিন</h2><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button id="refresh" onclick="loadReport()">রিপোর্ট রিফ্রেশ</button></section>
 <script>
-let activeFilter=null;let reportData=null;
-function setFilter(value){activeFilter=activeFilter===value?null:value;document.getElementById("longFilter").classList.toggle("active",activeFilter==="LONG");document.getElementById("shortFilter").classList.toggle("active",activeFilter==="SHORT");renderRecords();}
+let reportData=null;
 const fmt=n=>Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function time(s){return new Date(s).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});}
@@ -23,14 +22,14 @@ function date(s){return new Date(s+"T00:00:00").toLocaleDateString("bn-BD",{day:
 function renderRecords(){
  const records=document.getElementById("records"),daily=reportData?.daily||[];
  records.innerHTML=daily.length?daily.map(d=>{
-  const filtered=(d.records||[]).filter(r=>["LONG","SHORT"].includes(r.decision)&&(!activeFilter||r.decision===activeFilter));
-  const rows=filtered.map(r=>{
+  const decisions=(d.records||[]).filter(r=>["LONG","SHORT"].includes(r.decision));
+  const rows=decisions.map(r=>{
    const good=r.outcome==="CORRECT",bad=r.outcome==="WRONG",state=good?'<span class="correct">সঠিক সিদ্ধান্ত</span>':bad?'<span class="wrong">ভুল সিদ্ধান্ত</span>':'<span class="pending">২৪ ঘণ্টা পূর্ণ হলে যাচাই হবে</span>';
    const result=(good||bad)?'<br>২৪ ঘণ্টা পরের দাম: <b class="price">$'+fmt(r.exitPrice)+'</b> · '+state:'<br>'+state;
    return '<div class="decision"><div class="decision-head">'+time(r.decidedAt)+' · '+safe(r.symbol)+' / '+safe(r.timeframe)+' · <span class="'+(r.decision==="LONG"?"long":"short")+'">'+r.decision+'</span></div>সিদ্ধান্তের সময়কার দাম: <b class="price">$'+fmt(r.entryPrice)+'</b>'+result+'</div>';
   }).join("");
-  return rows?'<div class="day"><h3>'+date(d.date)+'</h3><div class="muted">সিদ্ধান্ত: '+filtered.length+'</div>'+rows+'</div>':"";
- }).join("")|| (activeFilter?"এই ১০ দিনে "+activeFilter+" সিদ্ধান্ত পাওয়া যায়নি।":"গত ১০ দিনে কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।"):"";
+  return rows?'<div class="day"><h3>'+date(d.date)+'</h3><div class="muted">সিদ্ধান্ত: '+decisions.length+'</div>'+rows+'</div>':"";
+ }).join("")|| "গত ১০ দিনে কোনো LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি.":"");
 }
 async function loadReport(){
  const stats=document.getElementById("stats"),records=document.getElementById("records"),btn=document.getElementById("refresh");btn.disabled=true;
