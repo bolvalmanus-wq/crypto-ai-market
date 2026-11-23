@@ -77,7 +77,7 @@ export async function onRequestPost({ request, env }) {
   // Use the replacement model named by Google's live API error. Ignore retired 2.5/3.5 IDs in old env vars.
   const configuredModels = [env.GEMINI_MODEL, env.GEMINI_FALLBACK_MODEL]
     .map(value => (value || "").trim())
-    .filter(value => value && !/gemini-(2\\.5|3\\.5)-/i.test(value));
+    .filter(value => value && !/gemini-(2\.5|3\.5)-/i.test(value));
   const models = [...new Set(["gemini-3.8-flash", ...configuredModels])];
   const prompt = `তুমি একটি সতর্ক, তথ্য-ভিত্তিক ক্রিপ্টো পারপেচুয়াল ফিউচার্সের সিনিয়র মার্কেট অ্যানালিস্ট। ${body.symbol}/USDT-এর ${body.timeframe} সময়সীমা বিশ্লেষণ করো। তুমি AI Council-এর প্রথম স্বাধীন বিশ্লেষক; পরের AI-দের মতামত জানো না এবং তাদের অনুকরণ করবে না।
 
