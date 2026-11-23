@@ -284,7 +284,7 @@ function parseModelJson(output) {
   if (Array.isArray(raw)) raw = raw.map(part => typeof part === "string" ? part : part && (part.text || part.content) || "").join("");
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     if (raw.decision) return validateReviewerAnswer(raw);
-    raw = raw.text || raw.content || raw.generated_text || "";
+    raw = raw.decision ? raw : (raw.response || raw.text || raw.content || raw.generated_text || "");
   }
   if (typeof raw !== "string" || !raw.trim()) {
     const keys = output && typeof output === "object" ? Object.keys(output).join(",") : typeof output;
@@ -343,7 +343,8 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
       { role:"user", content:JSON.stringify({ symbol, timeframe:tf, market:compactMarket }) }
     ],
     max_tokens: 512,
-    response_format: { type: "json_object" },
+    ...(model.includes("gpt-oss") ? { response_format: { type: "json_object" } } : {}),
+    ...(model.includes("gemma") ? { chat_template_kwargs: { enable_thinking: false } } : {}),
     temperature: 0
   });
   return { agent:role, model, ...parseModelJson(output) };
