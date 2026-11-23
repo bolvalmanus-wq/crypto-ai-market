@@ -251,15 +251,23 @@ function buildFourHourContext(data) {
   const ema20 = ema(closes.slice(-80),20), ema50 = ema(closes.slice(-100),50), strength = rsi(closes,14);
   const prior = bars.slice(-21,-1), support = Math.min(...prior.map(c=>c.low)), resistance = Math.max(...prior.map(c=>c.high));
   const supportBreakdown = last.close < support * 0.998, resistanceBreakout = last.close > resistance * 1.002;
+  const recent = bars.slice(-5), previous = bars.slice(-10,-5);
+  const lowerStructure = Math.max(...recent.map(c=>c.high)) < Math.max(...previous.map(c=>c.high)) && Math.min(...recent.map(c=>c.low)) < Math.min(...previous.map(c=>c.low));
+  const higherStructure = Math.max(...recent.map(c=>c.high)) > Math.max(...previous.map(c=>c.high)) && Math.min(...recent.map(c=>c.low)) > Math.min(...previous.map(c=>c.low));
+  const averageVolume = prior.reduce((sum,c)=>sum+(Number(c.volume)||0),0) / Math.max(1,prior.length);
+  const relativeVolume = averageVolume > 0 ? last.volume / averageVolume : null;
+  const confirmedSupportBreakdown = supportBreakdown && relativeVolume !== null && relativeVolume >= 1.15;
   const bearish = ema20 < ema50 && last.close < ema20 && strength < 50;
   const bullish = ema20 > ema50 && last.close > ema20 && strength > 50;
   const warnings = [];
   if (ema20 < ema50) warnings.push("৪ ঘণ্টায় EMA20, EMA50-এর নিচে: বড় প্রবণতা দুর্বল");
   if (last.close < ema20 && strength < 45) warnings.push("৪ ঘণ্টায় দাম EMA20-এর নিচে এবং RSI দুর্বল");
-  if (supportBreakdown) warnings.push("সাম্প্রতিক ৪ ঘণ্টার সাপোর্ট ভেঙেছে");
+  if (supportBreakdown) warnings.push(confirmedSupportBreakdown ? "৪ ঘণ্টার সাপোর্ট ভেঙেছে এবং ভলিউমও বেড়েছে" : "৪ ঘণ্টার সাপোর্টের নিচে; ভলিউম নিশ্চিতকরণ দুর্বল");
+  if (lowerStructure) warnings.push("৪ ঘণ্টায় lower-high ও lower-low কাঠামো তৈরি হচ্ছে");
+  if (higherStructure) warnings.push("৪ ঘণ্টায় higher-high ও higher-low কাঠামো তৈরি হচ্ছে");
   if (ema20 > ema50 && last.close > ema20 && strength > 55) warnings.push("৪ ঘণ্টায় ঊর্ধ্বমুখী প্রবণতার সমর্থন আছে");
   if (resistanceBreakout) warnings.push("সাম্প্রতিক ৪ ঘণ্টার রেজিস্ট্যান্স অতিক্রম করেছে");
-  return { timeframe: "4h", available: true, signal: bearish || supportBreakdown ? "SHORT" : bullish || resistanceBreakout ? "LONG" : "WAIT", ema20, ema50, rsi: strength, close: last.close, support, resistance, supportBreakdown, resistanceBreakout, bearishWarning: ema20 < ema50 || (last.close < ema20 && strength < 45), bullishWarning: ema20 > ema50 || (last.close > ema20 && strength > 55), warnings, candleTime: new Date(last.time + 14400000).toISOString() };
+  return { timeframe: "4h", available: true, signal: bearish || confirmedSupportBreakdown || (lowerStructure && ema20 < ema50) ? "SHORT" : bullish || resistanceBreakout ? "LONG" : "WAIT", ema20, ema50, rsi: strength, close: last.close, support, resistance, supportBreakdown, confirmedSupportBreakdown, resistanceBreakout, relativeVolume, lowerStructure, higherStructure, bearishWarning: ema20 < ema50 || (last.close < ema20 && strength < 45) || lowerStructure, bullishWarning: ema20 > ema50 || (last.close > ema20 && strength > 55) || higherStructure, warnings, candleTime: new Date(last.time + 14400000).toISOString() };
 }
 
 function parseModelJson(output) {
