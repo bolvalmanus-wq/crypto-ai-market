@@ -685,29 +685,25 @@ function showAi(symbol,tf,result){
  const el=aiPanel(symbol,tf);if(!el)return;
  const a=result.analysis,debate=result.debate||{};
  const dir=a.direction==="UPWARD"?"ঊর্ধ্বমুখী":a.direction==="DOWNWARD"?"নিম্নমুখী":"সমতল";
- const model=safeText(result.model||"Gemini");
+ const model=safeText(result.model||"AI Council");
  const ti=debate.technicalIndicators||{};
  const indicatorSummary=Number.isFinite(Number(ti.rsi))
-  ? '<div class="ai-risk">ইন্ডিকেটর ডেটা: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · ATR '+safeText(ti.atr)+' · MACD hist '+safeText(ti.macdHistogram)+' · ADX '+safeText(ti.adx)+' · Bollinger অবস্থান '+safeText(ti.bollingerPosition)+' · Relative volume '+safeText(ti.relativeVolume)+'x · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
+  ? '<div class="ai-risk">ইন্ডিকেটর: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · MACD '+safeText(ti.macdHistogram)+' · ADX '+safeText(ti.adx)+' · BB '+safeText(ti.bollingerPosition)+' · RV '+safeText(ti.relativeVolume)+'x · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
   : '';
  const decision=document.getElementById("decision-"+symbol+"-"+tf);
  const decisionLabel=a.decision==="LONG"?"LONG / BUY":a.decision==="SHORT"?"SHORT / SELL":"WAIT / অপেক্ষা";
  if(decision){decision.textContent="চূড়ান্ত সিদ্ধান্ত: "+decisionLabel;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
- let opinions="";
- if(debate.status==="REVIEWED"&&debate.gemini&&debate.cloudflare){
-  opinions='<div class="ai-reason"><b>Gemini: '+safeText(debate.gemini.decision)+'</b> — '+safeText(debate.gemini.reason)+'</div>'+
-   '<div class="ai-reason"><b>Cloudflare GLM-4.7-Flash: '+safeText(debate.cloudflare.decision)+'</b> — '+safeText(debate.cloudflare.reason)+'</div>'+
-   '<div class="ai-risk">দুই AI ও টেকনিক্যাল যাচাই: '+(debate.gemini.decision===debate.cloudflare.decision?"দুই AI একমত":"দুই AI-এর মতভেদ")+
-   ' · টেকনিক্যাল: '+safeText(debate.technicalSignal||"অজানা")+'</div>';
- }else if(debate.status==="REVIEW_FAILED"){
-  opinions='<div class="ai-risk">দ্বিতীয় AI যাচাই ব্যর্থ: '+safeText(debate.cloudflare?.risk||a.risk||"সাময়িক সমস্যা")+' — নিরাপত্তার জন্য WAIT</div>';
- }else{
-  opinions='<div class="ai-risk">দ্বিতীয় AI ডাকা হয়নি: এখনো LONG/SHORT প্রার্থী নেই; তাই WAIT।</div>';
- }
- el.innerHTML='<div class="ai-head"><span>✦ দুই AI পর্যালোচনা · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
-  opinions+indicatorSummary+'<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(a.reason)+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(a.risk)+'</div>';
+ const councilOpinions=Array.isArray(debate.councilOpinions)?debate.councilOpinions:[];
+ const counts=debate.councilVoteCounts||{LONG:0,SHORT:0,WAIT:0};
+ const opinions=councilOpinions.map(o=>'<div class="ai-reason"><b>'+safeText(o.agent||o.model||"AI")+' · '+safeText(o.decision)+'</b> — '+safeText(o.reason||"কারণ দেওয়া হয়নি")+'</div>').join("");
+ const voteSummary='<div class="ai-risk"><b>AI Council ভোট:</b> LONG '+Number(counts.LONG||0)+' · SHORT '+Number(counts.SHORT||0)+' · WAIT '+Number(counts.WAIT||0)+' · '+safeText(debate.status||"অজানা")+'</div>';
+ const errors=(debate.councilErrors||[]).map(x=>'<div class="ai-risk">'+safeText(x.agent)+': '+safeText(x.error)+'</div>').join("");
+ const judgeError=debate.judgeError?'<div class="ai-risk">বিচারক/কাউন্সিল সমস্যা: '+safeText(debate.judgeError)+'</div>':'';
+ const status=debate.status==="COUNCIL_COMPLETE"?"স্বাধীন বিশ্লেষণ ও বিচারক সম্পন্ন":debate.status==="COUNCIL_PARTIAL"?"আংশিক কাউন্সিল; কিছু AI অনুপলব্ধ":"কাউন্সিল সম্পূর্ণ হয়নি";
+ el.innerHTML='<div class="ai-head"><span>✦ AI Council · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
+  '<div class="ai-risk">'+safeText(status)+'</div>'+voteSummary+opinions+errors+judgeError+indicatorSummary+
+  '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(a.reason)+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(a.risk)+'</div>';
 }
-
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
  for(const tf of ["30m","1h"]){
   if(onlyTf&&tf!==onlyTf)continue;
