@@ -342,9 +342,8 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
       { role:"system", content:"তুমি AI Council-এর স্বাধীন " + role + " বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। " + instructions + " কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
       { role:"user", content:JSON.stringify({ symbol, timeframe:tf, market:compactMarket }) }
     ],
-    max_completion_tokens: 512,
+    max_tokens: 512,
     response_format: { type: "json_object" },
-    chat_template_kwargs: { enable_thinking: false },
     temperature: 0
   });
   return { agent:role, model, ...parseModelJson(output) };
@@ -361,9 +360,7 @@ async function runCouncilJudge(env, symbol, tf, market, opinions) {
         opinions
       }) }
     ],
-    max_completion_tokens: 512,
-    response_format: { type: "json_object" },
-    chat_template_kwargs: { enable_thinking: false },
+    max_tokens: 512,
     temperature: 0
   });
   return { agent:"Council Judge", model:REVIEW_MODEL, ...parseModelJson(output) };
@@ -376,7 +373,7 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
     : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }];
   const specialistModels = [
     { model:"@cf/google/gemma-4-26b-a4b-it", role:"Trend & Momentum Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe ও candle structure বিচার করো।" },
-    { model:REVIEW_MODEL, role:"Contrarian & Risk Analyst", instructions:"প্রথমে বিপরীত দিকের শক্তিশালী যুক্তি খোঁজো; false breakout, liquidity, funding, open interest, support/resistance ও downside/upside risk যাচাই করো।" }
+    { model:"@cf/openai/gpt-oss-20b", role:"Contrarian & Risk Analyst", instructions:"প্রথমে বিপরীত দিকের শক্তিশালী যুক্তি খোঁজো; false breakout, liquidity, funding, open interest, support/resistance ও downside/upside risk যাচাই করো।" }
   ];
   const settled = await Promise.allSettled(specialistModels.map(agent =>
     runCloudflareAgent(env, agent.model, agent.role, agent.instructions, symbol, tf, market)
@@ -395,9 +392,10 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
 
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
+  const independentOpinions = opinions.filter(opinion => opinion.agent !== "Council Judge");
   const counts = { LONG:0, SHORT:0, WAIT:0 };
-  for (const opinion of opinions) if (counts[opinion.decision] !== undefined) counts[opinion.decision]++;
-  const valid = opinions.length;
+  for (const opinion of independentOpinions) if (counts[opinion.decision] !== undefined) counts[opinion.decision]++;
+  const valid = independentOpinions.length;
   const ranked = ["LONG","SHORT"].sort((a,b)=>counts[b]-counts[a]);
   const candidate = ranked[0], opposing = ranked[1];
   const margin = counts[candidate] - counts[opposing];
@@ -419,7 +417,7 @@ function finalDecision(market, council) {
     return {
       decision:candidate,
       direction:candidate==="LONG"?"UPWARD":"DOWNWARD",
-      reason:"AI Council-এর " + counts[candidate] + "/" + valid + " মতামত " + candidate + " সমর্থন করেছে; টেকনিক্যাল স্কোরও সমর্থন করছে। " + judgeReason,
+      reason:"AI Council-এর " + counts[candidate] + "/" + valid + " স্বাধীন মতামত " + candidate + " সমর্থন করেছে; টেকনিক্যাল স্কোরও সমর্থন করছে। " + judgeReason,
       risk:council.judge?.risk || "বাজারের অস্থিরতা ও দ্রুত দিক পরিবর্তনের ঝুঁকি রয়েছে।",
       dataQuality:"GOOD"
     };
