@@ -310,7 +310,25 @@ function parseModelJson(output) {
     else if (ch === "{") depth++;
     else if (ch === "}") { depth--; if (depth === 0) { end = i; break; } }
   }
-  if (end < 0) throw new Error("Cloudflare AI returned incomplete JSON: " + cleaned.slice(0,100));
+  if (end < 0) {
+    // Salvage a truncated response only when decision and reason are present.
+    const decisionMatch = cleaned.match(/"decision"\s*:\s*"(LONG|SHORT|WAIT)"/i);
+    const reasonMatch = cleaned.match(/"reason"\s*:\s*"((?:\\.|[^"\\])*)/i);
+    if (decisionMatch && reasonMatch) {
+      let reason = reasonMatch[1];
+      try { reason = JSON.parse('"' + reason.replace(/\\$/, "") + '"'); }
+      catch (_) { reason = reason.replace(/\\(["\\])/g, "$1"); }
+      if (reason.trim()) {
+        const riskMatch = cleaned.match(/"risk"\s*:\s*"((?:\\.|[^"\\])*)/i);
+        let risk = "সিগন্যাল ভুল হতে পারে; বড় টাইমফ্রেম ও ইনভ্যালিডেশন নিশ্চিত না হলে ট্রেড নয়।";
+        if (riskMatch) {
+          try { risk = JSON.parse('"' + riskMatch[1].replace(/\\$/, "") + '"'); } catch (_) {}
+        }
+        return validateReviewerAnswer({decision:decisionMatch[1],reason,risk});
+      }
+    }
+    throw new Error("Cloudflare AI returned incomplete JSON: " + cleaned.slice(0,100));
+  }
   let parsed;
   try { parsed = JSON.parse(cleaned.slice(start, end + 1)); }
   catch (_) { throw new Error("Cloudflare AI returned malformed JSON"); }
@@ -366,7 +384,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
   const failures=[];
   for(const selectedModel of models){
     try{
-      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:384,max_tokens:384,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
+      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:512,max_tokens:512,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
       return {agent:role,model:selectedModel,...parseModelJson(output)};
     }catch(error){failures.push(selectedModel+": "+String(error?.message||error).slice(0,140));}
   }
@@ -375,14 +393,14 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
 
 async function runCouncilJudge(env, symbol, tf, market, opinions) {
   const messages=[
-    {role:"system",content:"তুমি AI Council-এর চূড়ান্ত বিচারক ও risk manager। "+TRADING_FRAMEWORK_BN+" স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; প্রতিটি মতামতের প্রমাণ, timeframe alignment, market structure, volume confirmation, invalidation ও risk-reward বিচার করবে। দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
+    {role:"system",content:"তুমি AI Council-এর চূড়ান্ত বিচারক ও risk manager। "+TRADING_FRAMEWORK_BN+" স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; প্রতিটি মতামতের প্রমাণ, timeframe alignment, market structure, volume confirmation, invalidation ও risk-reward বিচার করবে। দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। reason ও risk প্রতিটি এক বাক্য, সর্বোচ্চ প্রায় ১০০ অক্ষর। উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
     {role:"user",content:JSON.stringify({task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",symbol,timeframe:tf,market:{source:market.source,ticker:market.ticker,indicators:market.indicators,higherTimeframe:market.higherTimeframe,riskEngine:market.riskEngine,derivatives:market.derivatives},opinions})}
   ];
   const models=[...new Set([REVIEW_MODEL,"@cf/google/gemma-4-26b-a4b-it"].filter(Boolean))];
   const failures=[];
   for(const selectedModel of models){
     try{
-      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:384,max_tokens:384,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
+      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:512,max_tokens:512,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
       return {agent:"Council Judge",model:selectedModel,...parseModelJson(output)};
     }catch(error){failures.push(selectedModel+": "+String(error?.message||error).slice(0,140));}
   }
