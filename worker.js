@@ -331,7 +331,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
       { role:"system", content:"তুমি AI Council-এর স্বাধীন " + role + " বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। " + instructions + " কেবল JSON দেবে: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}." },
       { role:"user", content:JSON.stringify({ symbol, timeframe:tf, market:compactMarket }) }
     ],
-    max_completion_tokens: 260,
+    max_tokens: 260,
     temperature: 0
   });
   return { agent:role, model, ...parseModelJson(output) };
@@ -348,7 +348,7 @@ async function runCouncilJudge(env, symbol, tf, market, opinions) {
         opinions
       }) }
     ],
-    max_completion_tokens: 300,
+    max_tokens: 300,
     temperature: 0
   });
   return { agent:"Council Judge", model:REVIEW_MODEL, ...parseModelJson(output) };
@@ -389,7 +389,7 @@ function finalDecision(market, council) {
   const requiredVotes = Math.max(3, Math.ceil(valid * 0.6));
   const technical = market.indicators.technicalSignal;
   const score = Number(market.indicators.technicalScore) || 0;
-  const technicalSupports = candidate === "LONG" ? score >= 48 : score <= -48;
+  const technicalSupports = candidate === "LONG" ? score >= 0.48 : score <= -0.48;
   const higherSignals = [market.higherTimeframe?.signal, market.higherTimeframe?.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT");
   const higherConflict = higherSignals.some(x=>x!==candidate);
   const hardRisk = candidate === "LONG"
