@@ -407,6 +407,7 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   const specialists = settled.flatMap(item => item.status === "fulfilled" ? [item.value] : []);
   const errors = settled.flatMap((item,index) => item.status === "rejected"
     ? [{ agent:specialistModels[index].role, error:String(item.reason).slice(0,180) }] : []);
+  if (gemini.unavailableError) errors.unshift({ agent:"Gemini (optional)", error:String(gemini.unavailableError).slice(0,180) });
   const preJudge = [...geminiOpinions, ...specialists];
   let judge = null, judgeError = null;
   try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge); }
