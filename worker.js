@@ -182,18 +182,51 @@ function analyze(data, tf) {
   };
 }
 
+
 function parseModelJson(output) {
-  const raw = output?.response || output?.choices?.[0]?.message?.content || output?.result?.response || "";
+  let raw = output && output.response;
+  if (raw == null && output && output.choices && output.choices[0] && output.choices[0].message) raw = output.choices[0].message.content;
+  if (raw == null && output && output.result) raw = output.result.response;
+  if (Array.isArray(raw)) raw = raw.map(part => typeof part === "string" ? part : part && part.text || "").join("");
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    if (raw.decision) return validateReviewerAnswer(raw);
+    raw = raw.text || raw.content || "";
+  }
   if (typeof raw !== "string") throw new Error("Cloudflare AI returned an unsupported response");
-  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const start = cleaned.indexOf("{"), end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("Cloudflare AI returned invalid JSON");
-  const parsed = JSON.parse(cleaned.slice(start, end + 1));
-  if (!["LONG","SHORT","WAIT"].includes(parsed.decision) ||
-      typeof parsed.reason !== "string" || typeof parsed.risk !== "string") {
+  const cleaned = raw
+    .replace(/<think>[\\s\\S]*?(?:<\\/think>|$)/gi, "")
+    .replace(/<\\|(?:im_start|im_end|fim_prefix|fim_middle|fim_suffix|ghissue|ghreview)\\|>/g, "")
+    .replace(/^\\s*\x60\x60\x60(?:json)?\\s*/i, "")
+    .replace(/\\s*\x60\x60\x60\\s*$/i, "")
+    .trim();
+  const start = cleaned.indexOf("{");
+  if (start < 0) throw new Error("Cloudflare AI returned no JSON object");
+  let depth = 0, inString = false, escaped = false, end = -1;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\\\") escaped = true;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) { end = i; break; }
+  }
+  if (end < 0) throw new Error("Cloudflare AI returned incomplete JSON");
+  let parsed;
+  try { parsed = JSON.parse(cleaned.slice(start, end + 1)); }
+  catch (_) { throw new Error("Cloudflare AI returned malformed JSON"); }
+  return validateReviewerAnswer(parsed);
+}
+
+function validateReviewerAnswer(parsed) {
+  const decision = String(parsed && parsed.decision || "").trim().toUpperCase();
+  const reason = typeof (parsed && parsed.reason) === "string" ? parsed.reason.trim() : "";
+  const risk = typeof (parsed && parsed.risk) === "string" ? parsed.risk.trim() : "";
+  if (!["LONG","SHORT","WAIT"].includes(decision) || !reason || !risk) {
     throw new Error("Cloudflare AI answer failed validation");
   }
-  return parsed;
+  return { decision, reason: reason.slice(0, 500), risk: risk.slice(0, 500) };
 }
 
 async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
@@ -222,8 +255,8 @@ async function reviewWithCloudflare(env, symbol, tf, market, gemini) {
   ];
   const output = await env.AI.run(REVIEW_MODEL, {
     messages,
-    max_completion_tokens: 220,
-    temperature: 0.1
+    max_completion_tokens: 420,
+    temperature: 0
   });
   return parseModelJson(output);
 }
