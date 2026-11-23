@@ -86,7 +86,7 @@ async function sendSignalPush(env,result) {
   if(!["LONG","SHORT"].includes(decision)) return;
   const stateKey="lastsignal:"+result.symbol+":"+result.timeframe;
   const previous=await env.ANALYSIS_KV.get(stateKey,"json");
-  if(previous?.decision===decision) return;
+  if(previous?.decision===decision&&previous?.notifiedAt) return;
   const listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});
   if(!listed.keys.length) return;
   const payload={
