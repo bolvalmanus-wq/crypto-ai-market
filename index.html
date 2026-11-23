@@ -676,6 +676,10 @@ function showAi(symbol,tf,result){
  const a=result.analysis,debate=result.debate||{};
  const dir=a.direction==="UPWARD"?"ঊর্ধ্বমুখী":a.direction==="DOWNWARD"?"নিম্নমুখী":"সমতল";
  const model=safeText(result.model||"Gemini");
+ const ti=debate.technicalIndicators||{};
+ const indicatorSummary=Number.isFinite(Number(ti.rsi))
+  ? '<div class="ai-risk">ইন্ডিকেটর ডেটা: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · ATR '+safeText(ti.atr)+' · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
+  : '';
  const decision=document.getElementById("decision-"+symbol+"-"+tf);
  if(decision){decision.textContent="চূড়ান্ত সিদ্ধান্ত: "+a.decision;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
  let opinions="";
@@ -690,7 +694,7 @@ function showAi(symbol,tf,result){
   opinions='<div class="ai-risk">দ্বিতীয় AI ডাকা হয়নি: এখনো LONG/SHORT প্রার্থী নেই; তাই WAIT।</div>';
  }
  el.innerHTML='<div class="ai-head"><span>✦ দুই AI পর্যালোচনা · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
-  opinions+'<div class="ai-reason"><b>অ্যাপের চূড়ান্ত সিদ্ধান্ত: '+safeText(a.decision)+'</b> — '+safeText(a.reason)+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(a.risk)+'</div>';
+  opinions+indicatorSummary+'<div class="ai-reason"><b>অ্যাপের চূড়ান্ত সিদ্ধান্ত: '+safeText(a.decision)+'</b> — '+safeText(a.reason)+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(a.risk)+'</div>';
 }
 
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
