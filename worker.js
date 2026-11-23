@@ -271,23 +271,34 @@ function buildFourHourContext(data) {
 }
 
 function parseModelJson(output) {
-  let raw = output && (output.response ?? output.generated_text ?? output.output_text);
-  if (raw == null && output && output.choices && output.choices[0] && output.choices[0].message) raw = output.choices[0].message.content;
-  if (raw == null && output && output.result != null) raw = typeof output.result === "string" ? output.result : (output.result.response ?? output.result.generated_text ?? output.result.text ?? output.result.content);
+  let raw = typeof output === "string" ? output : null;
+  if (raw == null && output && typeof output === "object") {
+    raw = output.response ?? output.generated_text ?? output.output_text ?? output.text ?? null;
+    if (raw == null && output.result != null) {
+      raw = typeof output.result === "string" ? output.result
+        : (output.result.response ?? output.result.generated_text ?? output.result.text ?? output.result.content ?? null);
+    }
+    if (raw == null && output.choices?.[0]?.message) raw = output.choices[0].message.content;
+    if (raw == null && output.content != null) raw = output.content;
+  }
   if (Array.isArray(raw)) raw = raw.map(part => typeof part === "string" ? part : part && (part.text || part.content) || "").join("");
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     if (raw.decision) return validateReviewerAnswer(raw);
     raw = raw.text || raw.content || raw.generated_text || "";
   }
-  if (typeof raw !== "string") throw new Error("Cloudflare AI returned an unsupported response");
+  if (typeof raw !== "string" || !raw.trim()) {
+    const keys = output && typeof output === "object" ? Object.keys(output).join(",") : typeof output;
+    throw new Error("Cloudflare AI returned empty/unsupported response (" + keys.slice(0,100) + ")");
+  }
   const cleaned = raw
-    .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/gi, "")
     .replace(/<\|(?:im_start|im_end|fim_prefix|fim_middle|fim_suffix|ghissue|ghreview)\|>/g, "")
-    .replace(/^\s*\x60\x60\x60(?:json)?\s*/i, "")
-    .replace(/\s*\x60\x60\x60\s*$/i, "")
+    .replace(/^\s*```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
     .trim();
   const start = cleaned.indexOf("{");
-  if (start < 0) throw new Error("Cloudflare AI returned no JSON object");
+  if (start < 0) throw new Error("Cloudflare AI returned no JSON object: " + cleaned.slice(0,100));
   let depth = 0, inString = false, escaped = false, end = -1;
   for (let i = start; i < cleaned.length; i++) {
     const ch = cleaned[i];
@@ -297,9 +308,9 @@ function parseModelJson(output) {
       else if (ch === '"') inString = false;
     } else if (ch === '"') inString = true;
     else if (ch === "{") depth++;
-    else if (ch === "}" && --depth === 0) { end = i; break; }
+    else if (ch === "}") { depth--; if (depth === 0) { end = i; break; } }
   }
-  if (end < 0) throw new Error("Cloudflare AI returned incomplete JSON");
+  if (end < 0) throw new Error("Cloudflare AI returned incomplete JSON: " + cleaned.slice(0,100));
   let parsed;
   try { parsed = JSON.parse(cleaned.slice(start, end + 1)); }
   catch (_) { throw new Error("Cloudflare AI returned malformed JSON"); }
@@ -361,7 +372,7 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
     : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }];
   const specialistModels = [
     { model:"@cf/google/gemma-4-26b-a4b-it", role:"Trend & Momentum Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe ও candle structure বিচার করো।" },
-    { model:"@cf/nvidia/nemotron-3-120b-a12b", role:"Contrarian & Risk Analyst", instructions:"প্রথমে বিপরীত দিকের শক্তিশালী যুক্তি খোঁজো; false breakout, liquidity, funding, open interest, support/resistance ও downside/upside risk যাচাই করো।" }
+    { model:REVIEW_MODEL, role:"Contrarian & Risk Analyst", instructions:"প্রথমে বিপরীত দিকের শক্তিশালী যুক্তি খোঁজো; false breakout, liquidity, funding, open interest, support/resistance ও downside/upside risk যাচাই করো।" }
   ];
   const settled = await Promise.allSettled(specialistModels.map(agent =>
     runCloudflareAgent(env, agent.model, agent.role, agent.instructions, symbol, tf, market)
