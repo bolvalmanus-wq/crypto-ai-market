@@ -653,26 +653,14 @@ async function runOne(env, symbol, tf) {
   try { performanceFeedback = await getDecisionFeedback(env, symbol, tf); }
   catch (feedbackError) { console.warn("Decision feedback unavailable", String(feedbackError)); }
   market.performanceFeedback = performanceFeedback;
-  let ai = null;
-  if (tf === "5m" || tf === "15m") {
-    // Fast charts use the Cloudflare council directly; avoid repeated optional Gemini calls/quota delays.
-    ai = { unavailableError: "দ্রুত timeframe-এ Gemini ঐচ্ছিক ভোট বাদ; Cloudflare AI Council সক্রিয়।" };
-  } else {
-    try {
-      const aiResponse = await fetch(PAGE_URL + "/api/ai", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({symbol,timeframe:tf,market}), signal:AbortSignal.timeout(45000)
-      });
-      const payload = await aiResponse.json().catch(() => ({}));
-      if (aiResponse.ok && payload.analysis) ai = payload;
-      else ai = { unavailableError: payload.error || "Gemini API HTTP " + aiResponse.status };
-    } catch (error) { ai = { unavailableError: error instanceof Error ? error.message : "Gemini request failed" }; }
-  }
-  if (!ai.analysis) ai.analysis = {
-    decision:"WAIT", direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
-    reason:"Gemini থেকে যাচাইযোগ্য উত্তর পাওয়া যায়নি; কোনো ট্রেড সিদ্ধান্ত দেওয়া হয়নি।",
-    risk:ai.unavailableError || "AI সেবা সাময়িক অনুপলব্ধ", dataQuality:"LIMITED"
-  };
+  // No Gemini dependency: all five independent analysts run on the configured Workers AI binding.
+  const ai = { analysis:{
+    decision:"WAIT",
+    direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
+    reason:"চূড়ান্ত সিদ্ধান্ত পাঁচটি স্বাধীন AI বিশ্লেষক ও নিজস্ব টেকনিক্যাল ইঞ্জিনের সমর্থনের ভিত্তিতে হবে।",
+    risk:"স্বাধীন AI মডেলের অনুপস্থিতি বা বাজারের ঝুঁকি থাকলে WAIT থাকবে।",
+    dataQuality:"GOOD"
+  }};
 
   // Five independent model analysts; no judge/council and no Gemini quota dependency.
   let council = null;
