@@ -707,7 +707,8 @@ function showAi(symbol,tf,result){
   ? '<div class="ai-risk">ইন্ডিকেটর: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · MACD '+safeText(ti.macdHistogram)+' · ADX '+safeText(ti.adx)+' · BB '+safeText(ti.bollingerPosition)+' · RV '+safeText(ti.relativeVolume)+'x · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
   : '';
  const decision=document.getElementById("decision-"+symbol+"-"+tf);
- const decisionLabel=a.decision==="LONG"?"LONG / BUY":a.decision==="SHORT"?"SHORT / SELL":"WAIT / অপেক্ষা";
+ const aiFailed=debate.status==="COUNCIL_FAILED";
+ const decisionLabel=aiFailed?"AI বিশ্লেষণ ব্যর্থ — বাজারের সিদ্ধান্ত নেই":a.decision==="LONG"?"LONG / BUY":a.decision==="SHORT"?"SHORT / SELL":"WAIT / অপেক্ষা";
  if(decision){decision.textContent="চূড়ান্ত সিদ্ধান্ত: "+decisionLabel;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
  const councilOpinions=Array.isArray(debate.councilOpinions)?debate.councilOpinions:[];
  const counts=debate.councilVoteCounts||{LONG:0,SHORT:0,WAIT:0};
@@ -720,7 +721,7 @@ function showAi(symbol,tf,result){
 
  const errors=(debate.councilErrors||[]).map(x=>'<div class="ai-risk">'+safeText(x.agent)+': '+safeText(x.error)+'</div>').join("");
  const judgeError=debate.judgeError?'<div class="ai-risk">বিশ্লেষণ সমস্যা: '+safeText(debate.judgeError)+'</div>':'';
- const status=debate.status==="ANALYSTS_COMPLETE"?"স্বাধীন AI বিশ্লেষণ সম্পন্ন · "+Number(debate.analystCount||councilOpinions.length)+" জন":"স্বাধীন AI বিশ্লেষণ অসম্পূর্ণ · প্রয়োজনীয় ৩টি মডেল পাওয়া যায়নি";
+ const status=aiFailed?"AI চালানো যায়নি — এটি বাজারের WAIT নয়":debate.status==="ANALYSTS_COMPLETE"?"স্বাধীন AI বিশ্লেষণ সম্পন্ন · "+Number(debate.analystCount||councilOpinions.length)+" জন":"স্বাধীন AI বিশ্লেষণ অসম্পূর্ণ · প্রয়োজনীয় ৩টি মডেল পাওয়া যায়নি";
  el.innerHTML='<div class="ai-head"><span>✦ স্বাধীন AI বিশ্লেষণ · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
   '<div class="ai-risk">'+safeText(status)+'</div>'+voteSummary+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
   '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
