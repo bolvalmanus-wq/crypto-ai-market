@@ -135,6 +135,11 @@ export async function onRequestGet({ request }) {
             low: Number(c[3]), close: Number(c[4]), volume: Number(c[5]),
             confirmed: c[8] === "1",
           })).reverse(),
+          "4h": candles4h.map(c => ({
+            time: Number(c[0]), open: Number(c[1]), high: Number(c[2]),
+            low: Number(c[3]), close: Number(c[4]), volume: Number(c[5]),
+            confirmed: c[8] === "1",
+          })).reverse(),
         },
       }, { headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
     } catch (error) {
