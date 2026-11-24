@@ -740,17 +740,24 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    const response=await fetch("/api/scheduled?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf),{cache:"no-store"});
    const payload=await response.json().catch(()=>({}));
    let result=(payload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
-   const maxResultAge=({"1m":180000,"5m":900000,"15m":2700000,"30m":5400000,"1h":10800000,"4h":43200000}[tf]||180000);
+   const intervalMs=({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf]||60000);
    const resultAge=result?.generatedAt?Date.now()-Date.parse(result.generatedAt):Infinity;
-   const resultIsStale=!Number.isFinite(resultAge)||resultAge>maxResultAge;
-   // If no scheduled result exists or the 1m result is stale, trigger a fresh 1m analysis.
-   // Other timeframes keep their own schedule to avoid an AI request burst.
-   if(response.ok&&tf==="1m"&&(!result||!result.analysis||resultIsStale)){
+   const resultClose=result?.candleCloseTime?Date.parse(result.candleCloseTime):NaN;
+   const expectedCloseMs=expectedClose===null?NaN:expectedClose;
+   // A result is current only when it belongs to the latest closed candle for THIS timeframe.
+   const wrongCandle=!Number.isFinite(resultClose)||!Number.isFinite(expectedCloseMs)||resultClose<expectedCloseMs-5000;
+   const resultIsStale=!Number.isFinite(resultAge)||resultAge>intervalMs*1.5||wrongCandle;
+   // Refresh each timeframe independently when its own candle has closed and its result is stale.
+   if(response.ok&&(!result||!result.analysis||resultIsStale)){
     const run=await fetch("/api/scheduled",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf}),cache:"no-store"});
     const runPayload=await run.json().catch(()=>({}));
     if(!run.ok)throw new Error(runPayload.error||("AI বিশ্লেষণ API "+run.status));
     result=(runPayload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
-    if(!result||!result.analysis)throw new Error("১ মিনিটের AI বিশ্লেষণ এখনো ফলাফল দেয়নি");
+    if(!result||!result.analysis)throw new Error(labels[tf]+" AI বিশ্লেষণ ফলাফল দেয়নি");
+    const returnedClose=result.candleCloseTime?Date.parse(result.candleCloseTime):NaN;
+    if(Number.isFinite(expectedCloseMs)&&Number.isFinite(returnedClose)&&returnedClose<expectedCloseMs-5000){
+     throw new Error(labels[tf]+"-এর নতুন ক্যান্ডেলের বিশ্লেষণ এখনো পাওয়া যায়নি");
+    }
    }
    // Show the latest valid server analysis even when the browser candle timestamp differs.
    if(response.ok&&result&&result.analysis&&["LONG","SHORT","WAIT"].includes(result.analysis.decision)){
