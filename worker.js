@@ -433,7 +433,9 @@ function validateReviewerAnswer(parsed) {
   if (!["LONG","SHORT","WAIT"].includes(decision) || !reason) {
     throw new Error("Cloudflare AI answer failed validation");
   }
-  return { decision, reason: reason.slice(0, 500), risk: risk.slice(0, 500) };
+  const confidenceRaw = Number(parsed?.confidenceScore ?? parsed?.confidence ?? 50);
+  const confidenceScore = Number.isFinite(confidenceRaw) ? Math.max(0,Math.min(100,Math.round(confidenceRaw))) : 50;
+  return { decision, confidenceScore, reason: reason.slice(0, 500), risk: risk.slice(0, 500) };
 }
 
 const TRADING_FRAMEWORK_BN = `
@@ -469,7 +471,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
     recentCandles:(market.candles||[]).slice(-8).map(c=>({open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume}))
   };
   const messages=[
-    {role:"system",content:"তুমি স্বাধীন "+role+" বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
+    {role:"system",content:"তুমি স্বাধীন "+role+" ট্রেডিং বিশ্লেষক। অন্য AI-এর মতামত দেখবে না এবং তাদের সঙ্গে ঐকমত্য করার চেষ্টা করবে না। তোমার কাজ হলো এই নির্দিষ্ট "+tf+" টাইমফ্রেমে এখনকার বাজার দেখে বাধ্যতামূলকভাবে একটি দিক বেছে নেওয়া: LONG অথবা SHORT। WAIT তোমার স্বাভাবিক উত্তর নয়; ডেটা যথেষ্ট থাকলে দুই দিকের যুক্তি তুলনা করে যেদিকে প্রমাণ তুলনামূলক বেশি, সেই দিকেই ভোট দাও। কোনো দিকের প্রমাণ দুর্বল হলে সেটিও গোপন করবে না—reason-এ দুর্বলতা লিখবে এবং confidence ৫০-এর নিচে রাখবে। কেবল ডেটা অনুপস্থিত/অবৈধ বা বাজারের তথ্য বিশ্লেষণ-অযোগ্য হলে WAIT দিতে পারবে। কোনো indicator value বা market data বানাবে না। প্রথমে timeframe অনুযায়ী trend/structure, তারপর নিজের চারটি indicator, volume/volatility, support-resistance ও invalidation যাচাই করো; LONG ও SHORT উভয় সম্ভাবনার বিরুদ্ধে যুক্তি পরীক্ষা করে শেষে একটি দিক নির্বাচন করো। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়; decision অবশ্যই LONG অথবা SHORT (শুধু অযোগ্য ডেটায় WAIT), confidenceScore 0-100 পূর্ণসংখ্যা: {\"decision\":\"LONG|SHORT|WAIT\",\"confidenceScore\":65,\"reason\":\"বাংলায় সংক্ষিপ্ত কিন্তু নির্দিষ্ট যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি ও কোন দামে/কোন শর্তে মত ভুল হবে\"}."},
     {role:"user",content:JSON.stringify({symbol,timeframe:tf,market:compactMarket})}
   ];
   const models=[model].filter(Boolean); // No same-model fallback: each analyst must remain genuinely independent. Each reviewer must give its best evidence-based directional view; WAIT only when neither side has a real edge.
