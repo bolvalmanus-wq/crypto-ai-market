@@ -841,8 +841,8 @@ async function runOne(env, symbol, tf, options = {}) {
         };
   const result = {
     symbol, timeframe: tf,
-    provider: council ? "Five Independent Cloudflare AI Analysts" : "AI unavailable / WAIT",
-    model: council ? council.independentOpinions.map(x=>x.model).join(" + ") : "Independent AI unavailable",
+    provider: council?.screened ? "Technical pre-screen · AI council not called" : council ? "Five Independent Cloudflare AI Analysts" : "AI unavailable / WAIT",
+    model: council?.screened ? "AI models not invoked: no qualifying setup" : council ? council.independentOpinions.map(x=>x.model).join(" + ") : "Independent AI unavailable",
     analysis,
     debate: {
       status: council?.status || "COUNCIL_FAILED",
