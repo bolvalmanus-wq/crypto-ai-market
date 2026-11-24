@@ -564,7 +564,7 @@ function finalDecision(market, council) {
     candleData.every(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0) &&
     fourHourContext?.available === true
   );
-  const enoughIndependentReviewers = valid >= 2;
+  const enoughIndependentReviewers = valid >= 3;
   const strongEnough = enoughIndependentReviewers && enough && technicalSupports && higherAligned && !hardRisk && dataQualityGood;
   if (strongEnough) {
     const judgeReason = "স্বাধীন AI-দের সংখ্যাগরিষ্ঠ মতামত ও নিজস্ব টেকনিক্যাল ইঞ্জিন একই দিক সমর্থন করেছে।";
@@ -576,7 +576,7 @@ function finalDecision(market, council) {
       dataQuality:"GOOD"
     };
   }
-  let why = !enoughIndependentReviewers ? "কমপক্ষে দুইটি স্বাধীন AI মতামত পাওয়া যায়নি"
+  let why = !enoughIndependentReviewers ? "কমপক্ষে তিনটি স্বতন্ত্র AI মডেলের মতামত পাওয়া যায়নি"
     : counts[candidate] < requiredVotes || margin < 1 ? "AI মতামতে সংখ্যাগরিষ্ঠতা নেই"
     : !technicalSupports ? "নিজস্ব টেকনিক্যাল ইঞ্জিন প্রস্তাবিত দিক সমর্থন করছে না"
     : !higherAligned ? "বড় টাইমফ্রেমে বিপরীত সংকেত রয়েছে"
