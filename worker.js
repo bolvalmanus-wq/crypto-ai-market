@@ -231,6 +231,15 @@ function analyze(data, tf) {
   let adx = dxValues.length >= adxPeriod ? dxValues.slice(0, adxPeriod).reduce((sum,value)=>sum+value,0) / adxPeriod : 0;
   for (let i = adxPeriod; i < dxValues.length; i++) adx = (adx * (adxPeriod - 1) + dxValues[i]) / adxPeriod;
   const adxBias = adx >= 18 ? Math.sign(plusDI - minusDI) * clamp((adx - 18) / 25) : 0;
+  // Stochastic RSI (14,14): calculate a Wilder RSI series, then normalize
+  // the latest RSI against the recent 14 RSI readings. Keep it local to analyze().
+  const rsiSeries = closes.map((_, index) => index >= 14 ? rsi(closes.slice(0, index + 1), 14) : NaN);
+  const rsiWindow = rsiSeries.slice(-14).filter(Number.isFinite);
+  const rsiMin = rsiWindow.length ? Math.min(...rsiWindow) : 0;
+  const rsiMax = rsiWindow.length ? Math.max(...rsiWindow) : 0;
+  const stochRsi = rsiWindow.length && rsiMax > rsiMin
+    ? ((rv - rsiMin) / (rsiMax - rsiMin)) * 100
+    : 50;
   const vwapBars=bars.slice(-20);
   const vwapVolume=vwapBars.reduce((sum,x)=>sum+Math.max(0,Number(x.volume)||0),0);
   const vwap=vwapVolume>0?vwapBars.reduce((sum,x)=>sum+((x.high+x.low+x.close)/3)*Math.max(0,Number(x.volume)||0),0)/vwapVolume:price;
