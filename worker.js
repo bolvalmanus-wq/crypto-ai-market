@@ -273,7 +273,7 @@ function calculateAgentIndicatorSets(market){
   // Analyst-only, non-overlapping indicator calculations.
   const closes=b.map(x=>x.close), highs=b.map(x=>x.high), lows=b.map(x=>x.low), volumes=b.map(x=>x.volume);
   const pct=(a,z)=>z?((a-z)/z)*100:0;
-  const williams=(()=>{const x=hl(14);return x.high===x.low?-50:((x.high-p)/(x.high-x.low)-1)*100;})();
+  const williams=(()=>{const x=hl(14);return x.high===x.low?-50:-100*(x.high-p)/(x.high-x.low);})();
   const aroon=(()=>{const a=b.slice(-25);let hi=0,lo=0;for(let i=1;i<a.length;i++){if(a[i].high>=a[hi].high)hi=i;if(a[i].low<=a[lo].low)lo=i;}return{up:(hi/Math.max(1,a.length-1))*100,down:(lo/Math.max(1,a.length-1))*100};})();
   const volumeProfile=(()=>{const rows=b.slice(-50),lo=Math.min(...rows.map(x=>x.low)),hi=Math.max(...rows.map(x=>x.high)),bins=12,step=(hi-lo)/bins,weights=Array(bins).fill(0);for(const x of rows){const index=Math.max(0,Math.min(bins-1,Math.floor(((x.high+x.low+x.close)/3-lo)/(step||1))));weights[index]+=x.volume;}const best=weights.indexOf(Math.max(...weights));return{pointOfControl:lo+(best+.5)*step,binVolume:weights[best],priceVsPoc:p>=lo+(best+.5)*step?"ABOVE":"BELOW"};})();
   const trueRanges=b.slice(1).map((x,i)=>Math.max(x.high-x.low,Math.abs(x.high-b[i].close),Math.abs(x.low-b[i].close)));
@@ -344,6 +344,7 @@ function buildFourHourContext(data) {
   const averageVolume = prior.reduce((sum,c)=>sum+(Number(c.volume)||0),0) / Math.max(1,prior.length);
   const relativeVolume = averageVolume > 0 ? last.volume / averageVolume : null;
   const confirmedSupportBreakdown = supportBreakdown && relativeVolume !== null && relativeVolume >= 1.15;
+  const confirmedResistanceBreakout = resistanceBreakout && relativeVolume !== null && relativeVolume >= 1.15;
   const bearish = ema20 < ema50 && last.close < ema20 && strength < 50;
   const bullish = ema20 > ema50 && last.close > ema20 && strength > 50;
   const warnings = [];
@@ -354,7 +355,7 @@ function buildFourHourContext(data) {
   if (higherStructure) warnings.push("৪ ঘণ্টায় higher-high ও higher-low কাঠামো তৈরি হচ্ছে");
   if (ema20 > ema50 && last.close > ema20 && strength > 55) warnings.push("৪ ঘণ্টায় ঊর্ধ্বমুখী প্রবণতার সমর্থন আছে");
   if (resistanceBreakout) warnings.push("সাম্প্রতিক ৪ ঘণ্টার রেজিস্ট্যান্স অতিক্রম করেছে");
-  return { timeframe: "4h", available: true, signal: bearish || confirmedSupportBreakdown || (lowerStructure && ema20 < ema50) ? "SHORT" : bullish || resistanceBreakout ? "LONG" : "WAIT", ema20, ema50, rsi: strength, close: last.close, support, resistance, supportBreakdown, confirmedSupportBreakdown, resistanceBreakout, relativeVolume, lowerStructure, higherStructure, bearishWarning: ema20 < ema50 || (last.close < ema20 && strength < 45) || lowerStructure, bullishWarning: ema20 > ema50 || (last.close > ema20 && strength > 55) || higherStructure, warnings, candleTime: new Date(last.time + 14400000).toISOString() };
+  return { timeframe: "4h", available: true, signal: bearish || confirmedSupportBreakdown || (lowerStructure && ema20 < ema50) ? "SHORT" : bullish || resistanceBreakout ? "LONG" : "WAIT", ema20, ema50, rsi: strength, close: last.close, support, resistance, supportBreakdown, confirmedSupportBreakdown, resistanceBreakout, confirmedResistanceBreakout, relativeVolume, lowerStructure, higherStructure, bearishWarning: ema20 < ema50 || (last.close < ema20 && strength < 45) || lowerStructure, bullishWarning: ema20 > ema50 || (last.close > ema20 && strength > 55) || higherStructure, warnings, candleTime: new Date(last.time + 14400000).toISOString() };
 }
 
 function parseModelJson(output) {
@@ -564,7 +565,6 @@ function finalDecision(market, council) {
   const requiredHigherSignals = higher.requiredSignals || (higher.timeframe === "1h" ? [higher.signal, higher.fourHour?.signal] : [higher.signal]);
   // WAIT/neutral on a higher timeframe is not automatically a veto; only an explicit opposite trend blocks an entry.
   const oppositeSignal = candidate === "LONG" ? "SHORT" : "LONG";
-  const fastTimeframe = ["1m","5m","15m","30m"].includes(market.timeframe);
   // Fast and intraday setups are primarily checked against 1h structure.
   // 4h context remains important for 1h/4h decisions, but missing 4h data
   // must not silently veto every short-term opportunity.
@@ -574,9 +574,14 @@ function finalDecision(market, council) {
   // 15m/1h opposition is a caution for fast entries, not an automatic veto; only the 4h context can hard-veto the direction.
   const higherAligned = Boolean(strongestHigherSignal) && strongestHigherSignal !== oppositeSignal;
   const lowerTimeframeConflict = requiredHigherSignals.some(signal => signal === oppositeSignal) && !higherAligned;
-  const hardRisk = candidate === "LONG"
-    ? (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)
-    : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
+  const fastTimeframe = ["1m","5m","15m","30m"].includes(market.timeframe);
+  // Broad 4h trend warnings are context, not automatic vetoes for intraday reversals.
+  // Fast entries are blocked only by a volume-confirmed 4h structural break.
+  const hardRisk = fastTimeframe
+    ? (candidate === "LONG" ? market.riskEngine?.confirmedSupportBreakdown === true : market.riskEngine?.confirmedResistanceBreakout === true)
+    : (candidate === "LONG"
+      ? (market.riskEngine?.confirmedSupportBreakdown === true || market.riskEngine?.bearishWarning === true)
+      : (market.riskEngine?.confirmedResistanceBreakout === true || market.riskEngine?.bullishWarning === true));
   const enough = counts[candidate] >= requiredVotes && margin >= 1 && candidate !== "WAIT";
   // Directional decisions must depend on verified market data, not on Gemini being online.
   // Gemini is an optional vote; its outage must not permanently force WAIT when the
@@ -658,6 +663,15 @@ async function getDecisionFeedback(env, symbol, tf) {
   };
 }
 
+async function runScheduledOne(env, symbol, tf) {
+  if (!env.ANALYSIS_KV) throw new Error("ANALYSIS_KV binding is missing");
+  const lockKey = "analysis-lock:" + symbol + ":" + tf;
+  if (await env.ANALYSIS_KV.get(lockKey)) return { skipped: true, reason: "analysis already running", symbol, timeframe: tf };
+  await env.ANALYSIS_KV.put(lockKey, "1", { expirationTtl: 180 });
+  try { return await runOne(env, symbol, tf); }
+  finally { await env.ANALYSIS_KV.delete(lockKey); }
+}
+
 async function runOne(env, symbol, tf) {
   const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" } });
   if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
@@ -688,7 +702,7 @@ async function runOne(env, symbol, tf) {
     market.higherTimeframe = { timeframe: "4h", signal: market.indicators.technicalSignal, fourHour };
   }
   market.agentIndicatorSets = calculateAgentIndicatorSets(market);
-  market.riskEngine = { timeframe: "4h", available: fourHour.available === true, supportBreakdown: fourHour.supportBreakdown === true, resistanceBreakout: fourHour.resistanceBreakout === true, bearishWarning: fourHour.bearishWarning === true, bullishWarning: fourHour.bullishWarning === true, warnings: fourHour.warnings || (fourHour.warning ? [fourHour.warning] : []) };
+  market.riskEngine = { timeframe: "4h", available: fourHour.available === true, supportBreakdown: fourHour.supportBreakdown === true, confirmedSupportBreakdown: fourHour.confirmedSupportBreakdown === true, resistanceBreakout: fourHour.resistanceBreakout === true, confirmedResistanceBreakout: fourHour.confirmedResistanceBreakout === true, bearishWarning: fourHour.bearishWarning === true, bullishWarning: fourHour.bullishWarning === true, warnings: fourHour.warnings || (fourHour.warning ? [fourHour.warning] : []) };
 
   // Feed verified 10-day outcomes to BOTH AI reviewers; this is prompt feedback, not model retraining.
   let performanceFeedback = null;
@@ -943,14 +957,10 @@ export default {
         return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
       }
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
-      const lockKey = "manual-run:" + symbol + ":" + timeframe;
+      const lockKey = "analysis-lock:" + symbol + ":" + timeframe;
       const locked = await env.ANALYSIS_KV.get(lockKey);
-      if (locked) {
-        const cached = await env.ANALYSIS_KV.get("latest:" + symbol + ":" + timeframe, "json");
-        if (cached) return Response.json({ items: [cached], throttled: true }, { headers: { "Cache-Control": "no-store" } });
-        return Response.json({ error: "বিশ্লেষণ ইতিমধ্যে চলছে; কিছুক্ষণ পর আবার চেষ্টা করুন।" }, { status: 429 });
-      }
-      await env.ANALYSIS_KV.put(lockKey, "1", { expirationTtl: 120 });
+      if (locked) return Response.json({ error: "এই টাইমফ্রেমের বিশ্লেষণ ইতিমধ্যে চলছে; পুরোনো ফলাফলকে নতুন সিদ্ধান্ত হিসেবে দেখানো হবে না।" }, { status: 409, headers: { "Cache-Control": "no-store" } });
+      await env.ANALYSIS_KV.put(lockKey, "1", { expirationTtl: 180 });
       try {
         const result = await runOne(env, symbol, timeframe);
         await env.ANALYSIS_KV.delete(lockKey);
@@ -978,16 +988,17 @@ export default {
     const minute = new Date(controller.scheduledTime).getUTCMinutes();
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
-      tasks.push(runOne(env, symbol, "1m"));
-      if (minute % 5 === 0) tasks.push(runOne(env, symbol, "5m"));
-      if (minute % 15 === 0) tasks.push(runOne(env, symbol, "15m"));
-      if (minute % 30 === 0) tasks.push(runOne(env, symbol, "30m"));
-      if (minute === 0) tasks.push(runOne(env, symbol, "1h"));
-      if (minute === 0 && new Date(controller.scheduledTime).getUTCHours() % 4 === 0) tasks.push(runOne(env, symbol, "4h"));
+      tasks.push(runScheduledOne(env, symbol, "1m"));
+      if (minute % 5 === 0) tasks.push(runScheduledOne(env, symbol, "5m"));
+      if (minute % 15 === 1) tasks.push(runScheduledOne(env, symbol, "15m"));
+      if (minute % 30 === 2) tasks.push(runScheduledOne(env, symbol, "30m"));
+      if (minute === 3) tasks.push(runScheduledOne(env, symbol, "1h"));
+      if (minute === 4 && new Date(controller.scheduledTime).getUTCHours() % 4 === 0) tasks.push(runScheduledOne(env, symbol, "4h"));
     }
     const outcomes = await Promise.allSettled(tasks);
     const failed = outcomes.filter(x => x.status === "rejected");
+    const skipped = outcomes.filter(x => x.status === "fulfilled" && x.value?.skipped);
     if (failed.length) console.error("Scheduled analysis failures:", failed.map(x => String(x.reason)));
-    console.log("Scheduled analysis finished", { scheduledTime: controller.scheduledTime, success: outcomes.length - failed.length, failed: failed.length });
+    console.log("Scheduled analysis finished", { scheduledTime: controller.scheduledTime, success: outcomes.length - failed.length - skipped.length, failed: failed.length, skipped: skipped.length });
   }
 };
