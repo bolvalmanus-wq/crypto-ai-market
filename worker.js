@@ -516,6 +516,19 @@ async function runIndependentAnalysts(env, symbol, tf, market) {
     judgeError:null
   };
 }
+function recommendedDurationMinutes(market, confidenceScore) {
+  const tf = market.timeframe || "1m";
+  const base = {"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1;
+  let multiplier = confidenceScore >= 88 ? 3 : confidenceScore >= 78 ? 2 : 1;
+  const price = Number(market.ticker?.last);
+  const atr = Number(market.indicators?.atr);
+  const atrPct = price > 0 && Number.isFinite(atr) ? atr / price : 0;
+  // Higher-than-usual volatility shortens the suggested review horizon.
+  if (atrPct > 0.012) multiplier = 1;
+  else if (atrPct > 0.006) multiplier = Math.min(multiplier, 2);
+  return Math.max(base, Math.round(base * multiplier));
+}
+
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
   // Count only unique, successfully responding independent model analysts.
@@ -571,14 +584,24 @@ function finalDecision(market, council) {
     fourHourContext?.available === true
   );
   const enoughIndependentReviewers = valid >= 3;
-  const strongEnough = enoughIndependentReviewers && enough && technicalSupports && higherAligned && !hardRisk && dataQualityGood;
+  // Directional confidence is an evidence score, NOT a win probability.
+  // 60 points: independent AI vote share; 25: technical engine strength; 15: 4h context.
+  const votePoints = valid ? (counts[candidate] / valid) * 60 : 0;
+  const technicalPoints = technicalSupports ? Math.min(25, Math.abs(score) / 0.50 * 25) : 0;
+  const higherPoints = higherAligned ? 15 : 0;
+  const confidenceScore = Math.round(votePoints + technicalPoints + higherPoints);
+  const confidencePass = confidenceScore >= 70;
+  const strongEnough = enoughIndependentReviewers && enough && confidencePass && technicalSupports && higherAligned && !hardRisk && dataQualityGood;
   if (strongEnough) {
-    const judgeReason = "স্বাধীন AI-দের সংখ্যাগরিষ্ঠ মতামত ও নিজস্ব টেকনিক্যাল ইঞ্জিন একই দিক সমর্থন করেছে।";
+    const durationMinutes = recommendedDurationMinutes(market, confidenceScore);
     return {
       decision:candidate,
       direction:candidate==="LONG"?"UPWARD":"DOWNWARD",
-      reason:"স্বতন্ত্র AI ভোটে " + counts[candidate] + "/" + valid + " " + candidate + " সমর্থন করেছে; নিজস্ব টেকনিক্যাল স্কোরও সমর্থন করছে।" + (lowerTimeframeConflict ? " তবে ছোট টাইমফ্রেমে বিপরীত সংকেত থাকায় সতর্কতা প্রয়োজন।" : ""),
-      risk:(lowerTimeframeConflict ? "১৫মি/১ঘণ্টার কিছু সংকেত বিপরীত; ১মি এন্ট্রি দ্রুত invalid হতে পারে। " : "") + "দ্রুত মূল্য পরিবর্তন, স্লিপেজ ও নির্ধারিত invalidation অতিক্রমের ঝুঁকি রয়েছে।",
+      confidenceScore,
+      confidenceLabel:"দিকনির্দেশক আত্মবিশ্বাস; লাভের সম্ভাবনা নয়",
+      durationMinutes,
+      reason:"স্বতন্ত্র AI ভোটে " + counts[candidate] + "/" + valid + " " + candidate + " সমর্থন করেছে; সমন্বিত দিকনির্দেশক স্কোর " + confidenceScore + "% (ন্যূনতম ৭০%)।" + (lowerTimeframeConflict ? " তবে ছোট টাইমফ্রেমে বিপরীত সংকেত থাকায় সতর্কতা প্রয়োজন।" : ""),
+      risk:(lowerTimeframeConflict ? "১৫মি/১ঘণ্টার কিছু সংকেত বিপরীত; দ্রুত invalid হতে পারে। " : "") + "দ্রুত মূল্য পরিবর্তন, স্লিপেজ ও নির্ধারিত invalidation অতিক্রমের ঝুঁকি রয়েছে।",
       dataQuality:"GOOD"
     };
   }
@@ -630,6 +653,7 @@ async function runOne(env, symbol, tf) {
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
   const analysisData = tf === "4h" ? { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } } : data;
   const market = analyze(analysisData, tf);
+  market.timeframe = tf;
   // Check adjacent and broader 4h market structure before accepting a direction.
   const fourHour = buildFourHourContext(data);
   if (tf === "1m" || tf === "5m") {
@@ -737,7 +761,8 @@ async function runOne(env, symbol, tf) {
       decision: analysis.decision,
       entryPrice: Number(market.ticker.last),
       decidedAt: result.generatedAt,
-      expectedEvaluationAt: new Date(Date.parse(result.generatedAt) + 24 * 60 * 60 * 1000).toISOString(),
+      durationMinutes: Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1),
+      expectedEvaluationAt: new Date(Date.parse(result.generatedAt) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
       outcome: "PENDING"
     };
     await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), { expirationTtl: 60 * 60 * 24 * 11 });
@@ -755,7 +780,7 @@ async function evaluateMaturedDecisions(env) {
   for (const item of listed.keys) {
     const r = await env.ANALYSIS_KV.get(item.name, "json");
     if (r && (r.decision === "LONG" || r.decision === "SHORT") &&
-        r.outcome === "PENDING" && now - Date.parse(r.decidedAt) >= 24 * 60 * 60 * 1000) {
+        r.outcome === "PENDING" && now >= Date.parse(r.expectedEvaluationAt)) {
       due.push({ key: item.name, record: r });
     }
   }
