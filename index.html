@@ -732,7 +732,7 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
  for(const tf of ["1m","5m","15m","30m","1h","4h"]){
   if(onlyTf&&tf!==onlyTf)continue;
   const key="duel_v2_"+symbol+"_"+tf;
-  const tfCandles=tf==="4h"?(Array.isArray(data.candles["4h"])?data.candles["4h"]:buildFourHourCandles({candles:data.candles})):data.candles[tf];
+  const tfCandles=tf==="4h"?(Array.isArray(data.candles["4h"])?data.candles["4h"]:buildFourHourCandles(data.candles["1h"])):data.candles[tf];
   const lastClosed=(tfCandles||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
   const candleKey=lastClosed?Number(lastClosed.time):null;
   const expectedClose=candleKey===null?null:candleKey+({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf]);
