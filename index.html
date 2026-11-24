@@ -704,7 +704,7 @@ function showAi(symbol,tf,result){
  const model=safeText(result.provider||"স্বাধীন AI বিশ্লেষক");
  const ti=debate.technicalIndicators||{};
  const indicatorSummary=Number.isFinite(Number(ti.rsi))
-  ? '<div class="ai-risk">ইন্ডিকেটর: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · MACD '+safeText(ti.macdHistogram)+' · ADX '+safeText(ti.adx)+' · BB '+safeText(ti.bollingerPosition)+' · RV '+safeText(ti.relativeVolume)+'x · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
+  ? '<div class="ai-risk">ইন্ডিকেটর: RSI '+Number(ti.rsi).toFixed(1)+' · EMA9/EMA21 '+(Number(ti.ema9)>=Number(ti.ema21)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · MACD '+safeText(ti.macdHistogram)+' · ADX '+safeText(ti.adx)+' · BB '+safeText(ti.bollingerPosition)+' · RV '+safeText(ti.relativeVolume)+'x · VWAP '+safeText(ti.vwap)+' · ROC3/9 '+safeText(ti.roc3)+'/'+safeText(ti.roc9)+' · Donchian '+safeText(ti.donchianBias)+' · Price Action '+safeText(ti.priceActionBias)+' · স্কোর '+Number(ti.technicalScore).toFixed(2)+' · সংকেত '+safeText(ti.technicalSignal)+'</div>'
   : '';
  const bias=a.directionalBias==="LONG"?"LONG / ঊর্ধ্বমুখী পক্ষপাত":a.directionalBias==="SHORT"?"SHORT / নিম্নমুখী পক্ষপাত":"স্পষ্ট দিক নেই";
  const biasLine=a.decision==="WAIT"?'<div class="ai-risk"><b>AI-এর দিকনির্দেশক পক্ষপাত:</b> '+safeText(bias)+' · এটি চূড়ান্ত ট্রেড সংকেত নয়; প্রবেশের শর্ত পূরণ হয়নি</div>':'<div class="ai-risk"><b>AI নির্বাচিত দিক:</b> '+safeText(bias)+'</div>';
