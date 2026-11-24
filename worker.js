@@ -358,7 +358,7 @@ function calculateAdvancedIndicatorScore(sets, baseScore) {
  const g=sets?.gemma||{},l=sets?.glm||{},o=sets?.openai||{},m=sets?.llama||{},q=sets?.qwen||{};
  const ich=sign(g.ichimoku?.priceVsCloud)*.65+(Number(g.ichimoku?.tenkan)>Number(g.ichimoku?.kijun)?1:-1)*.35;
  const sar=sign(l.parabolicSAR?.direction),cci=clamp(Number(l.cci?.value)/180),will=clamp((Number(l.williamsR)+50)/50),aroon=clamp((Number(l.aroon?.up)-Number(l.aroon?.down))/100);
- const don=sign(o.position),kel=Number(o.keltner?.mid)>0?clamp((Number(o.keltner.mid)-Number(o.keltner.mid))*1):0;
+ const don=sign(o.position),kel=sign(o.position==="ABOVE_KELTNER"?"UP":o.position==="BELOW_KELTNER"?"DOWN":"FLAT");
  const supertrend=sign(m.supertrend?.direction),obv=sign(m.obv?.direction),mfi=clamp((Number(m.moneyFlowIndex)-50)/35),chaikin=Math.sign(Number(m.chaikinOscillator)||0);
  const roc=clamp(Number(q.rateOfChange)/1.5),ultimate=clamp((Number(q.ultimateOscillator)-50)/25),trix=clamp(Number(q.trix)/.15),dpo=clamp(Number(q.detrendedPriceOscillator)/(Math.abs(Number(g.fibonacci?.r500)||1)*.002));
  const parts=[[ich,.14],[sar,.10],[cci,.06],[will,.04],[aroon,.06],[don,.10],[kel,.04],[supertrend,.12],[obv,.05],[mfi,.06],[chaikin,.04],[roc,.07],[ultimate,.05],[trix,.04],[dpo,.03]];
