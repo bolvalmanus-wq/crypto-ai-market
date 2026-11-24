@@ -128,12 +128,20 @@ function ema(values, period) {
   return value;
 }
 function rsi(values, period = 14) {
-  let gains = 0, losses = 0;
-  for (let i = values.length - period; i < values.length; i++) {
-    const d = values[i] - values[i - 1]; if (d > 0) gains += d; else losses -= d;
+  if (!Array.isArray(values) || values.length <= period) return 50;
+  let avgGain=0,avgLoss=0;
+  for(let i=1;i<=period;i++){const change=values[i]-values[i-1];if(change>0)avgGain+=change;else avgLoss-=change;}
+  avgGain/=period;avgLoss/=period;
+  for(let i=period+1;i<values.length;i++){
+    const change=values[i]-values[i-1],gain=Math.max(0,change),loss=Math.max(0,-change);
+    avgGain=(avgGain*(period-1)+gain)/period;
+    avgLoss=(avgLoss*(period-1)+loss)/period;
   }
-  if (!gains && !losses) return 50; if (!losses) return 100; if (!gains) return 0;
-  return 100 - 100 / (1 + gains / losses);
+  if(avgGain===0&&avgLoss===0)return 50;
+  if(avgLoss===0)return 100;
+  if(avgGain===0)return 0;
+  const rs=avgGain/avgLoss;
+  return 100-100/(1+rs);
 }
 function analyze(data, tf) {
   const interval = INTERVALS[tf];
@@ -248,7 +256,7 @@ function analyze(data, tf) {
   else if (rv <= 22) reason = "RSI কম; নতুন SHORT নেওয়ার আগে নিশ্চিতকরণ দরকার";
   return {
     source: data.source, ticker: data.ticker,
-    indicators: { rsi: rv, ema9: e9, ema21: e21, atr, macdLine, macdSignal, macdHistogram, adx, plusDI, minusDI, bbUpper, bbMiddle: bbMean, bbLower, bbPosition, relativeVolume, vwap, roc3, roc9, donchianUpper, donchianLower, donchianBias, candlePressure, priceActionBias, technicalScore: score, technicalSignal: signal },
+    indicators: { rsi: rv, ema9: e9, ema21: e21, atr, macdLine, macdSignal, macdHistogram, adx, plusDI, minusDI, bbUpper, bbMiddle: bbMean, bbLower, bbPosition, relativeVolume, vwap, stochRsi, roc3, roc9, donchianUpper, donchianLower, donchianBias, candlePressure, priceActionBias, technicalScore: score, technicalSignal: signal },
     candles: bars.slice(-80),
     higherTimeframe: null,
     derivatives: data.derivatives ? {
@@ -345,7 +353,7 @@ function calculateAgentIndicatorSets(market){
   const pivot=(range.high+range.low+Number(last.close||p))/3;
 
   return {
-    gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci + Volume Profile",price:p,ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618},volumeProfile},
+    gemma:{name:"Ichimoku Cloud + Rolling VWAP(20) + Fibonacci + Volume Profile(12-bin proxy)",price:p,ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618},volumeProfile},
     glm:{name:"Parabolic SAR + CCI + Williams %R + Aroon",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20},williamsR:williams,aroon},
     openai:{name:"Donchian + Keltner + ATR Squeeze + Choppiness",donchian:dc,keltner:{mid:e20,upper:e20+2*atr,lower:e20-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e20+2*atr?"ABOVE_KELTNER":p<e20-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL",atrPercentile,choppiness},
     llama:{name:"Supertrend + OBV + MFI + Chaikin Oscillator",supertrend:{atr,ema20:e20,direction:supertrendDirection},obv:{value:obv,recentFlow:obvRecent,direction:obvRecent>0?"UP":obvRecent<0?"DOWN":"FLAT"},moneyFlowIndex:moneyFlow,chaikinOscillator:chaikinOsc},
