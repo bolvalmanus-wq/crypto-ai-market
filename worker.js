@@ -440,12 +440,12 @@ const TRADING_FRAMEWORK_BN = `
 ট্রেডিং জ্ঞান ও বাধ্যতামূলক বিশ্লেষণ-পদ্ধতি:
 ১) বাজারের অবস্থা আগে শ্রেণিবদ্ধ করো: uptrend, downtrend, range, breakout, pullback, নাকি high-volatility/choppy market। প্রতিটি অবস্থায় একই কৌশল প্রয়োগ করবে না।
 ২) Market structure: swing high/low, higher-high/higher-low, lower-high/lower-low, support/resistance এবং breakout-এর পর retest যাচাই করো। শুধু একটি candle বা wick-কে breakout ধরবে না; candle close ও volume confirmation দেখো।
-৩) Multi-timeframe: ৪ ঘণ্টা = প্রধান trend/context, ১ ঘণ্টা = intermediate structure, ১৫/৫ মিনিট = দ্রুত entry timing। ছোট timeframe-এর signal বড় timeframe-এর বিপরীত হলে confidence কমাও; জোর করে trade নিও না।
+৩) Multi-timeframe: ৪ ঘণ্টা = প্রধান trend/context, ১ ঘণ্টা = intermediate structure, ১৫/৫/১ মিনিট = দ্রুত entry timing। ১ মিনিটে ১৫ মিনিট/১ ঘণ্টার বিপরীত সংকেত থাকলে সেটিকে ঝুঁকির সতর্কতা হিসেবে ধরো; শুধু ছোট timeframe ভিন্ন বলেই বিশ্লেষণ বন্ধ করবে না। ৪ ঘণ্টার প্রবল বিপরীত trend হলে confidence কমাও এবং risk স্পষ্ট করো।
 ৪) Indicator-গুলোকে আলাদা ভোটের মতো গুনবে না। EMA trend, MACD momentum, RSI momentum/overbought-oversold context, ADX trend strength, Bollinger volatility/mean-reversion context, relative volume confirmation—এগুলো একই price action-এর সম্পর্কিত প্রমাণ। একই তথ্যকে বারবার double-count করবে না।
 ৫) Derivatives: open interest বাড়া/কমা, long-short ratio, funding এবং orderbook imbalance-কে context হিসেবে দেখো; এগুলো একা price direction নিশ্চিত করে না। crowded positioning হলে squeeze/liq risk উল্লেখ করো।
 ৬) LONG-এর পক্ষে: structure ও higher timeframe bullish, price/EMA trend সহায়ক, momentum ও volume confirmation আছে, resistance-এর ঠিক নিচে late entry নয়, এবং invalidation level যুক্তিসঙ্গত।
 ৭) SHORT-এর পক্ষে: structure ও higher timeframe bearish, lower-high/lower-low বা confirmed support breakdown, momentum ও volume সহায়ক, support-এর একেবারে কাছে late entry নয়, এবং invalidation level যুক্তিসঙ্গত।
-৮) WAIT-এর কারণ: mixed timeframe, range/chop, দুর্বল volume, false breakout, অতিরিক্ত stretched move, গুরুত্বপূর্ণ level-এর মাঝখানে অস্পষ্ট price, data missing/stale, অথবা risk-reward অনুকূল নয়। WAIT একটি বৈধ ও পেশাদার সিদ্ধান্ত।
+৮) WAIT কেবল তখনই দেবে যখন প্রমাণ সত্যিই দ্বিধাবিভক্ত/সমতল, market range/chop, data missing/stale, অথবা কোনো দিকেই গ্রহণযোগ্য setup নেই। ৪টি নিজস্ব indicator-এর মধ্যে অন্তত ৩টি একই দিক দেখালে এবং বিপরীত প্রমাণ দুর্বল হলে সেই দিকের LONG/SHORT bias দেবে; নিখুঁত নিশ্চয়তা না থাকার কারণে WAIT করবে না। দুর্বল/মাঝারি সংকেত হলে ঝুঁকি স্পষ্ট করবে, কিন্তু সিদ্ধান্ত এড়িয়ে যাবে না।
 ৯) Risk management: আগে trade invalidation কোথায় হবে তা ভাবো; stop-loss ছাড়া trade নয়। সম্ভাব্য reward যদি সম্ভাব্য risk-এর তুলনায় যথেষ্ট না হয় তবে WAIT। leverage, position size বা নিশ্চিত লাভের দাবি বানাবে না। ATR/volatility বেশি হলে risk বাড়ে।
 ১০) সিদ্ধান্ত দেওয়ার আগে বিপরীত দিকের সবচেয়ে শক্তিশালী যুক্তি খোঁজো (pre-mortem)। নিজের প্রাথমিক মত ভুল প্রমাণ করতে পারে—এমন ডেটা স্পষ্টভাবে বিবেচনা করো।
 ১১) কেবল সরবরাহ করা ডেটা ব্যবহার করো। সংবাদ, liquidation map, funding, open interest, support বা price level দেওয়া না থাকলে সেগুলো আছে বলে দাবি করবে না। কোনো সংখ্যা অনুমান করবে না।
@@ -469,10 +469,10 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
     recentCandles:(market.candles||[]).slice(-8).map(c=>({open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume}))
   };
   const messages=[
-    {role:"system",content:"তুমি AI Council-এর স্বাধীন "+role+" বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
+    {role:"system",content:"তুমি স্বাধীন "+role+" বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
     {role:"user",content:JSON.stringify({symbol,timeframe:tf,market:compactMarket})}
   ];
-  const models=[model].filter(Boolean); // No same-model fallback: each analyst must remain genuinely independent.
+  const models=[model].filter(Boolean); // No same-model fallback: each analyst must remain genuinely independent. Each reviewer must give its best evidence-based directional view; WAIT only when neither side has a real edge.
   const failures=[];
   for(const selectedModel of models){
     try{
@@ -542,14 +542,17 @@ function finalDecision(market, council) {
   const requiredVotes = Math.floor(valid / 2) + 1;
   const technical = market.indicators.technicalSignal;
   const score = Number(market.indicators.technicalScore) || 0;
-  const technicalSupports = candidate === "LONG" ? score >= 0.22 : score <= -0.22;
+  const technicalSupports = candidate === "LONG" ? score >= 0.18 : score <= -0.18;
   // Require directional agreement from every higher timeframe:
   // fast entries use 15m/1h/4h context; 30m entries use 1h/4h; 1h setups use 4h trend.
   const higher = market.higherTimeframe || {};
   const requiredHigherSignals = higher.requiredSignals || (higher.timeframe === "1h" ? [higher.signal, higher.fourHour?.signal] : [higher.signal]);
   // WAIT/neutral on a higher timeframe is not automatically a veto; only an explicit opposite trend blocks an entry.
   const oppositeSignal = candidate === "LONG" ? "SHORT" : "LONG";
-  const higherAligned = requiredHigherSignals.length > 0 && requiredHigherSignals.every(signal => signal !== oppositeSignal);
+  const strongestHigherSignal = higher.fourHour?.signal || (requiredHigherSignals.length ? requiredHigherSignals[requiredHigherSignals.length - 1] : higher.signal);
+  // 15m/1h opposition is a caution for fast entries, not an automatic veto; only the 4h context can hard-veto the direction.
+  const higherAligned = Boolean(strongestHigherSignal) && strongestHigherSignal !== oppositeSignal;
+  const lowerTimeframeConflict = requiredHigherSignals.some(signal => signal === oppositeSignal) && !higherAligned;
   const hardRisk = candidate === "LONG"
     ? (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)
     : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
@@ -574,8 +577,8 @@ function finalDecision(market, council) {
     return {
       decision:candidate,
       direction:candidate==="LONG"?"UPWARD":"DOWNWARD",
-      reason:"আলাদা AI ভোটে " + counts[candidate] + "/" + valid + " " + candidate + " সমর্থন করেছে; নিজস্ব টেকনিক্যাল ইঞ্জিনও সমর্থন করছে।",
-      risk:"দ্রুত মূল্য পরিবর্তন, স্লিপেজ ও নির্ধারিত invalidation অতিক্রমের ঝুঁকি রয়েছে।",
+      reason:"স্বতন্ত্র AI ভোটে " + counts[candidate] + "/" + valid + " " + candidate + " সমর্থন করেছে; নিজস্ব টেকনিক্যাল স্কোরও সমর্থন করছে।" + (lowerTimeframeConflict ? " তবে ছোট টাইমফ্রেমে বিপরীত সংকেত থাকায় সতর্কতা প্রয়োজন।" : ""),
+      risk:(lowerTimeframeConflict ? "১৫মি/১ঘণ্টার কিছু সংকেত বিপরীত; ১মি এন্ট্রি দ্রুত invalid হতে পারে। " : "") + "দ্রুত মূল্য পরিবর্তন, স্লিপেজ ও নির্ধারিত invalidation অতিক্রমের ঝুঁকি রয়েছে।",
       dataQuality:"GOOD"
     };
   }
@@ -589,7 +592,7 @@ function finalDecision(market, council) {
   return {
     decision:"WAIT",
     direction:technical==="LONG"?"UPWARD":technical==="SHORT"?"DOWNWARD":"SIDEWAYS",
-    reason:"AI Council: LONG " + counts.LONG + ", SHORT " + counts.SHORT + ", WAIT " + counts.WAIT + " — " + why + "।",
+    reason:"স্বাধীন AI ভোট: LONG " + counts.LONG + ", SHORT " + counts.SHORT + ", WAIT " + counts.WAIT + " — " + why + "।",
     risk:"স্বাধীন বিশ্লেষকদের মধ্যে যথেষ্ট সমর্থন না থাকলে ট্রেড এড়িয়ে চলুন।",
     dataQuality:dataQualityGood?"GOOD":"LIMITED"
   };
