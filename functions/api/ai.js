@@ -69,7 +69,7 @@ export async function onRequestPost({ request, env }) {
   catch { return Response.json({ error: "Invalid JSON request." }, { status: 400 }); }
 
   if (!["BTC", "SOL"].includes(body?.symbol) ||
-      !["30m", "1h", "4h"].includes(body?.timeframe) || !body?.market) {
+      !["5m", "15m", "30m", "1h", "4h"].includes(body?.timeframe) || !body?.market) {
     return Response.json({ error: "Invalid symbol, timeframe, or market data." }, { status: 400 });
   }
 
@@ -84,7 +84,7 @@ export async function onRequestPost({ request, env }) {
 ট্রেডিং প্রশিক্ষণ ও বিশ্লেষণ-পদ্ধতি:
 - প্রথমে market regime চিহ্নিত করো: trend, range, breakout, pullback, নাকি choppy/high-volatility। regime অনুযায়ী প্রমাণ বিচার করো।
 - Market structure-এ swing high/low, HH/HL, LH/LL, support/resistance, candle close, breakout-retest ও false breakout যাচাই করো। wick-কে একা breakout ধরবে না।
-- ৪ ঘণ্টাকে প্রধান trend/context, ১ ঘণ্টাকে intermediate structure, ৩০ মিনিটকে entry timing হিসেবে দেখো। ছোট timeframe বড় timeframe-এর বিপরীত হলে সিদ্ধান্তে সতর্ক হও।
+- ৪ ঘণ্টাকে প্রধান trend/context, ১ ঘণ্টাকে intermediate structure, ১৫/৫ মিনিটকে fast entry timing হিসেবে দেখো। ছোট timeframe বড় timeframe-এর বিপরীত হলে সিদ্ধান্তে সতর্ক হও।
 - EMA trend, MACD momentum, RSI, ADX/DI trend strength, Bollinger volatility/mean-reversion এবং relative volume confirmation একত্রে বিচার করো। এগুলো সম্পর্কিত প্রমাণ; একই price action-কে একাধিকবার গুনে confidence বাড়াবে না।
 - Derivatives-এর open interest, long-short ratio, funding ও orderbook-কে সহায়ক context ধরো; একা এগুলো দিয়ে direction নিশ্চিত করো না। crowded positioning থেকে squeeze/liquidation risk বিবেচনা করো, তবে ডেটা না থাকলে দাবি করো না।
 - LONG-এর আগে bullish structure, timeframe support, momentum/volume confirmation, resistance পর্যন্ত জায়গা এবং invalidation বিবেচনা করো। SHORT-এর আগে bearish structure, support breakdown বা lower-high/lower-low, momentum/volume confirmation এবং support পর্যন্ত জায়গা বিবেচনা করো।
