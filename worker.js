@@ -456,7 +456,7 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   for(const opinion of geminiOpinions) opinion.indicators=indicatorSets.gemini;
   const specialistModels = [
     {model:"@cf/google/gemma-4-26b-a4b-it",role:"Gemma · Ichimoku/VWAP/Fibonacci",indicators:indicatorSets.gemma,instructions:"শুধু অতিরিক্ত Ichimoku Cloud, VWAP ও Fibonacci বিচার করো। অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"},
-    {model:"@cf/zai-org/glm-4.7-flash",role:"GLM · Supertrend/CCI",indicators:indicatorSets.glm,instructions:"শুধু অতিরিক্ত Supertrend ও CCI বিচার করো। অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"}
+    {model:"@cf/zai-org/glm-4.7-flash",role:"GLM · Parabolic SAR/CCI",indicators:indicatorSets.glm,instructions:"শুধু অতিরিক্ত Parabolic SAR-এর trend flip/price position এবং CCI-এর momentum/extreme বিচার করো। Supertrend নয়; অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"}
   ];
   const settled = await Promise.allSettled(specialistModels.map(agent =>
     runCloudflareAgent(env,agent.model,agent.role,agent.instructions,symbol,tf,market,agent.indicators)
@@ -467,18 +467,24 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   if (gemini.unavailableError) errors.unshift({ agent:"Gemini (optional)", error:String(gemini.unavailableError).slice(0,180) });
   const preJudge = [...geminiOpinions, ...specialists];
   let judge = null, judgeError = null;
-  try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge, indicatorSets.judge); }
-  catch(error) { judgeError = String(error).slice(0,180); }
+  // The judge reviews evidence but is never counted as an independent vote.
+  if (preJudge.length > 0) {
+    try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge, indicatorSets.judge); }
+    catch(error) { judgeError = String(error).slice(0,180); }
+  } else {
+    judgeError = "কোনো স্বাধীন AI বিশ্লেষকের বৈধ মতামত পাওয়া যায়নি";
+  }
   if(judge) judge.indicators=indicatorSets.judge;
   const opinions = [...preJudge, ...(judge ? [judge] : [])];
-  return { opinions, judge, errors, judgeError,
+  return { opinions, independentOpinions:preJudge, judge, errors, judgeError,
     geminiUnavailable:gemini.unavailableError || null,
     status:judge && preJudge.length >= 2 ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
 }
 
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
-  const independentOpinions = opinions;
+  // Judge is advisory only; count only independent specialist/Gemini votes.
+  const independentOpinions = council.independentOpinions || opinions.filter(x => x.agent !== "Council Judge");
   const counts = { LONG:0, SHORT:0, WAIT:0 };
   for (const opinion of independentOpinions) if (counts[opinion.decision] !== undefined) counts[opinion.decision]++;
   const valid = independentOpinions.length;
@@ -513,7 +519,8 @@ function finalDecision(market, council) {
     candleData.every(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0) &&
     fourHourContext?.available === true
   );
-  const strongEnough = enough && technicalSupports && !hardRisk && dataQualityGood;
+  const enoughIndependentReviewers = valid >= 2;
+  const strongEnough = enoughIndependentReviewers && enough && technicalSupports && higherAligned && !hardRisk && dataQualityGood;
   if (strongEnough) {
     const judgeReason = council.judge?.reason || "AI Council-এর অধিকাংশ স্বাধীন বিশ্লেষণ একমত।";
     return {
@@ -524,8 +531,10 @@ function finalDecision(market, council) {
       dataQuality:"GOOD"
     };
   }
-  let why = counts[candidate] < requiredVotes || margin < 1 ? "AI মতামতে সংখ্যাগরিষ্ঠতা নেই"
+  let why = !enoughIndependentReviewers ? "কমপক্ষে দুইটি স্বাধীন AI মতামত পাওয়া যায়নি"
+    : counts[candidate] < requiredVotes || margin < 1 ? "AI মতামতে সংখ্যাগরিষ্ঠতা নেই"
     : !technicalSupports ? "নিজস্ব টেকনিক্যাল ইঞ্জিন প্রস্তাবিত দিক সমর্থন করছে না"
+    : !higherAligned ? "বড় টাইমফ্রেমে বিপরীত সংকেত রয়েছে"
     : hardRisk ? "গুরুত্বপূর্ণ সাপোর্ট/রেজিস্ট্যান্স ঝুঁকি বিপরীত"
     : !dataQualityGood ? "যাচাইকৃত বাজার ডেটা বা ৪ ঘণ্টার প্রেক্ষাপট অপর্যাপ্ত"
     : "নিরাপদ সিদ্ধান্তের শর্ত পূরণ হয়নি";
