@@ -476,7 +476,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
   const failures=[];
   for(const selectedModel of models){
     try{
-      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:512,max_tokens:512,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
+      const output=await env.AI.run(selectedModel,{messages,max_tokens:512,temperature:0});
       return {agent:role,model:selectedModel,...parseModelJson(output)};
     }catch(error){failures.push(selectedModel+": "+String(error?.message||error).slice(0,140));}
   }
@@ -492,7 +492,7 @@ async function runIndependentAnalysts(env, symbol, tf, market) {
     {model:"@cf/zai-org/glm-4.7-flash",role:"GLM 4.7 · Parabolic SAR/CCI/Williams %R/Aroon",key:"glm",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Parabolic SAR trend flip, CCI momentum/extreme, Williams %R close-location momentum এবং Aroon trend age/direction। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"},
     {model:"@cf/openai/gpt-oss-20b",role:"GPT OSS · Donchian/Keltner/ATR Squeeze/Choppiness",key:"openai",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Donchian breakout/channel, Keltner volatility envelope, ATR percentile squeeze/expansion এবং Choppiness Index trend-vs-range। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"},
     {model:"@cf/meta/llama-3.3-70b-instruct-fp8-fast",role:"Llama 3.3 · Supertrend/OBV/MFI/Chaikin Oscillator",key:"llama",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: ATR Supertrend trend, OBV volume confirmation, Money Flow Index buying/selling pressure এবং Chaikin Oscillator accumulation/distribution momentum। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"},
-    {model:"@cf/qwen/qwen3-30b-a3b-fp8",role:"Qwen 3 · ROC/Ultimate Oscillator/TRIX/DPO",key:"qwen",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Rate of Change momentum, Ultimate Oscillator multi-period buying pressure, TRIX smoothed momentum এবং Detrended Price Oscillator cycle deviation। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"}
+    {model:"@cf/qwen/qwen3.8-27b",role:"Qwen 3.8.8 · ROC/Ultimate Oscillator/TRIX/DPO",key:"qwen",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Rate of Change momentum, Ultimate Oscillator multi-period buying pressure, TRIX smoothed momentum এবং Detrended Price Oscillator cycle deviation। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"}
   ];
   const settled=await Promise.allSettled(analysts.map(a=>
     runCloudflareAgent(env,a.model,a.role,a.instructions,symbol,tf,market,sets[a.key])
