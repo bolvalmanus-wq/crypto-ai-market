@@ -1002,12 +1002,7 @@ export default {
         const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
         const records = [];
         for (const item of (listed?.keys || [])) {
-          let record = item.metadata;
-          // Older records have no metadata; load their JSON values individually.
-          if (!record && item.name) {
-            try { record = await env.ANALYSIS_KV.get(item.name, "json"); }
-            catch (readError) { console.error("Performance record read failed", item.name, String(readError)); }
-          }
+          const record = item.metadata;
           if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
               Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
         }
