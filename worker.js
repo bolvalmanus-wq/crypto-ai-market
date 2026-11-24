@@ -996,54 +996,60 @@ export default {
       return Response.json({ ok: true });
     }
     if (url.pathname === "/performance" && request.method === "GET") {
-      if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
-      const now = Date.now(), cutoff = now - 10 * 24 * 60 * 60 * 1000;
-      const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
-      // Read decision records from KV metadata instead of issuing up to
-      // 1,000 individual KV.get subrequests in a single report request.
-      const records = [];
-      for (const item of listed.keys) {
-        const record = item.metadata;
-        if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
-            Date.parse(record.decidedAt) >= cutoff) records.push(record);
-      }
-      records.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
-      const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
-      const settled = records.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG");
-      const correct = settled.filter(x => x.outcome === "CORRECT").length;
-      const evaluatedLast24 = settled.filter(x => Date.parse(x.evaluatedAt || 0) >= now - 86400000);
-      const summary = {
-        total: records.length, correct, wrong: settled.length - correct,
-        pending: records.filter(x => x.outcome === "PENDING").length,
-        accuracy: settled.length ? Math.round(correct / settled.length * 1000) / 10 : null,
-        last24: {
-          total: last24.length,
-          correct: last24.filter(x => x.outcome === "CORRECT").length,
-          wrong: last24.filter(x => x.outcome === "WRONG").length,
-          pending: last24.filter(x => x.outcome === "PENDING").length
-        },
-        evaluatedLast24: {
-          total: evaluatedLast24.length,
-          correct: evaluatedLast24.filter(x => x.outcome === "CORRECT").length,
-          wrong: evaluatedLast24.filter(x => x.outcome === "WRONG").length
+      try {
+        if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
+        const now = Date.now(), cutoff = now - 10 * 24 * 60 * 60 * 1000;
+        const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+        const records = [];
+        for (const item of (listed?.keys || [])) {
+          let record = item.metadata;
+          // Older records have no metadata; load their JSON values individually.
+          if (!record && item.name) {
+            try { record = await env.ANALYSIS_KV.get(item.name, "json"); }
+            catch (readError) { console.error("Performance record read failed", item.name, String(readError)); }
+          }
+          if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
+              Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
         }
-      };
-      const dailyMap = {};
-      for (const r of records) {
-        const day = new Date(r.decidedAt).toISOString().slice(0,10);
-        if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, records: [] };
-        const d = dailyMap[day];
-        d.total++;
-        if (r.outcome === "CORRECT") d.correct++;
-        else if (r.outcome === "WRONG") d.wrong++;
-        else d.pending++;
-        d.records.push(r);
+        records.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
+        const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
+        const settled = records.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG");
+        const correct = settled.filter(x => x.outcome === "CORRECT").length;
+        const evaluatedLast24 = settled.filter(x => Date.parse(x.evaluatedAt || 0) >= now - 86400000);
+        const summary = {
+          total: records.length, correct, wrong: settled.length - correct,
+          pending: records.filter(x => x.outcome === "PENDING").length,
+          accuracy: settled.length ? Math.round(correct / settled.length * 1000) / 10 : null,
+          last24: {
+            total: last24.length,
+            correct: last24.filter(x => x.outcome === "CORRECT").length,
+            wrong: last24.filter(x => x.outcome === "WRONG").length,
+            pending: last24.filter(x => x.outcome === "PENDING").length
+          },
+          evaluatedLast24: {
+            total: evaluatedLast24.length,
+            correct: evaluatedLast24.filter(x => x.outcome === "CORRECT").length,
+            wrong: evaluatedLast24.filter(x => x.outcome === "WRONG").length
+          }
+        };
+        const dailyMap = {};
+        for (const r of records) {
+          const day = new Date(r.decidedAt).toISOString().slice(0,10);
+          if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, records: [] };
+          const d = dailyMap[day];
+          d.total++;
+          if (r.outcome === "CORRECT") d.correct++;
+          else if (r.outcome === "WRONG") d.wrong++;
+          else d.pending++;
+          d.records.push(r);
+        }
+        return Response.json({ summary, daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)), records },
+          { headers: { "Cache-Control": "no-store" } });
+      } catch (error) {
+        console.error("Performance report failed", error instanceof Error ? error.stack : String(error));
+        return Response.json({ error: "Performance report failed", details: error instanceof Error ? error.message : String(error) },
+          { status: 500, headers: { "Cache-Control": "no-store" } });
       }
-      return Response.json({
-        summary,
-        daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)),
-        records
-      }, { headers: { "Cache-Control": "no-store" } });
     }
     if (url.pathname === "/analyze" && request.method === "POST") {
       let body;
