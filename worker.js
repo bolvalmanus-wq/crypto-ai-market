@@ -345,7 +345,7 @@ function calculateAgentIndicatorSets(market){
   const pivot=(range.high+range.low+Number(last.close||p))/3;
 
   return {
-    gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci + Volume Profile",ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618},volumeProfile},
+    gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci + Volume Profile",price:p,ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618},volumeProfile},
     glm:{name:"Parabolic SAR + CCI + Williams %R + Aroon",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20},williamsR:williams,aroon},
     openai:{name:"Donchian + Keltner + ATR Squeeze + Choppiness",donchian:dc,keltner:{mid:e20,upper:e20+2*atr,lower:e20-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e20+2*atr?"ABOVE_KELTNER":p<e20-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL",atrPercentile,choppiness},
     llama:{name:"Supertrend + OBV + MFI + Chaikin Oscillator",supertrend:{atr,ema20:e20,direction:supertrendDirection},obv:{value:obv,recentFlow:obvRecent,direction:obvRecent>0?"UP":obvRecent<0?"DOWN":"FLAT"},moneyFlowIndex:moneyFlow,chaikinOscillator:chaikinOsc},
@@ -356,15 +356,15 @@ function calculateAdvancedIndicatorScore(sets, baseScore) {
  const clamp=x=>Math.max(-1,Math.min(1,Number.isFinite(Number(x))?Number(x):0));
  const sign=x=>x==="UP"||x==="ABOVE"||x==="BREAKOUT_UP"?1:x==="DOWN"||x==="BELOW"||x==="BREAKOUT_DOWN"?-1:0;
  const g=sets?.gemma||{},l=sets?.glm||{},o=sets?.openai||{},m=sets?.llama||{},q=sets?.qwen||{};
- const ich=sign(g.ichimoku?.priceVsCloud)*.65+(Number(g.ichimoku?.tenkan)>Number(g.ichimoku?.kijun)?1:-1)*.35;
+ const ich=sign(g.ichimoku?.priceVsCloud)*.65+(Number(g.ichimoku?.tenkan)>Number(g.ichimoku?.kijun)?1:-1)*.35; const vwapScore=sign(g.vwap?.priceVsVwap),pocScore=sign(g.volumeProfile?.priceVsPoc),fibScore=Number(g.price)>Number(g.fibonacci?.r500)?1:-1;
  const sar=sign(l.parabolicSAR?.direction),cci=clamp(Number(l.cci?.value)/180),will=clamp((Number(l.williamsR)+50)/50),aroon=clamp((Number(l.aroon?.up)-Number(l.aroon?.down))/100);
  const don=sign(o.position),kel=sign(o.position==="ABOVE_KELTNER"?"UP":o.position==="BELOW_KELTNER"?"DOWN":"FLAT");
  const supertrend=sign(m.supertrend?.direction),obv=sign(m.obv?.direction),mfi=clamp((Number(m.moneyFlowIndex)-50)/35),chaikin=Math.sign(Number(m.chaikinOscillator)||0);
  const roc=clamp(Number(q.rateOfChange)/1.5),ultimate=clamp((Number(q.ultimateOscillator)-50)/25),trix=clamp(Number(q.trix)/.15),dpo=clamp(Number(q.detrendedPriceOscillator)/(Math.abs(Number(g.fibonacci?.r500)||1)*.002));
- const parts=[[ich,.14],[sar,.10],[cci,.06],[will,.04],[aroon,.06],[don,.10],[kel,.04],[supertrend,.12],[obv,.05],[mfi,.06],[chaikin,.04],[roc,.07],[ultimate,.05],[trix,.04],[dpo,.03]];
+ const parts=[[ich,.13],[vwapScore,.05],[pocScore,.04],[fibScore,.03],[sar,.09],[cci,.06],[will,.04],[aroon,.06],[don,.09],[kel,.04],[supertrend,.11],[obv,.05],[mfi,.06],[chaikin,.04],[roc,.07],[ultimate,.05],[trix,.04],[dpo,.03]];
  const weight=parts.reduce((a,x)=>a+x[1],0),advanced=parts.reduce((a,x)=>a+x[0]*x[1],0)/weight;
  const chop=Number(o.choppiness),atrPct=Number(o.atrPercentile),regimeFactor=(Number.isFinite(chop)&&chop>61.8?.72:1)*(Number.isFinite(atrPct)&&atrPct<10?.82:1);
- return {score:clamp((clamp(baseScore)*.58+advanced*.42)*regimeFactor),advancedScore:advanced,regimeFactor,components:{ichimoku:ich,parabolicSar:sar,cci,williamsR:will,aroon,donchian:don,keltner:kel,supertrend,obv,mfi,chaikin,roc,ultimateOscillator:ultimate,trix,dpo,choppiness:Number.isFinite(chop)?chop:null,atrPercentile:Number.isFinite(atrPct)?atrPct:null}};
+ return {score:clamp((clamp(baseScore)*.58+advanced*.42)*regimeFactor),advancedScore:advanced,regimeFactor,components:{ichimoku:ich,vwap:vwapScore,volumeProfile:pocScore,fibonacci:fibScore,parabolicSar:sar,cci,williamsR:will,aroon,donchian:don,keltner:kel,supertrend,obv,mfi,chaikin,roc,ultimateOscillator:ultimate,trix,dpo,choppiness:Number.isFinite(chop)?chop:null,atrPercentile:Number.isFinite(atrPct)?atrPct:null}};
 }
 
 function buildFourHourCandles(data) {
