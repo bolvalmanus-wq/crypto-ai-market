@@ -223,7 +223,22 @@ function analyze(data, tf) {
   let adx = dxValues.length >= adxPeriod ? dxValues.slice(0, adxPeriod).reduce((sum,value)=>sum+value,0) / adxPeriod : 0;
   for (let i = adxPeriod; i < dxValues.length; i++) adx = (adx * (adxPeriod - 1) + dxValues[i]) / adxPeriod;
   const adxBias = adx >= 18 ? Math.sign(plusDI - minusDI) * clamp((adx - 18) / 25) : 0;
-  rawScore = clamp(rawScore * 0.68 + macdBias * 0.14 + bbPosition * 0.08 + adxBias * 0.07 + volumeBias * 0.03);
+  const vwapBars=bars.slice(-20);
+  const vwapVolume=vwapBars.reduce((sum,x)=>sum+Math.max(0,Number(x.volume)||0),0);
+  const vwap=vwapVolume>0?vwapBars.reduce((sum,x)=>sum+((x.high+x.low+x.close)/3)*Math.max(0,Number(x.volume)||0),0)/vwapVolume:price;
+  const roc3=closes.length>3?(price/closes[closes.length-4]-1)*100:0;
+  const roc9=closes.length>9?(price/closes[closes.length-10]-1)*100:0;
+  const rocBias=clamp((roc3*0.55+roc9*0.45)*18);
+  const vwapBias=clamp((price/vwap-1)*160);
+  const donchianBars=bars.slice(-21,-1);
+  const donchianUpper=donchianBars.length?Math.max(...donchianBars.map(x=>x.high)):price;
+  const donchianLower=donchianBars.length?Math.min(...donchianBars.map(x=>x.low)):price;
+  const donchianWidth=Math.max(donchianUpper-donchianLower,price*0.00001);
+  const donchianBias=price>donchianUpper?1:price<donchianLower?-1:clamp((price-(donchianUpper+donchianLower)/2)/(donchianWidth/2))*0.35;
+  const lastRange=Math.max(last.high-last.low,price*0.00001);
+  const candlePressure=clamp((2*last.close-last.high-last.low)/lastRange);
+  const priceActionBias=clamp(rocBias*0.38+vwapBias*0.22+donchianBias*0.25+candlePressure*0.15);
+  // Add bounded price-action confirmation; related signals are combined once.\n  rawScore = clamp(rawScore * 0.82 + priceActionBias * 0.18);
   const score = clamp(rawScore);
   let signal = "WAIT", reason = "ট্রেন্ড, MACD, ADX, ভলিউম ও অন্যান্য সূচক এখনো একমত নয়";
   // RSI extremes are risk warnings, not automatic bans on a valid trend signal.
@@ -233,7 +248,7 @@ function analyze(data, tf) {
   else if (rv <= 22) reason = "RSI কম; নতুন SHORT নেওয়ার আগে নিশ্চিতকরণ দরকার";
   return {
     source: data.source, ticker: data.ticker,
-    indicators: { rsi: rv, ema9: e9, ema21: e21, atr, macdLine, macdSignal, macdHistogram, adx, plusDI, minusDI, bbUpper, bbMiddle: bbMean, bbLower, bbPosition, relativeVolume, technicalScore: score, technicalSignal: signal },
+    indicators: { rsi: rv, ema9: e9, ema21: e21, atr, macdLine, macdSignal, macdHistogram, adx, plusDI, minusDI, bbUpper, bbMiddle: bbMean, bbLower, bbPosition, relativeVolume, vwap, roc3, roc9, donchianUpper, donchianLower, donchianBias, candlePressure, priceActionBias, technicalScore: score, technicalSignal: signal },
     candles: bars.slice(-80),
     higherTimeframe: null,
     derivatives: data.derivatives ? {
@@ -815,6 +830,12 @@ async function runOne(env, symbol, tf) {
         minusDI: market.indicators.minusDI,
         bollingerPosition: market.indicators.bbPosition,
         relativeVolume: market.indicators.relativeVolume,
+        vwap: market.indicators.vwap,
+        roc3: market.indicators.roc3,
+        roc9: market.indicators.roc9,
+        donchianUpper: market.indicators.donchianUpper,
+        donchianLower: market.indicators.donchianLower,
+        priceActionBias: market.indicators.priceActionBias,
         technicalScore: market.indicators.technicalScore,
         technicalSignal: market.indicators.technicalSignal
       }
