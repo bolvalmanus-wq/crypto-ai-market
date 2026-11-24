@@ -714,6 +714,8 @@ function showAi(symbol,tf,result){
  const counts=debate.councilVoteCounts||{LONG:0,SHORT:0,WAIT:0};
  const opinions=councilOpinions.map(o=>'<div class="ai-reason"><b>'+safeText(o.agent||o.model||"AI")+' · '+safeText(o.decision)+'</b> — '+safeText(String(o.reason||"কারণ দেওয়া হয়নি").slice(0,180))+(o.indicators?'<div class="ai-risk"><b>নিজস্ব ৪টি Indicator:</b> '+safeText(o.indicators.name||"বিশেষজ্ঞ Indicator সেট")+'<br><b>প্রাপ্ত মান:</b> '+safeText(JSON.stringify(Object.fromEntries(Object.entries(o.indicators).filter(([k])=>k!=="name"))).slice(0,850))+'</div>':'<div class="ai-risk">বিশেষজ্ঞ Indicator ডেটা পাওয়া যায়নি।</div>')+'</div>').join("");
  const voteSummary='<div class="ai-risk"><b>স্বাধীন AI মতামত:</b> LONG '+Number(counts.LONG||0)+' · SHORT '+Number(counts.SHORT||0)+' · WAIT '+Number(counts.WAIT||0)+' · '+safeText(debate.status||"অজানা")+'</div>';
+ const confidenceLine=Number.isFinite(Number(a.confidenceScore))?'<div class="ai-risk"><b>দিকনির্দেশক আত্মবিশ্বাস: '+Number(a.confidenceScore)+'%</b> · ৭০% বা বেশি হলে সিদ্ধান্তের শর্ত পূরণ · এটি লাভের সম্ভাবনা নয়</div>':'';
+ const durationLine=Number(a.durationMinutes)>0?'<div class="ai-risk"><b>পর্যালোচনার সময়:</b> '+Number(a.durationMinutes)+' মিনিট পরে ফলাফল যাচাই হবে</div>':'';
  const h4=debate.fourHourContext||{};
  const signalBn=x=>x==="LONG"?"বুলিশ":x==="SHORT"?"বেয়ারিশ":"নিরপেক্ষ/WAIT";
  const htfLine='<div class="ai-risk"><b>মাল্টি-টাইমফ্রেম:</b> ৪ ঘণ্টা '+(h4.available?signalBn(h4.signal):"ডেটা অপর্যাপ্ত")+(tf==="5m"?' · ১৫ মিনিট/১ ঘণ্টা প্রেক্ষাপট':tf==="15m"?' · ১ ঘণ্টা প্রেক্ষাপট':tf==="30m"?' · ১ ঘণ্টা '+signalBn(debate.higherTimeframeSignal):'')+' · '+(tf==="5m"?'৫ মিনিট এন্ট্রি':tf==="15m"?'১৫ মিনিট এন্ট্রি':tf==="30m"?'৩০ মিনিট এন্ট্রি':tf==="1h"?'১ ঘণ্টা সেটআপ':'৪ ঘণ্টা প্রেক্ষাপট')+'</div>';
@@ -723,7 +725,7 @@ function showAi(symbol,tf,result){
  const judgeError=debate.judgeError?'<div class="ai-risk">বিশ্লেষণ সমস্যা: '+safeText(debate.judgeError)+'</div>':'';
  const status=aiFailed?"AI চালানো যায়নি — এটি বাজারের WAIT নয়":debate.status==="ANALYSTS_COMPLETE"?"স্বাধীন AI বিশ্লেষণ সম্পন্ন · "+Number(debate.analystCount||councilOpinions.length)+" জন":"স্বাধীন AI বিশ্লেষণ অসম্পূর্ণ · প্রয়োজনীয় ৩টি মডেল পাওয়া যায়নি";
  el.innerHTML='<div class="ai-head"><span>✦ স্বাধীন AI বিশ্লেষণ · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
-  '<div class="ai-risk">'+safeText(status)+'</div>'+voteSummary+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
+  '<div class="ai-risk">'+safeText(status)+'</div>'+voteSummary+confidenceLine+durationLine+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
   '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
 }
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
