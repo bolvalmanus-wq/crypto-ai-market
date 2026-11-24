@@ -64,14 +64,14 @@ loadReport();
 </script></body></html>+fmt(r.exitPrice)+'</b></div>':"";
  const pnl=Number.isFinite(Number(r.pnlPct))&&r.pnlPct!==null?'<div>পরিবর্তন: <b class="'+(Number(r.pnlPct)>=0?"correct":"wrong")+'">'+(Number(r.pnlPct)>0?"+":"")+Number(r.pnlPct).toFixed(3)+'%</b></div>':"";
  const evaluated=r.evaluatedAt?'<div>ফল যাচাইয়ের UTC সময়: '+utcTime(r.evaluatedAt)+' · '+r.evaluatedAt.slice(0,10)+'</div>':"";
- const expected=r.expectedEvaluationAt?'<div>২৪ ঘণ্টা পূর্ণ হবে: '+r.expectedEvaluationAt.slice(0,10)+' '+utcTime(r.expectedEvaluationAt)+'</div>':"";
+ const expected=r.expectedEvaluationAt?'<div>'+safe(r.durationMinutes||"—")+' মিনিট পরে ফল যাচাই: '+r.expectedEvaluationAt.slice(0,10)+' '+utcTime(r.expectedEvaluationAt)+'</div>':"";
  return '<article class="decision"><div class="decision-head"><span>'+utcTime(r.decidedAt)+'</span><span class="pill">'+safe(r.symbol)+'</span><span class="pill">'+safe(r.timeframe)+'</span><b class="'+dir+'">'+r.decision+'</b></div><div class="detail">এন্ট্রি মূল্য: <b class="price">$'+fmt(r.entryPrice)+'</b></div>'+(showOutcome?'<div class="result">'+state+exit+pnl+evaluated+'</div>':'<div class="detail">'+expected+'</div><div class="result">'+state+exit+pnl+evaluated+'</div>')+'</article>';
 }
 function renderSheet(){
  const target=document.getElementById("records"),rows=allRecords().slice().sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
  if(activeSheet==="results"){
   const settled=rows.filter(r=>r.outcome==="CORRECT"||r.outcome==="WRONG");
-  target.innerHTML=settled.length?'<div class="day-summary">২৪ ঘণ্টা পার হয়ে ফল যাচাই সম্পন্ন হয়েছে এমন সিদ্ধান্ত: '+settled.length+'টি। নতুন ফল এখানে যোগ হবে।</div>'+settled.map(r=>recordCard(r,true)).join(""):"এখনো ২৪ ঘণ্টা পূর্ণ করে ফল যাচাই সম্পন্ন হয়েছে—এমন সিদ্ধান্ত নেই।";
+  target.innerHTML=settled.length?'<div class="day-summary">নির্ধারিত সময় পার হয়ে ফল যাচাই সম্পন্ন হয়েছে এমন সিদ্ধান্ত: '+settled.length+'টি। নতুন ফল এখানে যোগ হবে।</div>'+settled.map(r=>recordCard(r,true)).join(""):"এখনো কোনো সিদ্ধান্তের নির্ধারিত সময় পূর্ণ হয়নি।";
   return;
  }
  const daily=rows.filter(r=>r.decidedAt&&r.decidedAt.slice(0,10)===activeSheet);
@@ -83,9 +83,9 @@ async function loadReport(){
  try{
   const res=await fetch("/api/performance",{cache:"no-store"}),data=await res.json();if(!res.ok)throw Error(data.error||"রিপোর্ট পাওয়া যায়নি");
   reportData=data;const s=data.summary||{},evaluated=(s.correct||0)+(s.wrong||0),accuracy=evaluated?((s.correct||0)/evaluated*100).toFixed(1):"—";
-  const tiles=[["মোট সিদ্ধান্ত",s.total||0],["যাচাই সম্পন্ন",evaluated],["সঠিক সিদ্ধান্ত",s.correct||0],["ভুল সিদ্ধান্ত",s.wrong||0],["২৪ ঘণ্টা অপেক্ষমাণ",s.pending||0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",(s.last24||{}).total||0]];
+  const tiles=[["মোট সিদ্ধান্ত",s.total||0],["যাচাই সম্পন্ন",evaluated],["সঠিক সিদ্ধান্ত",s.correct||0],["ভুল সিদ্ধান্ত",s.wrong||0],["সময় পূর্ণের অপেক্ষায়",s.pending||0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",(s.last24||{}).total||0]];
   stats.innerHTML=tiles.map(([k,n])=>'<div class="stat"><span>'+k+'</span><b>'+safe(n)+'</b></div>').join("");
-  document.getElementById("accuracy").textContent="যাচাইকৃত সিদ্ধান্তের সঠিকতার হার: "+accuracy+(accuracy==="—"?"":"%")+" · UTC সময় অনুযায়ী ২৪ ঘণ্টা পূর্ণ হওয়া রেকর্ডই ফলাফলে গণনা করা হয়েছে।";
+  document.getElementById("accuracy").textContent="যাচাইকৃত সিদ্ধান্তের সঠিকতার হার: "+accuracy+(accuracy==="—"?"":"%")+" · প্রতিটি সিদ্ধান্তের নিজস্ব নির্ধারিত সময় পূর্ণ হলে ফল গণনা করা হয়।";
   if(activeSheet!=="results"&&!utcDays().includes(activeSheet))activeSheet="results";
   renderTabs();renderSheet();
  }catch(err){stats.innerHTML='<div class="muted">রিপোর্ট লোড হয়নি: '+safe(err.message)+'</div>';records.textContent="সার্ভার/API সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।";}
