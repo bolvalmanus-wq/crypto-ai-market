@@ -481,51 +481,38 @@ async function runCouncilJudge(env, symbol, tf, market, opinions, judgeIndicator
   throw new Error("চূড়ান্ত বিচারক ও fallback মডেল ব্যর্থ: "+failures.join(" | "));
 }
 
-async function runAICouncil(env, symbol, tf, market, gemini) {
+async function runIndependentAnalysts(env, symbol, tf, market) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
-  // Gemini is an optional independent vote: a Pages deployment/model outage must not disable the entire council.
-  const indicatorSets=market.agentIndicatorSets || calculateAgentIndicatorSets(market);
-  const geminiOpinions = !gemini.unavailableError
-    ? (Array.isArray(gemini.councilOpinions) && gemini.councilOpinions.length
-      ? gemini.councilOpinions
-      : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }])
-    : [];
-  for(const opinion of geminiOpinions) opinion.indicators=indicatorSets.gemini;
-  const specialistModels = [
-    {model:"@cf/google/gemma-4-26b-a4b-it",role:"Gemma · Ichimoku/VWAP/Fibonacci",indicators:indicatorSets.gemma,instructions:"শুধু অতিরিক্ত Ichimoku Cloud, VWAP ও Fibonacci বিচার করো। অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"},
-    {model:"@cf/zai-org/glm-4.7-flash",role:"GLM · Parabolic SAR/CCI",indicators:indicatorSets.glm,instructions:"শুধু অতিরিক্ত Parabolic SAR-এর trend flip/price position এবং CCI-এর momentum/extreme বিচার করো। Supertrend নয়; অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"}
+  const sets=market.agentIndicatorSets || calculateAgentIndicatorSets(market);
+  const analysts=[
+    {model:"@cf/google/gemma-4-26b-a4b-it",role:"Gemma 4 · Ichimoku/VWAP/Fibonacci",key:"gemma",instructions:"শুধু Ichimoku Cloud, VWAP ও Fibonacci level দিয়ে trend, value ও pullback বিচার করো।"},
+    {model:"@cf/zai-org/glm-4.7-flash",role:"GLM 4.7 · Parabolic SAR/CCI",key:"glm",instructions:"শুধু Parabolic SAR trend flip/price position এবং CCI momentum/extreme বিচার করো।"},
+    {model:"@cf/openai/gpt-oss-20b",role:"GPT OSS · Donchian/Keltner",key:"openai",instructions:"শুধু Donchian breakout/channel এবং Keltner volatility expansion/mean reversion বিচার করো।"},
+    {model:"@cf/meta/llama-3.3-70b-instruct-fp8-fast",role:"Llama 3.3 · Supertrend/OBV",key:"llama",instructions:"শুধু ATR ভিত্তিক Supertrend proxy এবং On-Balance Volume flow বিচার করো।"},
+    {model:"@cf/qwen/qwen3-30b-a3b-fp8",role:"Qwen 3 · Stoch RSI/CMF",key:"qwen",instructions:"শুধু Stochastic RSI momentum এবং Chaikin Money Flow accumulation/distribution বিচার করো।"}
   ];
-  const settled = await Promise.allSettled(specialistModels.map(agent =>
-    runCloudflareAgent(env,agent.model,agent.role,agent.instructions,symbol,tf,market,agent.indicators)
+  const settled=await Promise.allSettled(analysts.map(a=>
+    runCloudflareAgent(env,a.model,a.role,a.instructions,symbol,tf,market,sets[a.key])
   ));
-  const specialists = settled.flatMap(item => item.status === "fulfilled" ? [item.value] : []);
-  const errors = settled.flatMap((item,index) => item.status === "rejected"
-    ? [{ agent:specialistModels[index].role, error:String(item.reason).slice(0,180) }] : []);
-  if (gemini.unavailableError) errors.unshift({ agent:"Gemini (optional)", error:String(gemini.unavailableError).slice(0,180) });
-  const rawPreJudge = [...geminiOpinions, ...specialists];
-  // A fallback model is not an independent analyst if it duplicates another vote.
-  const usedModels = new Set();
-  const preJudge = rawPreJudge.filter(opinion => {
-    const identity = String(opinion.model || opinion.agent || "").trim();
-    if (!identity || usedModels.has(identity)) return false;
-    usedModels.add(identity);
-    return true;
+  const opinions=settled.flatMap((item)=>item.status==="fulfilled"?[item.value]:[]);
+  const errors=settled.flatMap((item,index)=>item.status==="rejected"
+    ?[{agent:analysts[index].role,error:String(item.reason).slice(0,220)}]:[]);
+  const unique=new Set();
+  const independentOpinions=opinions.filter(o=>{
+    const id=String(o.model||"").trim();
+    if(!id||unique.has(id))return false;
+    unique.add(id);return true;
   });
-  let judge = null, judgeError = null;
-  // The judge reviews evidence but is never counted as an independent vote.
-  if (preJudge.length > 0) {
-    try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge, indicatorSets.judge); }
-    catch(error) { judgeError = String(error).slice(0,180); }
-  } else {
-    judgeError = "কোনো স্বাধীন AI বিশ্লেষকের বৈধ মতামত পাওয়া যায়নি";
-  }
-  if(judge) judge.indicators=indicatorSets.judge;
-  const opinions = [...preJudge, ...(judge ? [judge] : [])];
-  return { opinions, independentOpinions:preJudge, judge, errors, judgeError,
-    geminiUnavailable:gemini.unavailableError || null,
-    status:judge && preJudge.length >= 2 ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
+  return {
+    opinions:independentOpinions,
+    independentOpinions,
+    errors,
+    status:independentOpinions.length>=3?"ANALYSTS_COMPLETE":"ANALYSTS_INSUFFICIENT",
+    analystCount:independentOpinions.length,
+    judge:null,
+    judgeError:null
+  };
 }
-
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
   // Judge is advisory only; count only independent specialist/Gemini votes.
@@ -580,12 +567,12 @@ function finalDecision(market, council) {
   const enoughIndependentReviewers = valid >= 2;
   const strongEnough = enoughIndependentReviewers && enough && technicalSupports && higherAligned && !hardRisk && dataQualityGood;
   if (strongEnough) {
-    const judgeReason = council.judge?.reason || "AI Council-এর অধিকাংশ স্বাধীন বিশ্লেষণ একমত।";
+    const judgeReason = "স্বাধীন AI-দের সংখ্যাগরিষ্ঠ মতামত ও নিজস্ব টেকনিক্যাল ইঞ্জিন একই দিক সমর্থন করেছে।";
     return {
       decision:candidate,
       direction:candidate==="LONG"?"UPWARD":"DOWNWARD",
       reason:"আলাদা AI ভোটে " + counts[candidate] + "/" + valid + " " + candidate + " সমর্থন করেছে; নিজস্ব টেকনিক্যাল ইঞ্জিনও সমর্থন করছে।",
-      risk:council.judge?.risk || "বাজারের অস্থিরতা ও দ্রুত দিক পরিবর্তনের ঝুঁকি রয়েছে।",
+      risk:"দ্রুত মূল্য পরিবর্তন, স্লিপেজ ও নির্ধারিত invalidation অতিক্রমের ঝুঁকি রয়েছে।",
       dataQuality:"GOOD"
     };
   }
@@ -600,7 +587,7 @@ function finalDecision(market, council) {
     decision:"WAIT",
     direction:technical==="LONG"?"UPWARD":technical==="SHORT"?"DOWNWARD":"SIDEWAYS",
     reason:"AI Council: LONG " + counts.LONG + ", SHORT " + counts.SHORT + ", WAIT " + counts.WAIT + " — " + why + "।",
-    risk:council.judge?.risk || "ঐকমত্য না থাকলে ট্রেড না নেওয়াই নিরাপদ।",
+    risk:"স্বাধীন বিশ্লেষকদের মধ্যে যথেষ্ট সমর্থন না থাকলে ট্রেড এড়িয়ে চলুন।",
     dataQuality:dataQualityGood?"GOOD":"LIMITED"
   };
 }
@@ -687,32 +674,32 @@ async function runOne(env, symbol, tf) {
     risk:ai.unavailableError || "AI সেবা সাময়িক অনুপলব্ধ", dataQuality:"LIMITED"
   };
 
-  // Multi-agent council: independent Gemini opinions, two specialist models, then a separate GLM judge.
+  // Five independent model analysts; no judge/council and no Gemini quota dependency.
   let council = null;
   let councilError = null;
   try {
-    council = await runAICouncil(env, symbol, tf, market, ai);
+    council = await runIndependentAnalysts(env, symbol, tf, market);
   } catch (error) {
     councilError = error instanceof Error ? error.message.slice(0,240) : String(error);
-    console.error("AI Council failed", { symbol, timeframe: tf, error:councilError });
+    console.error("Independent analyst run failed", { symbol, timeframe: tf, error:councilError });
   }
   const analysis = council
     ? finalDecision(market, council)
     : {
         decision:"WAIT",
-        direction:ai.analysis.direction || "SIDEWAYS",
-        reason:"AI Council-এর প্রয়োজনীয় স্বাধীন মতামত পাওয়া যায়নি; নিরাপদে WAIT।",
-        risk:councilError || ai.analysis.risk || "AI সেবা সাময়িক অনুপলব্ধ",
-        dataQuality:ai.analysis.dataQuality || "LIMITED"
+        direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
+        reason:"স্বাধীন AI বিশ্লেষণ চালানো যায়নি; নিরাপদে WAIT।",
+        risk:councilError || "AI সেবা সাময়িক অনুপলব্ধ",
+        dataQuality:"LIMITED"
       };
   const result = {
     symbol, timeframe: tf,
-    provider: council ? (ai.unavailableError ? "Cloudflare AI Council (Gemma 4 + GLM Judge)" : "Gemini + Gemma 4 + GLM Judge") : "AI unavailable / WAIT",
-    model: (ai.model || "Gemini unavailable") + (council ? " + Gemma 4 + Judge " + REVIEW_MODEL : ""),
+    provider: council ? "Five Independent Cloudflare AI Analysts" : "AI unavailable / WAIT",
+    model: council ? council.independentOpinions.map(x=>x.model).join(" + ") : "Independent AI unavailable",
     analysis,
     debate: {
       status: council?.status || "COUNCIL_FAILED",
-      gemini: ai.analysis,
+      analystCount:council?.analystCount || 0,
       councilOpinions: council?.opinions || [],
       // Vote totals exclude the judge; only independent analysts count as votes.
       councilVoteCounts: council ? {
@@ -721,7 +708,7 @@ async function runOne(env, symbol, tf) {
         WAIT:(council.independentOpinions || []).filter(x=>x.decision==="WAIT").length
       } : null,
       councilErrors: council?.errors || [],
-      judgeError: council?.judgeError || councilError,
+      judgeError: councilError,
       technicalSignal: market.indicators.technicalSignal,
       higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE",
       fourHourContext: market.higherTimeframe?.fourHour || null,
