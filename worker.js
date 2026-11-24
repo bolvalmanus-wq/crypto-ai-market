@@ -761,6 +761,7 @@ async function runOne(env, symbol, tf) {
       symbol,
       timeframe: tf,
       decision: analysis.decision,
+      confidenceScore: Number(result.analysis.confidenceScore) || 0,
       entryPrice: Number(market.ticker.last),
       decidedAt: result.generatedAt,
       durationMinutes: Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1),
