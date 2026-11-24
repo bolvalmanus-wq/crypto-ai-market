@@ -484,14 +484,27 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
   // Judge is advisory only; count only independent specialist/Gemini votes.
-  const independentOpinions = council.independentOpinions || opinions.filter(x => x.agent !== "Council Judge");
+  const rawIndependentOpinions = council.independentOpinions || opinions.filter(x => x.agent !== "Council Judge");
+  // Never count the same underlying model twice (for example, a fallback GLM
+  // answering both the Gemma and GLM specialist prompts).
+  const seenModels = new Set();
+  const independentOpinions = rawIndependentOpinions.filter(opinion => {
+    const identity = String(opinion.model || opinion.agent || "").trim();
+    if (!identity || seenModels.has(identity)) return false;
+    seenModels.add(identity);
+    return true;
+  });
   const counts = { LONG:0, SHORT:0, WAIT:0 };
   for (const opinion of independentOpinions) if (counts[opinion.decision] !== undefined) counts[opinion.decision]++;
   const valid = independentOpinions.length;
   const ranked = ["LONG","SHORT"].sort((a,b)=>counts[b]-counts[a]);
   const candidate = ranked[0], opposing = ranked[1];
   const margin = counts[candidate] - counts[opposing];
-  const requiredVotes = Math.floor(valid / 2) + 1;
+  // With only two independent analysts (the fast 5m/15m council), one clear
+  // directional vote plus one WAIT may proceed only if technical, higher-TF,
+  // market-data and hard-risk checks all independently confirm it. Opposing
+  // LONG/SHORT votes still produce WAIT. Three or more reviewers need majority.
+  const requiredVotes = valid === 2 ? 1 : Math.floor(valid / 2) + 1;
   const technical = market.indicators.technicalSignal;
   const score = Number(market.indicators.technicalScore) || 0;
   const technicalSupports = candidate === "LONG" ? score >= 0.22 : score <= -0.22;
