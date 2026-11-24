@@ -737,6 +737,26 @@ async function persistLatestSnapshot(env, symbol, result) {
   await env.ANALYSIS_KV.put(key, JSON.stringify(snapshot), { expirationTtl: 60 * 60 * 24 * 90 });
 }
 
+function shouldRunAiCouncil(market) {
+  const ind = market.indicators || {};
+  const score = Number(ind.technicalScore) || 0;
+  const priceAction = Number(ind.priceActionBias) || 0;
+  const adx = Number(ind.adx) || 0;
+  const roc3 = Number(ind.roc3) || 0;
+  const breakout = Math.abs(Number(ind.donchianBias) || 0) >= 0.65;
+  // Always review a clear technical signal. Earlier directional setups also
+  // qualify when momentum/structure confirms; neutral chop does not consume 5 AI calls.
+  if (ind.technicalSignal === "LONG" || ind.technicalSignal === "SHORT") {
+    return { review: true, reason: "প্রাথমিক টেকনিক্যাল সিগন্যাল তৈরি হয়েছে" };
+  }
+  const directional = Math.abs(score) >= 0.28;
+  const confirmation = adx >= 16 || Math.abs(roc3) >= 0.12 || breakout || Math.abs(priceAction) >= 0.38;
+  if (directional && confirmation) {
+    return { review: true, reason: "প্রাথমিক দিকনির্দেশক স্কোর ও মোমেন্টাম/ব্রেকআউট নিশ্চিতকরণ আছে" };
+  }
+  return { review: false, reason: "প্রাথমিক স্ক্রিনিংয়ে পর্যাপ্ত দিকনির্দেশক edge নেই; নিরপেক্ষ/চপ বাজারে অপ্রয়োজনীয় AI কল বাদ" };
+}
+
 async function runOne(env, symbol, tf, options = {}) {
   const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" } });
   if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
@@ -789,21 +809,36 @@ async function runOne(env, symbol, tf, options = {}) {
   // Five independent model analysts; no judge/council and no Gemini quota dependency.
   let council = null;
   let councilError = null;
-  try {
-    council = await runIndependentAnalysts(env, symbol, tf, market);
-  } catch (error) {
-    councilError = error instanceof Error ? error.message.slice(0,240) : String(error);
-    console.error("Independent analyst run failed", { symbol, timeframe: tf, error:councilError });
+  const screening = shouldRunAiCouncil(market);
+  if (screening.review) {
+    try {
+      council = await runIndependentAnalysts(env, symbol, tf, market);
+    } catch (error) {
+      councilError = error instanceof Error ? error.message.slice(0,240) : String(error);
+      console.error("Independent analyst run failed", { symbol, timeframe: tf, error:councilError });
+    }
+  } else {
+    council = { status:"SCREENED_OUT", analystCount:0, opinions:[], independentOpinions:[], errors:[], screened:true };
   }
-  const analysis = council
-    ? finalDecision(market, council)
-    : {
+  const analysis = council?.screened
+    ? {
         decision:"WAIT",
         direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
-        reason:"স্বাধীন AI বিশ্লেষণ চালানো যায়নি; নিরাপদে WAIT।",
-        risk:councilError || "AI সেবা সাময়িক অনুপলব্ধ",
-        dataQuality:"LIMITED"
-      };
+        directionalBias:market.indicators.technicalScore >= 0.18 ? "LONG" : market.indicators.technicalScore <= -0.18 ? "SHORT" : "NO_CLEAR_EDGE",
+        confidenceScore:Math.round(Math.min(69,Math.abs(Number(market.indicators.technicalScore)||0)*100)),
+        reason:screening.reason,
+        risk:"এটি AI কাউন্সিলের সিদ্ধান্ত নয়; বাজারে নতুন মোমেন্টাম/ব্রেকআউট দেখা দিলে পাঁচ AI বিশ্লেষণ চালানো হবে।",
+        dataQuality:"GOOD"
+      }
+    : council
+      ? finalDecision(market, council)
+      : {
+          decision:"WAIT",
+          direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
+          reason:"স্বাধীন AI বিশ্লেষণ চালানো যায়নি; নিরাপদে WAIT।",
+          risk:councilError || "AI সেবা সাময়িক অনুপলব্ধ",
+          dataQuality:"LIMITED"
+        };
   const result = {
     symbol, timeframe: tf,
     provider: council ? "Five Independent Cloudflare AI Analysts" : "AI unavailable / WAIT",
@@ -811,6 +846,7 @@ async function runOne(env, symbol, tf, options = {}) {
     analysis,
     debate: {
       status: council?.status || "COUNCIL_FAILED",
+      screening: { reviewed: screening.review, reason: screening.reason },
       analystCount:council?.analystCount || 0,
       councilOpinions: council?.opinions || [],
       // Vote totals exclude the judge; only independent analysts count as votes.
