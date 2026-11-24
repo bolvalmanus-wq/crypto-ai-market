@@ -1102,14 +1102,25 @@ export default {
     if (minute % 15 === 0) await evaluateMaturedDecisions(env);
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
-      tasks.push(runScheduledOne(env, symbol, "1m"));
-      if (minute % 5 === 0) tasks.push(runScheduledOne(env, symbol, "5m"));
-      if (minute % 15 === 0) tasks.push(runScheduledOne(env, symbol, "15m"));
-      if (minute % 30 === 0) tasks.push(runScheduledOne(env, symbol, "30m"));
-      if (minute === 0) tasks.push(runScheduledOne(env, symbol, "1h"));
-      if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push(runScheduledOne(env, symbol, "4h"));
+      tasks.push(() => runScheduledOne(env, symbol, "1m"));
+      if (minute % 5 === 0) tasks.push(() => runScheduledOne(env, symbol, "5m"));
+      if (minute % 15 === 0) tasks.push(() => runScheduledOne(env, symbol, "15m"));
+      if (minute % 30 === 0) tasks.push(() => runScheduledOne(env, symbol, "30m"));
+      if (minute === 0) tasks.push(() => runScheduledOne(env, symbol, "1h"));
+      if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push(() => runScheduledOne(env, symbol, "4h"));
     }
-    const outcomes = await Promise.allSettled(tasks);
+    // Bound concurrent timeframe jobs: each qualifying job may call five models.
+    // Running all 12 jobs together could burst up to 60 simultaneous AI requests.
+    const outcomes = new Array(tasks.length);
+    let nextTask = 0;
+    const runners = Array.from({ length: 2 }, async () => {
+      while (nextTask < tasks.length) {
+        const index = nextTask++;
+        try { outcomes[index] = { status: "fulfilled", value: await tasks[index]() }; }
+        catch (reason) { outcomes[index] = { status: "rejected", reason }; }
+      }
+    });
+    await Promise.all(runners);
     const successful = outcomes.filter(x => x.status === "fulfilled" && x.value && !x.value.skipped).map(x => x.value);
     const failed = outcomes.filter(x => x.status === "rejected");
     // Persist one combined snapshot per symbol every five minutes, instead of
