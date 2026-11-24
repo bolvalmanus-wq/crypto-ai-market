@@ -740,9 +740,12 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    const response=await fetch("/api/scheduled?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf),{cache:"no-store"});
    const payload=await response.json().catch(()=>({}));
    let result=(payload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
-   // If no scheduled result exists yet, trigger the first 1m analysis from the UI.
-   // Other timeframes remain on their existing schedule to avoid a burst of AI calls.
-   if(response.ok&&tf==="1m"&&(!result||!result.analysis)){
+   const maxResultAge=({"1m":180000,"5m":900000,"15m":2700000,"30m":5400000,"1h":10800000,"4h":43200000}[tf]||180000);
+   const resultAge=result?.generatedAt?Date.now()-Date.parse(result.generatedAt):Infinity;
+   const resultIsStale=!Number.isFinite(resultAge)||resultAge>maxResultAge;
+   // If no scheduled result exists or the 1m result is stale, trigger a fresh 1m analysis.
+   // Other timeframes keep their own schedule to avoid an AI request burst.
+   if(response.ok&&tf==="1m"&&(!result||!result.analysis||resultIsStale)){
     const run=await fetch("/api/scheduled",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf}),cache:"no-store"});
     const runPayload=await run.json().catch(()=>({}));
     if(!run.ok)throw new Error(runPayload.error||("AI বিশ্লেষণ API "+run.status));
