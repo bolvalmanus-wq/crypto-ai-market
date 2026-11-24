@@ -70,7 +70,7 @@ async function loadReport(){
  try{
   const res=await fetch("/api/performance",{cache:"no-store",headers:{Accept:"application/json"}});
   const data=await res.json();
-  if(!res.ok)throw new Error(data.error||"রিপোর্ট পাওয়া যায়নি");
+  if(!res.ok)throw new Error([data.error||"রিপোর্ট পাওয়া যায়নি",data.details||data.upstreamStatus?("বিস্তারিত: "+(data.details||("HTTP "+data.upstreamStatus))):""].filter(Boolean).join(" · "));
   if(!data||typeof data!=="object"||!Array.isArray(data.records))throw new Error("রিপোর্টের ডেটার কাঠামো সঠিক নয়");
   reportData=data;
   const s=data.summary||{},correct=Number(s.correct)||0,wrong=Number(s.wrong)||0,evaluated=correct+wrong;
