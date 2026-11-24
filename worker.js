@@ -248,6 +248,21 @@ function analyze(data, tf) {
 
 
 
+function buildIntradayMovement(data){
+  const now=Date.now(),cutoff=now-24*60*60*1000;
+  const bars=(data.candles?.["5m"]||[]).filter(c=>c&&c.confirmed&&[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.close>0&&c.time>=cutoff&&c.time<=now).sort((a,b)=>a.time-b.time);
+  const hours=new Map();
+  for(const c of bars){
+    const hourStart=Math.floor(c.time/3600000)*3600000;
+    let h=hours.get(hourStart);
+    if(!h){h={time:hourStart,open:c.open,close:c.close,high:c.high,low:c.low,candles:0};hours.set(hourStart,h);}
+    h.close=c.close;h.high=Math.max(h.high,c.high);h.low=Math.min(h.low,c.low);h.candles++;
+  }
+  const hourly=[...hours.values()].sort((a,b)=>a.time-b.time).map(h=>({time:new Date(h.time).toISOString(),endTime:new Date(h.time+3600000).toISOString(),open:Number(h.open.toFixed(8)),close:Number(h.close.toFixed(8)),high:Number(h.high.toFixed(8)),low:Number(h.low.toFixed(8)),changePct:Number(((h.close/h.open-1)*100).toFixed(3)),direction:h.close>h.open?"UP":h.close<h.open?"DOWN":"FLAT",candles:h.candles}));
+  const ranked=hourly.filter(h=>h.candles>=3);
+  return {timeframe:"5m grouped by UTC hour",windowStart:bars.length?new Date(bars[0].time).toISOString():null,windowEnd:bars.length?new Date(bars[bars.length-1].time+300000).toISOString():null,candleCount:bars.length,coverageHours:Number((bars.length*5/60).toFixed(1)),complete24h:bars.length>=270,hourly,strongestRise:ranked.slice().sort((a,b)=>b.changePct-a.changePct)[0]||null,strongestFall:ranked.slice().sort((a,b)=>a.changePct-b.changePct)[0]||null};
+}
+
 function calculateAgentIndicatorSets(market){
   const b=(market.candles||[]).filter(c=>[c.high,c.low,c.close,c.volume].every(Number.isFinite)).slice(-80);
   const hl=n=>{const a=b.slice(-n);return{high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low))};};
@@ -461,6 +476,7 @@ const TRADING_FRAMEWORK_BN = `
 
 async function runCloudflareAgent(env, model, role, instructions, symbol, tf, market, specialistIndicators) {
   const compactMarket = {
+    intradayMovement:market.intradayMovement||null,
     source:market.source,
     ticker:{last:market.ticker?.last,mark:market.ticker?.mark,bid:market.ticker?.bid,ask:market.ticker?.ask,volume24h:market.ticker?.volume24h,openInterest:market.ticker?.openInterest,fundingRate:market.ticker?.fundingRate},
     indicators:market.indicators,
@@ -479,7 +495,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
     timeframe:tf
   };
   const messages=[
-    {role:"system",content:"তুমি স্বাধীন "+role+" ট্রেডিং বিশ্লেষক। অন্য AI-এর মতামত দেখবে না এবং তাদের সঙ্গে ঐকমত্য করার চেষ্টা করবে না। তোমার কাজ হলো এই নির্দিষ্ট "+tf+" টাইমফ্রেমে এখনকার বাজার দেখে বাধ্যতামূলকভাবে একটি দিক বেছে নেওয়া: LONG অথবা SHORT। WAIT তোমার স্বাভাবিক উত্তর নয়; ডেটা যথেষ্ট থাকলে দুই দিকের যুক্তি তুলনা করে যেদিকে প্রমাণ তুলনামূলক বেশি, সেই দিকেই ভোট দাও। কোনো দিকের প্রমাণ দুর্বল হলে সেটিও গোপন করবে না—reason-এ দুর্বলতা লিখবে এবং confidence ৫০-এর নিচে রাখবে। কেবল ডেটা অনুপস্থিত/অবৈধ বা বাজারের তথ্য বিশ্লেষণ-অযোগ্য হলে WAIT দিতে পারবে। কোনো indicator value বা market data বানাবে না। প্রথমে timeframe অনুযায়ী trend/structure, তারপর নিজের চারটি indicator, volume/volatility, support-resistance ও invalidation যাচাই করো; LONG ও SHORT উভয় সম্ভাবনার বিরুদ্ধে যুক্তি পরীক্ষা করে শেষে একটি দিক নির্বাচন করো। recentCandles-এর প্রতিটি time UTC millisecond timestamp; এগুলোকে সময়ক্রমে বিশ্লেষণ করে কোন সময়/ক্যান্ডেলে দাম বেড়েছে, কোন সময়/ক্যান্ডেলে কমেছে, পরিবর্তনের শতাংশ, ধারাবাহিক higher-high/higher-low বা lower-high/lower-low, breakout, reversal ও volume confirmation নির্দিষ্ট করে বলবে। শুধু শেষ দামের ভিত্তিতে সিদ্ধান্ত নয়—সর্বশেষ ৪০টি সম্পূর্ণ ক্যান্ডেলের price path বিচার করবে। formingCandle থাকলে সেটি চলমান, এখনো বন্ধ হয়নি—এটিকে আগাম সতর্কতা হিসেবে বিবেচনা করো, নিশ্চিত ক্যান্ডেল বলে দাবি করো না; ticker ও formingCandle-এর দিক/ভলিউম মিলিয়ে দেখো। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়; decision অবশ্যই LONG অথবা SHORT (শুধু অযোগ্য ডেটায় WAIT), confidenceScore 0-100 পূর্ণসংখ্যা: {\"decision\":\"LONG|SHORT|WAIT\",\"confidenceScore\":65,\"reason\":\"বাংলায় সংক্ষিপ্ত কিন্তু নির্দিষ্ট যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি ও কোন দামে/কোন শর্তে মত ভুল হবে\"}."},
+    {role:"system",content:"তুমি স্বাধীন "+role+" ট্রেডিং বিশ্লেষক। অন্য AI-এর মতামত দেখবে না এবং তাদের সঙ্গে ঐকমত্য করার চেষ্টা করবে না। তোমার কাজ হলো এই নির্দিষ্ট "+tf+" টাইমফ্রেমে এখনকার বাজার দেখে বাধ্যতামূলকভাবে একটি দিক বেছে নেওয়া: LONG অথবা SHORT। WAIT তোমার স্বাভাবিক উত্তর নয়; ডেটা যথেষ্ট থাকলে দুই দিকের যুক্তি তুলনা করে যেদিকে প্রমাণ তুলনামূলক বেশি, সেই দিকেই ভোট দাও। কোনো দিকের প্রমাণ দুর্বল হলে সেটিও গোপন করবে না—reason-এ দুর্বলতা লিখবে এবং confidence ৫০-এর নিচে রাখবে। কেবল ডেটা অনুপস্থিত/অবৈধ বা বাজারের তথ্য বিশ্লেষণ-অযোগ্য হলে WAIT দিতে পারবে। কোনো indicator value বা market data বানাবে না। প্রথমে timeframe অনুযায়ী trend/structure, তারপর নিজের চারটি indicator, volume/volatility, support-resistance ও invalidation যাচাই করো; LONG ও SHORT উভয় সম্ভাবনার বিরুদ্ধে যুক্তি পরীক্ষা করে শেষে একটি দিক নির্বাচন করো। intradayMovement-এ গত ২৪ ঘণ্টার ৫-মিনিট ক্যান্ডেল UTC ঘণ্টা অনুযায়ী সাজানো আছে; hourly-এর time/endTime ও changePct দেখে কোন ঘণ্টায় দাম উঠেছে/নেমেছে এবং strongestRise/strongestFall শনাক্ত করবে। complete24h false হলে পুরো ২৪ ঘণ্টার কভারেজ দাবি করবে। recentCandles-এর প্রতিটি time UTC millisecond timestamp; এগুলোকে সময়ক্রমে বিশ্লেষণ করে কোন সময়/ক্যান্ডেলে দাম বেড়েছে, কোন সময়/ক্যান্ডেলে কমেছে, পরিবর্তনের শতাংশ, ধারাবাহিক higher-high/higher-low বা lower-high/lower-low, breakout, reversal ও volume confirmation নির্দিষ্ট করে বলবে। শুধু শেষ দামের ভিত্তিতে সিদ্ধান্ত নয়—সর্বশেষ ৪০টি সম্পূর্ণ ক্যান্ডেলের price path বিচার করবে। formingCandle থাকলে সেটি চলমান, এখনো বন্ধ হয়নি—এটিকে আগাম সতর্কতা হিসেবে বিবেচনা করো, নিশ্চিত ক্যান্ডেল বলে দাবি করো না; ticker ও formingCandle-এর দিক/ভলিউম মিলিয়ে দেখো। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়; decision অবশ্যই LONG অথবা SHORT (শুধু অযোগ্য ডেটায় WAIT), confidenceScore 0-100 পূর্ণসংখ্যা: {\"decision\":\"LONG|SHORT|WAIT\",\"confidenceScore\":65,\"reason\":\"বাংলায় সংক্ষিপ্ত কিন্তু নির্দিষ্ট যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি ও কোন দামে/কোন শর্তে মত ভুল হবে\"}."},
     {role:"user",content:JSON.stringify({symbol,timeframe:tf,market:compactMarket})}
   ];
   const models=[model].filter(Boolean); // No same-model fallback: each analyst must remain genuinely independent. Each reviewer must give its best evidence-based directional view; WAIT only when neither side has a real edge.
@@ -687,6 +703,7 @@ async function runOne(env, symbol, tf) {
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
   const analysisData = tf === "4h" ? { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } } : data;
   const market = analyze(analysisData, tf);
+  market.intradayMovement = buildIntradayMovement(data);
   market.timeframe = tf;
   // Check adjacent and broader 4h market structure before accepting a direction.
   const fourHour = buildFourHourContext(data);
@@ -791,7 +808,8 @@ async function runOne(env, symbol, tf) {
     marketFetchedAt: data.fetchedAt || null,
     marketTimestamp: data.marketTimestamp || null,
     inputTimeframe: tf,
-    inputCandleCount: market.candles.length
+    inputCandleCount: market.candles.length,
+    intradayMovement: market.intradayMovement
   };
   const key = "latest:" + symbol + ":" + tf;
   await env.ANALYSIS_KV.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
