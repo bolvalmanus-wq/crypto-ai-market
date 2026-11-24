@@ -91,7 +91,7 @@ async function sendSignalPush(env,result) {
   if(!listed.keys.length) return;
   const payload={
     title:decision,
-    body:result.symbol+" · "+({"5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"}[result.timeframe]||result.timeframe),
+    body:result.symbol+" · "+({"1m":"১ মিনিট","5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"}[result.timeframe]||result.timeframe),
     url:"/",
     tag:result.symbol+"-"+result.timeframe+"-"+decision,
     decision,symbol:result.symbol,timeframe:result.timeframe
@@ -120,7 +120,7 @@ async function sendSignalPush(env,result) {
   // temporary delivery failure would suppress every retry of this signal.
   if(delivered) await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime,notifiedAt:new Date().toISOString()}),{expirationTtl:60*60*24*14});
 }
-const INTERVALS = { "5m": 5 * 60 * 1000, "15m": 15 * 60 * 1000, "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
+const INTERVALS = { "1m": 60 * 1000, "5m": 5 * 60 * 1000, "15m": 15 * 60 * 1000, "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
 
 function ema(values, period) {
   const k = 2 / (period + 1); let value = values[0];
@@ -629,7 +629,7 @@ async function runOne(env, symbol, tf) {
   const market = analyze(analysisData, tf);
   // Check adjacent and broader 4h market structure before accepting a direction.
   const fourHour = buildFourHourContext(data);
-  if (tf === "5m") {
+  if (tf === "1m" || tf === "5m") {
     let fifteen = "WAIT", hourly = "WAIT";
     try { fifteen = analyze(data, "15m").indicators.technicalSignal; } catch (_) {}
     try { hourly = analyze(data, "1h").indicators.technicalSignal; } catch (_) {}
@@ -898,7 +898,7 @@ export default {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
       const { symbol, timeframe } = body || {};
-      if (!["BTC", "SOL"].includes(symbol) || !["5m", "15m", "30m", "1h", "4h"].includes(timeframe)) {
+      if (!["BTC", "SOL"].includes(symbol) || !["1m", "5m", "15m", "30m", "1h", "4h"].includes(timeframe)) {
         return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
       }
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
@@ -936,6 +936,7 @@ export default {
     const minute = new Date(controller.scheduledTime).getUTCMinutes();
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
+      tasks.push(runOne(env, symbol, "1m"));
       tasks.push(runOne(env, symbol, "5m"));
       if (minute % 3 === 0) tasks.push(runOne(env, symbol, "15m"));
       if (minute % 6 === 0) tasks.push(runOne(env, symbol, "30m"));
