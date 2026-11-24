@@ -249,7 +249,44 @@ function analyze(data, tf) {
 
 
 
-function calculateAgentIndicatorSets(market){const b=(market.candles||[]).filter(c=>[c.high,c.low,c.close,c.volume].every(Number.isFinite)).slice(-80),hl=n=>{const a=b.slice(-n);return{high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low))}},mid=n=>{const x=hl(n);return(x.high+x.low)/2},last=b[b.length-1]||{},p=Number(market.ticker?.last)||Number(last.close)||0,t=mid(9),k=mid(26),a=(t+k)/2,z=mid(52),v=b.slice(-20).reduce((s,c)=>s+Math.max(0,c.volume),0),vw=v?b.slice(-20).reduce((s,c)=>s+(c.high+c.low+c.close)/3*Math.max(0,c.volume),0)/v:p,r=hl(50),d=r.high-r.low,atr=Number(market.indicators?.atr)||0,e=ema(b.map(c=>c.close).slice(-40),20),ts=b.slice(-20).map(c=>(c.high+c.low+c.close)/3),m=ts.reduce((x,y)=>x+y,0)/Math.max(1,ts.length),dev=ts.reduce((s,x)=>s+Math.abs(x-m),0)/Math.max(1,ts.length),cci=dev?(ts[ts.length-1]-m)/(.015*dev):0,dc=hl(20);let sar=Number(b[0]?.low)||0,ep=Number(b[0]?.high)||0,af=.02,up=(Number(b[1]?.close)||p)>=(Number(b[0]?.close)||p);for(let i=1;i<b.length;i++){const cur=b[i],prev=b[i-1];sar=sar+af*(ep-sar);if(up){sar=Math.min(sar,prev.low,...(b[i-2]?[b[i-2].low]:[]));if(cur.low<sar){up=false;sar=ep;ep=cur.low;af=.02;}else if(cur.high>ep){ep=cur.high;af=Math.min(.2,af+.02);}}else{sar=Math.max(sar,prev.high,...(b[i-2]?[b[i-2].high]:[]));if(cur.high>sar){up=true;sar=ep;ep=cur.high;af=.02;}else if(cur.low<ep){ep=cur.low;af=Math.min(.2,af+.02);}}}return{gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci",ichimoku:{tenkan:t,kijun:k,spanA:a,spanB:z,priceVsCloud:p>Math.max(a,z)?"ABOVE":p<Math.min(a,z)?"BELOW":"INSIDE"},vwap:{value:vw,priceVsVwap:p>=vw?"ABOVE":"BELOW"},fibonacci:{r382:r.high-d*.382,r500:r.high-d*.5,r618:r.high-d*.618}},glm:{name:"Parabolic SAR + CCI",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20}},judge:{name:"Donchian Channel + Keltner Channel",donchian:dc,keltner:{mid:e,upper:e+2*atr,lower:e-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e+2*atr?"ABOVE_KELTNER":p<e-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL"},gemini:{name:"Classic Pivot Points + Williams %R",pivot:{p:(r.high+r.low+Number(last.close||p))/3,r1:2*((r.high+r.low+Number(last.close||p))/3)-r.low,s1:2*((r.high+r.low+Number(last.close||p))/3)-r.high},williamsR:(()=>{const x=hl(14);return x.high===x.low? -50:(x.high-p)/(x.high-x.low)*-100;})()}};}
+function calculateAgentIndicatorSets(market){
+  const b=(market.candles||[]).filter(c=>[c.high,c.low,c.close,c.volume].every(Number.isFinite)).slice(-80);
+  const hl=n=>{const a=b.slice(-n);return{high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low))};};
+  const mid=n=>{const x=hl(n);return(x.high+x.low)/2;};
+  const last=b[b.length-1]||{},p=Number(market.ticker?.last)||Number(last.close)||0;
+  const tenkan=mid(9),kijun=mid(26),spanA=(tenkan+kijun)/2,spanB=mid(52);
+  const vol=b.slice(-20).reduce((s,x)=>s+Math.max(0,x.volume),0);
+  const vwap=vol?b.slice(-20).reduce((s,x)=>s+(x.high+x.low+x.close)/3*Math.max(0,x.volume),0)/vol:p;
+  const range=hl(50),width=range.high-range.low,atr=Number(market.indicators?.atr)||0;
+  const e20=ema(b.map(x=>x.close).slice(-40),20);
+  const typical=b.slice(-20).map(x=>(x.high+x.low+x.close)/3);
+  const mean=typical.reduce((s,x)=>s+x,0)/Math.max(1,typical.length);
+  const deviation=typical.reduce((s,x)=>s+Math.abs(x-mean),0)/Math.max(1,typical.length);
+  const cci=deviation?(typical[typical.length-1]-mean)/(.015*deviation):0;
+  const dc=hl(20);
+  let sar=Number(b[0]?.low)||0,ep=Number(b[0]?.high)||0,af=.02,up=(Number(b[1]?.close)||p)>=(Number(b[0]?.close)||p);
+  for(let i=1;i<b.length;i++){const cur=b[i],prev=b[i-1];sar=sar+af*(ep-sar);if(up){sar=Math.min(sar,prev.low,...(b[i-2]?[b[i-2].low]:[]));if(cur.low<sar){up=false;sar=ep;ep=cur.low;af=.02;}else if(cur.high>ep){ep=cur.high;af=Math.min(.2,af+.02);}}else{sar=Math.max(sar,prev.high,...(b[i-2]?[b[i-2].high]:[]));if(cur.high>sar){up=true;sar=ep;ep=cur.high;af=.02;}else if(cur.low<ep){ep=cur.low;af=Math.min(.2,af+.02);}}}
+  const obv=b.reduce((state,x,i)=>state+(i===0||x.close===b[i-1].close?0:x.close>b[i-1].close?x.volume:-x.volume),0);
+  const obvRecent=b.slice(-10).reduce((state,x,i,a)=>state+(i===0||x.close===a[i-1].close?0:x.close>a[i-1].close?x.volume:-x.volume),0);
+  const moneyFlowVolume=b.slice(-20).reduce((s,x)=>s+((x.high===x.low?0:((2*x.close-x.high-x.low)/(x.high-x.low))*x.volume)),0);
+  const volume20=b.slice(-20).reduce((s,x)=>s+x.volume,0);
+  const cmf=volume20?moneyFlowVolume/volume20:0;
+  const recentRsi=closes=>rsi(closes,14);
+  const rsiSeries=b.slice(-22).map((_,i,arr)=>recentRsi(b.slice(0,Math.max(15,b.length-22+i+1)).map(x=>x.close)));
+  const rsiNow=Number(market.indicators?.rsi)||recentRsi(b.map(x=>x.close));
+  const rsiWindow=rsiSeries.slice(-14).filter(Number.isFinite);
+  const stochRsi=rsiWindow.length&&Math.max(...rsiWindow)!==Math.min(...rsiWindow)?(rsiNow-Math.min(...rsiWindow))/(Math.max(...rsiWindow)-Math.min(...rsiWindow))*100:50;
+  const pivot=(range.high+range.low+Number(last.close||p))/3;
+  const supertrendDirection=p>=e20-atr?"UP":"DOWN";
+  return {
+    gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci",ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618}},
+    glm:{name:"Parabolic SAR + CCI",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20}},
+    openai:{name:"Donchian Channel + Keltner Channel",donchian:dc,keltner:{mid:e20,upper:e20+2*atr,lower:e20-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e20+2*atr?"ABOVE_KELTNER":p<e20-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL"},
+    llama:{name:"Supertrend proxy + On-Balance Volume",supertrend:{atr,ema20:e20,direction:supertrendDirection},obv:{value:obv,recentFlow:obvRecent,direction:obvRecent>0?"UP":obvRecent<0?"DOWN":"FLAT"}},
+    qwen:{name:"Stochastic RSI + Chaikin Money Flow",stochasticRsi:{value:stochRsi,period:14},chaikinMoneyFlow:{value:cmf,period:20}},
+    gemini:{name:"Classic Pivot Points + Williams %R",pivot:{p:pivot,r1:2*pivot-range.low,s1:2*pivot-range.high},williamsR:(()=>{const x=hl(14);return x.high===x.low?-50:(x.high-p)/(x.high-x.low)*-100;})()}
+  };
+}
 function buildFourHourCandles(data) {
   const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
   const buckets = new Map();
@@ -417,7 +454,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
     {role:"system",content:"তুমি AI Council-এর স্বাধীন "+role+" বিশ্লেষক। অন্য AI-এর মতামত দেখবে না। কেবল দেওয়া ডেটা ব্যবহার করবে, বিপরীত দিকের যুক্তিও যাচাই করবে, অনুমান করে ডেটা বানাবে না। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
     {role:"user",content:JSON.stringify({symbol,timeframe:tf,market:compactMarket})}
   ];
-  const models=[...new Set([model,"@cf/zai-org/glm-4.7-flash"].filter(Boolean))];
+  const models=[model].filter(Boolean); // No same-model fallback: each analyst must remain genuinely independent.
   const failures=[];
   for(const selectedModel of models){
     try{
