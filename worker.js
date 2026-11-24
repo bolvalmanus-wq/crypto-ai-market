@@ -465,7 +465,15 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   const errors = settled.flatMap((item,index) => item.status === "rejected"
     ? [{ agent:specialistModels[index].role, error:String(item.reason).slice(0,180) }] : []);
   if (gemini.unavailableError) errors.unshift({ agent:"Gemini (optional)", error:String(gemini.unavailableError).slice(0,180) });
-  const preJudge = [...geminiOpinions, ...specialists];
+  const rawPreJudge = [...geminiOpinions, ...specialists];
+  // A fallback model is not an independent analyst if it duplicates another vote.
+  const usedModels = new Set();
+  const preJudge = rawPreJudge.filter(opinion => {
+    const identity = String(opinion.model || opinion.agent || "").trim();
+    if (!identity || usedModels.has(identity)) return false;
+    usedModels.add(identity);
+    return true;
+  });
   let judge = null, judgeError = null;
   // The judge reviews evidence but is never counted as an independent vote.
   if (preJudge.length > 0) {
