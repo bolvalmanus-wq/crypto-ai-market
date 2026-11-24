@@ -878,7 +878,10 @@ async function runOne(env, symbol, tf, options = {}) {
       expectedEvaluationAt: new Date(Date.parse(result.generatedAt) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
       outcome: "PENDING"
     };
-    await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), { expirationTtl: 60 * 60 * 24 * 11 });
+    await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {
+      expirationTtl: 60 * 60 * 24 * 11,
+      metadata: decisionRecord
+    });
   }
   // Per-run history writes were removed: they exhausted the free daily KV quota.
   // Signal alerts remain event-driven and are sent only for LONG/SHORT.
@@ -892,7 +895,8 @@ async function evaluateMaturedDecisions(env) {
   const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
   const due = [];
   for (const item of listed.keys) {
-    const r = await env.ANALYSIS_KV.get(item.name, "json");
+    // Use record metadata to avoid one KV read per decision in this scheduled run.
+    const r = item.metadata;
     if (r && (r.decision === "LONG" || r.decision === "SHORT") &&
         r.outcome === "PENDING" && now >= Date.parse(r.expectedEvaluationAt)) {
       due.push({ key: item.name, record: r });
@@ -921,7 +925,10 @@ async function evaluateMaturedDecisions(env) {
       ? (exitPrice / r.entryPrice - 1)
       : (r.entryPrice / exitPrice - 1)) * 100;
     r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
-    await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), { expirationTtl: 60 * 60 * 24 * 11 });
+    await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), {
+      expirationTtl: 60 * 60 * 24 * 11,
+      metadata: r
+    });
   }
 }
 
@@ -992,9 +999,11 @@ export default {
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
       const now = Date.now(), cutoff = now - 10 * 24 * 60 * 60 * 1000;
       const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+      // Read decision records from KV metadata instead of issuing up to
+      // 1,000 individual KV.get subrequests in a single report request.
       const records = [];
       for (const item of listed.keys) {
-        const record = await env.ANALYSIS_KV.get(item.name, "json");
+        const record = item.metadata;
         if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
             Date.parse(record.decidedAt) >= cutoff) records.push(record);
       }
