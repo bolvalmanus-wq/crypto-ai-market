@@ -937,9 +937,9 @@ export default {
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
       tasks.push(runOne(env, symbol, "1m"));
-      tasks.push(runOne(env, symbol, "5m"));
-      if (minute % 3 === 0) tasks.push(runOne(env, symbol, "15m"));
-      if (minute % 6 === 0) tasks.push(runOne(env, symbol, "30m"));
+      if (minute % 5 === 0) tasks.push(runOne(env, symbol, "5m"));
+      if (minute % 15 === 0) tasks.push(runOne(env, symbol, "15m"));
+      if (minute % 30 === 0) tasks.push(runOne(env, symbol, "30m"));
       if (minute === 0) tasks.push(runOne(env, symbol, "1h"));
       if (minute === 0 && new Date(controller.scheduledTime).getUTCHours() % 4 === 0) tasks.push(runOne(env, symbol, "4h"));
     }
