@@ -306,6 +306,8 @@ function calculateAgentIndicatorSets(market){
   };
 }
 function buildFourHourCandles(data) {
+  const native = (data.candles?.["4h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
+  if (native.length >= 30) return native;
   const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
   const buckets = new Map();
   for (const candle of source) {
@@ -321,18 +323,20 @@ function buildFourHourCandles(data) {
 }
 
 function buildFourHourContext(data) {
-  const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
+  const native = (data.candles?.["4h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
+  const source = native.length >= 50 ? [] : (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
   const buckets = new Map();
   for (const candle of source) {
     const bucket = Math.floor(candle.time / 14400000) * 14400000;
     if (!buckets.has(bucket)) buckets.set(bucket, []);
     buckets.get(bucket).push(candle);
   }
-  const bars = [...buckets.entries()].sort((a,b) => a[0] - b[0]).flatMap(([time, rows]) => {
+  const aggregatedBars = [...buckets.entries()].sort((a,b) => a[0] - b[0]).flatMap(([time, rows]) => {
     rows.sort((a,b) => a.time - b.time);
     if (rows.length !== 4 || rows.some((c,i) => i > 0 && c.time - rows[i-1].time !== 3600000)) return [];
     return [{ time, open: rows[0].open, high: Math.max(...rows.map(c=>c.high)), low: Math.min(...rows.map(c=>c.low)), close: rows[3].close, volume: rows.reduce((sum,c)=>sum + (Number(c.volume)||0),0) }];
   });
+  const bars = native.length >= 50 ? native : aggregatedBars;
   if (bars.length < 50) return { timeframe: "4h", signal: "WAIT", available: false, warning: "৪ ঘণ্টার পর্যাপ্ত সম্পূর্ণ ক্যান্ডেল নেই" };
   const closes = bars.map(c=>c.close), last = bars[bars.length-1];
   const ema20 = ema(closes.slice(-80),20), ema50 = ema(closes.slice(-100),50), strength = rsi(closes,14);
