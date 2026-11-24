@@ -249,6 +249,7 @@ function analyze(data, tf) {
 
 
 
+function calculateAgentIndicatorSets(market){const b=(market.candles||[]).filter(c=>[c.high,c.low,c.close,c.volume].every(Number.isFinite)).slice(-80),hl=n=>{const a=b.slice(-n);return{high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low))}},mid=n=>{const x=hl(n);return(x.high+x.low)/2},last=b[b.length-1]||{},p=Number(market.ticker?.last)||Number(last.close)||0,t=mid(9),k=mid(26),a=(t+k)/2,z=mid(52),v=b.slice(-20).reduce((s,c)=>s+Math.max(0,c.volume),0),vw=v?b.slice(-20).reduce((s,c)=>s+(c.high+c.low+c.close)/3*Math.max(0,c.volume),0)/v:p,r=hl(50),d=r.high-r.low,atr=Number(market.indicators?.atr)||0,e=ema(b.map(c=>c.close).slice(-40),20),ts=b.slice(-20).map(c=>(c.high+c.low+c.close)/3),m=ts.reduce((x,y)=>x+y,0)/Math.max(1,ts.length),dev=ts.reduce((s,x)=>s+Math.abs(x-m),0)/Math.max(1,ts.length),cci=dev?(ts[ts.length-1]-m)/(.015*dev):0,dc=hl(20),st=(Number(last.high)+Number(last.low))/2-3*atr;return{gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci",ichimoku:{tenkan:t,kijun:k,spanA:a,spanB:z,priceVsCloud:p>Math.max(a,z)?"ABOVE":p<Math.min(a,z)?"BELOW":"INSIDE"},vwap:{value:vw,priceVsVwap:p>=vw?"ABOVE":"BELOW"},fibonacci:{r382:r.high-d*.382,r500:r.high-d*.5,r618:r.high-d*.618}},glm:{name:"Supertrend + CCI",supertrend:{line:st,direction:p>=st?"UP":"DOWN"},cci:{value:cci,period:20}},judge:{name:"Donchian Channel + Keltner Channel",donchian:dc,keltner:{mid:e,upper:e+2*atr,lower:e-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e+2*atr?"ABOVE_KELTNER":p<e-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL"}};}
 function buildFourHourCandles(data) {
   const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
   const buckets = new Map();
@@ -396,11 +397,12 @@ const TRADING_FRAMEWORK_BN = `
 ১২) confidence score বা win-rate বানাবে না। সিদ্ধান্তের সঙ্গে সংক্ষিপ্ত evidence এবং সবচেয়ে বড় risk উল্লেখ করো। অতীতের performance feedback ছোট sample হলে সেটিকে দুর্বল ইঙ্গিত হিসেবে ধরো, নিশ্চয়তা হিসেবে নয়।
 `; 
 
-async function runCloudflareAgent(env, model, role, instructions, symbol, tf, market) {
+async function runCloudflareAgent(env, model, role, instructions, symbol, tf, market, specialistIndicators) {
   const compactMarket = {
     source:market.source,
     ticker:{last:market.ticker?.last,mark:market.ticker?.mark,bid:market.ticker?.bid,ask:market.ticker?.ask,volume24h:market.ticker?.volume24h,openInterest:market.ticker?.openInterest,fundingRate:market.ticker?.fundingRate},
     indicators:market.indicators,
+    specialistIndicators,
     higherTimeframe:market.higherTimeframe,
     riskEngine:market.riskEngine,
     derivatives:market.derivatives ? {
@@ -426,10 +428,10 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
   throw new Error("সব Cloudflare বিশ্লেষক মডেল ব্যর্থ: "+failures.join(" | "));
 }
 
-async function runCouncilJudge(env, symbol, tf, market, opinions) {
+async function runCouncilJudge(env, symbol, tf, market, opinions, judgeIndicators) {
   const messages=[
     {role:"system",content:"তুমি AI Council-এর চূড়ান্ত বিচারক ও risk manager। "+TRADING_FRAMEWORK_BN+" স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; প্রতিটি মতামতের প্রমাণ, timeframe alignment, market structure, volume confirmation, invalidation ও risk-reward বিচার করবে। দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। reason ও risk প্রতিটি এক বাক্য, সর্বোচ্চ প্রায় ১০০ অক্ষর। উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
-    {role:"user",content:JSON.stringify({task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",symbol,timeframe:tf,market:{source:market.source,ticker:market.ticker,indicators:market.indicators,higherTimeframe:market.higherTimeframe,riskEngine:market.riskEngine,derivatives:market.derivatives},opinions})}
+    {role:"user",content:JSON.stringify({task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",symbol,timeframe:tf,market:{source:market.source,ticker:market.ticker,indicators:market.indicators,specialistIndicators:judgeIndicators,higherTimeframe:market.higherTimeframe,riskEngine:market.riskEngine,derivatives:market.derivatives},opinions})}
   ];
   const models=[...new Set([REVIEW_MODEL,"@cf/google/gemma-4-26b-a4b-it"].filter(Boolean))];
   const failures=[];
@@ -450,12 +452,13 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
       ? gemini.councilOpinions
       : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }])
     : [];
+  const indicatorSets=calculateAgentIndicatorSets(market);
   const specialistModels = [
-    { model:"@cf/google/gemma-4-26b-a4b-it", role:"Independent Technical & Risk Analyst", instructions:"EMA, RSI, MACD, ADX/DI, Bollinger, higher timeframe, candle structure, false breakout ও downside/upside risk একসঙ্গে বিচার করো।" },
-    { model:"@cf/zai-org/glm-4.7-flash", role:"Independent Market Structure & Risk Analyst", instructions:"নিজস্বভাবে market regime, support/resistance, volume, multi-timeframe alignment, derivatives context, false breakout এবং বিপরীত দিকের ঝুঁকি বিচার করো।" }
+    {model:"@cf/google/gemma-4-26b-a4b-it",role:"Gemma · Ichimoku/VWAP/Fibonacci",indicators:indicatorSets.gemma,instructions:"শুধু অতিরিক্ত Ichimoku Cloud, VWAP ও Fibonacci বিচার করো। অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"},
+    {model:"@cf/zai-org/glm-4.7-flash",role:"GLM · Supertrend/CCI",indicators:indicatorSets.glm,instructions:"শুধু অতিরিক্ত Supertrend ও CCI বিচার করো। অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"}
   ];
   const settled = await Promise.allSettled(specialistModels.map(agent =>
-    runCloudflareAgent(env, agent.model, agent.role, agent.instructions, symbol, tf, market)
+    runCloudflareAgent(env,agent.model,agent.role,agent.instructions,symbol,tf,market,agent.indicators)
   ));
   const specialists = settled.flatMap(item => item.status === "fulfilled" ? [item.value] : []);
   const errors = settled.flatMap((item,index) => item.status === "rejected"
@@ -463,9 +466,10 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
   if (gemini.unavailableError) errors.unshift({ agent:"Gemini (optional)", error:String(gemini.unavailableError).slice(0,180) });
   const preJudge = [...geminiOpinions, ...specialists];
   let judge = null, judgeError = null;
-  try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge); }
+  try { judge = await runCouncilJudge(env, symbol, tf, market, preJudge, indicatorSets.judge); }
   catch(error) { judgeError = String(error).slice(0,180); }
-  const opinions = judge ? [...preJudge, judge] : preJudge;
+  if(judge) judge.indicators=indicatorSets.judge;
+  const opinions = [...preJudge, ...(judge ? [judge] : [])];
   return { opinions, judge, errors, judgeError,
     geminiUnavailable:gemini.unavailableError || null,
     status:judge && preJudge.length >= 2 ? "COUNCIL_COMPLETE" : "COUNCIL_PARTIAL" };
@@ -473,17 +477,17 @@ async function runAICouncil(env, symbol, tf, market, gemini) {
 
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
-  const independentOpinions = opinions.filter(opinion => opinion.agent !== "Council Judge");
+  const independentOpinions = opinions;
   const counts = { LONG:0, SHORT:0, WAIT:0 };
   for (const opinion of independentOpinions) if (counts[opinion.decision] !== undefined) counts[opinion.decision]++;
   const valid = independentOpinions.length;
   const ranked = ["LONG","SHORT"].sort((a,b)=>counts[b]-counts[a]);
   const candidate = ranked[0], opposing = ranked[1];
   const margin = counts[candidate] - counts[opposing];
-  const requiredVotes = Math.max(2, Math.ceil(valid * 0.6));
+  const requiredVotes = Math.floor(valid / 2) + 1;
   const technical = market.indicators.technicalSignal;
   const score = Number(market.indicators.technicalScore) || 0;
-  const technicalSupports = candidate === "LONG" ? score >= 0.48 : score <= -0.48;
+  const technicalSupports = candidate === "LONG" ? score >= 0.22 : score <= -0.22;
   // Require directional agreement from every higher timeframe:
   // fast entries use 15m/1h/4h context; 30m entries use 1h/4h; 1h setups use 4h trend.
   const higher = market.higherTimeframe || {};
@@ -495,7 +499,6 @@ function finalDecision(market, council) {
     ? (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)
     : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
   const enough = counts[candidate] >= requiredVotes && margin >= 1 && candidate !== "WAIT";
-  const judgeSupports = council.judge?.decision === candidate;
   // Directional decisions must depend on verified market data, not on Gemini being online.
   // Gemini is an optional vote; its outage must not permanently force WAIT when the
   // two independent Cloudflare analysts and the judge agree.
@@ -509,7 +512,7 @@ function finalDecision(market, council) {
     candleData.every(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0) &&
     fourHourContext?.available === true
   );
-  const strongEnough = enough && technicalSupports && higherAligned && !hardRisk && judgeSupports && dataQualityGood;
+  const strongEnough = enough && technicalSupports && !hardRisk && dataQualityGood;
   if (strongEnough) {
     const judgeReason = council.judge?.reason || "AI Council-এর অধিকাংশ স্বাধীন বিশ্লেষণ একমত।";
     return {
@@ -520,12 +523,10 @@ function finalDecision(market, council) {
       dataQuality:"GOOD"
     };
   }
-  let why = !council.judge ? "চূড়ান্ত বিচারক অনুপলব্ধ"
-    : counts[candidate] < requiredVotes || margin < 1 ? "AI মতামতে পর্যাপ্ত ঐকমত্য নেই"
-    : !technicalSupports ? "টেকনিক্যাল স্কোর প্রস্তাবিত দিককে যথেষ্ট সমর্থন করছে না"
+  let why = counts[candidate] < requiredVotes || margin < 1 ? "AI মতামতে সংখ্যাগরিষ্ঠতা নেই"
+    : !technicalSupports ? "নিজস্ব টেকনিক্যাল ইঞ্জিন প্রস্তাবিত দিক সমর্থন করছে না"
     : hardRisk ? "গুরুত্বপূর্ণ সাপোর্ট/রেজিস্ট্যান্স ঝুঁকি বিপরীত"
-    : !dataQualityGood ? "বাজারের যাচাইকৃত ডেটা বা ৪ ঘণ্টার প্রেক্ষাপট অপর্যাপ্ত"
-    : !higherAligned ? (higher.timeframe === "1h" ? "১ ঘণ্টা ও ৪ ঘণ্টার প্রবণতা একই দিকে নিশ্চিত নয়" : "৪ ঘণ্টার প্রবণতা প্রস্তাবিত দিককে নিশ্চিত করছে না")
+    : !dataQualityGood ? "যাচাইকৃত বাজার ডেটা বা ৪ ঘণ্টার প্রেক্ষাপট অপর্যাপ্ত"
     : "নিরাপদ সিদ্ধান্তের শর্ত পূরণ হয়নি";
   return {
     decision:"WAIT",
@@ -645,9 +646,9 @@ async function runOne(env, symbol, tf) {
       gemini: ai.analysis,
       councilOpinions: council?.opinions || [],
       councilVoteCounts: council ? {
-        LONG:council.opinions.filter(x=>x.agent!=="Council Judge" && x.decision==="LONG").length,
-        SHORT:council.opinions.filter(x=>x.agent!=="Council Judge" && x.decision==="SHORT").length,
-        WAIT:council.opinions.filter(x=>x.agent!=="Council Judge" && x.decision==="WAIT").length
+        LONG:council.opinions.filter(x=>x.decision==="LONG").length,
+        SHORT:council.opinions.filter(x=>x.decision==="SHORT").length,
+        WAIT:council.opinions.filter(x=>x.decision==="WAIT").length
       } : null,
       councilErrors: council?.errors || [],
       judgeError: council?.judgeError || councilError,
