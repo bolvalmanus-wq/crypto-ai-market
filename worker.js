@@ -564,7 +564,13 @@ function finalDecision(market, council) {
   const requiredHigherSignals = higher.requiredSignals || (higher.timeframe === "1h" ? [higher.signal, higher.fourHour?.signal] : [higher.signal]);
   // WAIT/neutral on a higher timeframe is not automatically a veto; only an explicit opposite trend blocks an entry.
   const oppositeSignal = candidate === "LONG" ? "SHORT" : "LONG";
-  const strongestHigherSignal = higher.fourHour?.signal || (requiredHigherSignals.length ? requiredHigherSignals[requiredHigherSignals.length - 1] : higher.signal);
+  const fastTimeframe = ["1m","5m","15m","30m"].includes(market.timeframe);
+  // Fast and intraday setups are primarily checked against 1h structure.
+  // 4h context remains important for 1h/4h decisions, but missing 4h data
+  // must not silently veto every short-term opportunity.
+  const strongestHigherSignal = fastTimeframe
+    ? (higher.oneHourSignal || (requiredHigherSignals.length > 1 ? requiredHigherSignals[1] : higher.signal))
+    : (higher.fourHour?.signal || higher.signal || (requiredHigherSignals.length ? requiredHigherSignals[requiredHigherSignals.length - 1] : "WAIT"));
   // 15m/1h opposition is a caution for fast entries, not an automatic veto; only the 4h context can hard-veto the direction.
   const higherAligned = Boolean(strongestHigherSignal) && strongestHigherSignal !== oppositeSignal;
   const lowerTimeframeConflict = requiredHigherSignals.some(signal => signal === oppositeSignal) && !higherAligned;
@@ -583,7 +589,9 @@ function finalDecision(market, council) {
     Number.isFinite(tickerPrice) && tickerPrice > 0 &&
     candleData.length >= 30 &&
     candleData.every(c => [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0) &&
-    fourHourContext?.available === true
+    (fastTimeframe
+      ? Boolean(higher.oneHourSignal || requiredHigherSignals.some(x => x === "LONG" || x === "SHORT" || x === "WAIT"))
+      : fourHourContext?.available === true)
   );
   const enoughIndependentReviewers = valid >= 3;
   // Directional confidence is an evidence score, NOT a win probability.
