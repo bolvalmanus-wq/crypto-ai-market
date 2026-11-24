@@ -603,7 +603,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
 const symbols=["BTC","SOL"];
 function updateLiveClock(){const el=document.getElementById("liveClock");if(!el)return;const now=new Date();const date=now.toLocaleDateString("bn-BD",{weekday:"short",day:"numeric",month:"short",year:"numeric"});const time=now.toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});el.innerHTML='<span class="clock-dot"></span><span>LIVE · '+date+' · '+time+'</span>'}
 updateLiveClock();setInterval(updateLiveClock,1000);
-const labels={"5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"};
+const labels={"1m":"১ মিনিট","5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"};
 const fmt=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:4}):"—";
 function safeText(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
 function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
@@ -659,9 +659,9 @@ function card(symbol,data){
  let html='<section class="card market-card" id="market-'+symbol+'"><div class="row market-title"><h2>'+symbol+' / USDT</h2><span class="tag">'+safeText(data.source||'Market data')+'</span></div><div class="row price-live-row"><div class="price" id="live-price-'+symbol+'">$ '+fmt(price)+'</div><div class="fresh '+((age>180||!Number.isFinite(price)||price<=0)?"offline":"")+'">'+(age>180||!Number.isFinite(price)||price<=0?'<span class="live-dot"></span>ডেটা পুরোনো বা অপ্রাপ্য':'<span class="live-dot"></span>লাইভ মার্কেট ডেটা সচল')+'</div></div>';
  if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
-  html+='<nav class="timeframe-tabs" aria-label="সময় নির্বাচন"><button type="button" class="timeframe-tab active" id="tf-tab-'+symbol+'-5m" onclick="showTimeframe(\''+symbol+'\',\'5m\')">৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-15m" onclick="showTimeframe(\''+symbol+'\',\'15m\')">১৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-30m" onclick="showTimeframe(\''+symbol+'\',\'30m\')">৩০ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1h" onclick="showTimeframe(\''+symbol+'\',\'1h\')">১ ঘণ্টা</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-4h" onclick="showTimeframe(\''+symbol+'\',\'4h\')">৪ ঘণ্টা</button></nav><div class="timeframe-panels>';
-  for(const tf of ["5m","15m","30m","1h","4h"]){
-   const interval={"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf];
+  html+='<nav class="timeframe-tabs" aria-label="সময় নির্বাচন"><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1m" onclick="showTimeframe(\''+symbol+'\',\'1m\')">১ মিনিট</button><button type="button" class="timeframe-tab active" id="tf-tab-'+symbol+'-5m" onclick="showTimeframe(\''+symbol+'\',\'5m\')">৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-15m" onclick="showTimeframe(\''+symbol+'\',\'15m\')">১৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-30m" onclick="showTimeframe(\''+symbol+'\',\'30m\')">৩০ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1h" onclick="showTimeframe(\''+symbol+'\',\'1h\')">১ ঘণ্টা</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-4h" onclick="showTimeframe(\''+symbol+'\',\'4h\')">৪ ঘণ্টা</button></nav><div class="timeframe-panels>';
+  for(const tf of ["1m","5m","15m","30m","1h","4h"]){
+   const interval={"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf];
    const candles=tf==="4h"?buildFourHourCandles(data.candles["1h"]):data.candles[tf];
    const a=analyse(candles,price,interval*1.5,interval,data.derivatives,tf);
    const score=Number.isFinite(a.score)?a.score:null;
@@ -675,7 +675,7 @@ function card(symbol,data){
  html+='</section>';return html;
 }
 function showTimeframe(symbol,tf){
- for(const item of ["5m","15m","30m","1h","4h"]){
+ for(const item of ["1m","5m","15m","30m","1h","4h"]){
   const panel=document.getElementById("tf-panel-"+symbol+"-"+item);
   const tab=document.getElementById("tf-tab-"+symbol+"-"+item);
   if(panel)panel.hidden=item!==tf;
@@ -695,7 +695,7 @@ function renderHistory(){
  el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
 }
 
-const aiCacheTtl={"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
+const aiCacheTtl={"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
 function aiPanel(symbol,tf){return document.getElementById("ai-"+symbol+"-"+tf)}
 function showAi(symbol,tf,result){
  const el=aiPanel(symbol,tf);if(!el)return;
@@ -726,13 +726,13 @@ function showAi(symbol,tf,result){
   '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
 }
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
- for(const tf of ["5m","15m","30m","1h","4h"]){
+ for(const tf of ["1m","5m","15m","30m","1h","4h"]){
   if(onlyTf&&tf!==onlyTf)continue;
   const key="duel_v2_"+symbol+"_"+tf;
   const tfCandles=tf==="4h"?buildFourHourCandles(data.candles["1h"]):data.candles[tf];
   const lastClosed=(tfCandles||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
   const candleKey=lastClosed?Number(lastClosed.time):null;
-  const expectedClose=candleKey===null?null:candleKey+({"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf]);
+  const expectedClose=candleKey===null?null:candleKey+({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf]);
   const panel=aiPanel(symbol,tf);
   const decision=document.getElementById("decision-"+symbol+"-"+tf);
   try{
@@ -801,7 +801,7 @@ async function fetchWithRetry(symbol){
  let lastError;
  for(let attempt=0;attempt<2;attempt++){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
-  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
+  try{const response=await fetch("/api/market?symbol="+symbol,{cache:"no-store",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.details||data.error||("API "+response.status));if(!data.ticker||!data.candles||!Array.isArray(data.candles["1m"])||!Array.isArray(data.candles["30m"])||!Array.isArray(data.candles["1h"])||!Number.isFinite(Number(data.ticker.last))||Number(data.ticker.last)<=0||!Number.isFinite(Number(data.ageSeconds)))throw new Error("অসম্পূর্ণ বা অবৈধ মার্কেট ডেটা");return data}
   catch(e){lastError=e;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,900))}
   finally{clearTimeout(timer)}
  }
@@ -867,11 +867,11 @@ async function refreshLivePrices(){
   }));
  }finally{livePriceBusy=false}
 }
-let lastCountdownSlots={"5m":Math.floor(Date.now()/300000),"15m":Math.floor(Date.now()/900000),"30m":Math.floor(Date.now()/1800000),"1h":Math.floor(Date.now()/3600000),"4h":Math.floor(Date.now()/14400000)};
+let lastCountdownSlots={"1m":Math.floor(Date.now()/60000),"5m":Math.floor(Date.now()/300000),"15m":Math.floor(Date.now()/900000),"30m":Math.floor(Date.now()/1800000),"1h":Math.floor(Date.now()/3600000),"4h":Math.floor(Date.now()/14400000)};
 function updateCandleCountdowns(){
- const now=Date.now(),intervals={"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
+ const now=Date.now(),intervals={"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
  let boundaryChanged=false;
- for(const tf of ["5m","15m","30m","1h","4h"]){
+ for(const tf of ["1m","5m","15m","30m","1h","4h"]){
   const interval=intervals[tf],slot=Math.floor(now/interval),key=tf;
   if(slot>lastCountdownSlots[key]){boundaryChanged=true;lastCountdownSlots[key]=slot;}
   let remaining=interval-(now%interval);if(remaining===interval)remaining=0;
