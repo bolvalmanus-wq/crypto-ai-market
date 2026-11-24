@@ -660,10 +660,10 @@ function card(symbol,data){
  if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
   html+='<nav class="timeframe-tabs" aria-label="সময় নির্বাচন"><button type="button" class="timeframe-tab active" id="tf-tab-'+symbol+'-5m" onclick="showTimeframe(\''+symbol+'\',\'5m\')">৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-15m" onclick="showTimeframe(\''+symbol+'\',\'15m\')">১৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-30m" onclick="showTimeframe(\''+symbol+'\',\'30m\')">৩০ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1h" onclick="showTimeframe(\''+symbol+'\',\'1h\')">১ ঘণ্টা</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-4h" onclick="showTimeframe(\''+symbol+'\',\'4h\')">৪ ঘণ্টা</button></nav><div class="timeframe-panels>';
-  for(const tf of ["30m","1h","4h"]){
-   const interval=tf==="30m"?1800000:tf==="1h"?3600000:14400000;
+  for(const tf of ["5m","15m","30m","1h","4h"]){
+   const interval={"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf];
    const candles=tf==="4h"?buildFourHourCandles(data.candles["1h"]):data.candles[tf];
-   const a=analyse(candles,price,tf==="30m"?2700000:tf==="1h"?5400000:21600000,interval,data.derivatives,tf);
+   const a=analyse(candles,price,interval*1.5,interval,data.derivatives,tf);
    const score=Number.isFinite(a.score)?a.score:null;
    const longScore=score===null?null:Math.round((score+1)*50);
    const shortScore=score===null?null:100-longScore;
