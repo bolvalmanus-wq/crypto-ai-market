@@ -749,26 +749,18 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    // A result is current only when it belongs to the latest closed candle for THIS timeframe.
    const wrongCandle=!Number.isFinite(resultClose)||!Number.isFinite(expectedCloseMs)||resultClose<expectedCloseMs-5000;
    const resultIsStale=!Number.isFinite(resultAge)||resultAge>intervalMs*1.5||wrongCandle;
-   // Refresh each timeframe independently when its own candle has closed and its result is stale.
-   if(response.ok&&(!result||!result.analysis||resultIsStale)){
-    const run=await fetch("/api/scheduled",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf}),cache:"no-store"});
-    const runPayload=await run.json().catch(()=>({}));
-    if(!run.ok)throw new Error(runPayload.error||("AI বিশ্লেষণ API "+run.status));
-    result=(runPayload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
-    if(!result||!result.analysis)throw new Error(labels[tf]+" AI বিশ্লেষণ ফলাফল দেয়নি");
-    const returnedClose=result.candleCloseTime?Date.parse(result.candleCloseTime):NaN;
-    if(Number.isFinite(expectedCloseMs)&&Number.isFinite(returnedClose)&&returnedClose<expectedCloseMs-5000){
-     throw new Error(labels[tf]+"-এর নতুন ক্যান্ডেলের বিশ্লেষণ এখনো পাওয়া যায়নি");
-    }
-   }
-   // Show the latest valid server analysis even when the browser candle timestamp differs.
-   if(response.ok&&result&&result.analysis&&["LONG","SHORT","WAIT"].includes(result.analysis.decision)){
+   // UI only reads scheduled results. It must not launch six parallel manual AI runs
+   // every minute; manual runs are reserved for the user's explicit retry action.
+   if(!response.ok&&payload.error)throw new Error(payload.error);
+   if(!result||!result.analysis)throw new Error(labels[tf]+"-এর নতুন AI বিশ্লেষণ এখনো সার্ভারে তৈরি হয়নি");
+   if(resultIsStale)throw new Error(labels[tf]+"-এর সিদ্ধান্ত পুরোনো; নতুন ক্যান্ডেলের বিশ্লেষণ এখনো আসেনি");
+   if(["LONG","SHORT","WAIT"].includes(result.analysis.decision)){
     result.model=(result.model||"Five Independent Cloudflare AI Analysts")+" · ক্লাউড";
     localStorage.setItem(key,JSON.stringify({...result,_candleTime:candleKey}));
     showAi(symbol,tf,result);
     continue;
    }
-   if(!response.ok&&payload.error)throw new Error(payload.error);
+   throw new Error(labels[tf]+"-এর AI সিদ্ধান্তের ফরম্যাট সঠিক নয়");
   }catch(error){
    if(panel)panel.innerHTML='<div class="ai-head"><span>✦ AI বিশ্লেষণ</span><span class="offline">সংযোগ/বিশ্লেষণ ব্যর্থ</span></div><div class="ai-reason">'+safeText(error?.message||"AI ফলাফল পাওয়া যায়নি")+'</div><div class="ai-risk">এটি বাজারের WAIT সংকেত নয়; AI বিশ্লেষণ সম্পন্ন হয়নি। “আবার বিশ্লেষণ” চাপ দিয়ে পুনরায় চেষ্টা করুন।</div>';
    if(decision){decision.textContent="AI বিশ্লেষণ ব্যর্থ — ফলাফল নেই";decision.className="trade-action wait-on";}
