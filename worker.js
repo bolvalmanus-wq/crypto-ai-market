@@ -474,7 +474,9 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
       orderbook:{bids:Array.isArray(market.derivatives.orderbook?.bids)?market.derivatives.orderbook.bids.slice(0,5):[],asks:Array.isArray(market.derivatives.orderbook?.asks)?market.derivatives.orderbook.asks.slice(0,5):[]},
       fundingHistory:Array.isArray(market.derivatives.fundingHistory)?market.derivatives.fundingHistory.slice(-3):[]
     }:null,
-    recentCandles:(market.candles||[]).slice(-8).map(c=>({open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume}))
+    recentCandles:(market.candles||[]).slice(-8).map(c=>({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume})),
+    candleCloseTime:market.candleCloseTime,
+    timeframe:tf
   };
   const messages=[
     {role:"system",content:"তুমি স্বাধীন "+role+" ট্রেডিং বিশ্লেষক। অন্য AI-এর মতামত দেখবে না এবং তাদের সঙ্গে ঐকমত্য করার চেষ্টা করবে না। তোমার কাজ হলো এই নির্দিষ্ট "+tf+" টাইমফ্রেমে এখনকার বাজার দেখে বাধ্যতামূলকভাবে একটি দিক বেছে নেওয়া: LONG অথবা SHORT। WAIT তোমার স্বাভাবিক উত্তর নয়; ডেটা যথেষ্ট থাকলে দুই দিকের যুক্তি তুলনা করে যেদিকে প্রমাণ তুলনামূলক বেশি, সেই দিকেই ভোট দাও। কোনো দিকের প্রমাণ দুর্বল হলে সেটিও গোপন করবে না—reason-এ দুর্বলতা লিখবে এবং confidence ৫০-এর নিচে রাখবে। কেবল ডেটা অনুপস্থিত/অবৈধ বা বাজারের তথ্য বিশ্লেষণ-অযোগ্য হলে WAIT দিতে পারবে। কোনো indicator value বা market data বানাবে না। প্রথমে timeframe অনুযায়ী trend/structure, তারপর নিজের চারটি indicator, volume/volatility, support-resistance ও invalidation যাচাই করো; LONG ও SHORT উভয় সম্ভাবনার বিরুদ্ধে যুক্তি পরীক্ষা করে শেষে একটি দিক নির্বাচন করো। formingCandle থাকলে সেটি চলমান, এখনো বন্ধ হয়নি—এটিকে দ্রুত আগাম সতর্কতা হিসেবে বিবেচনা করো, কিন্তু নিশ্চিত ক্যান্ডেল বলে দাবি করো না; ticker ও formingCandle-এর দিক/ভলিউম মিলিয়ে দেখো। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়; decision অবশ্যই LONG অথবা SHORT (শুধু অযোগ্য ডেটায় WAIT), confidenceScore 0-100 পূর্ণসংখ্যা: {\"decision\":\"LONG|SHORT|WAIT\",\"confidenceScore\":65,\"reason\":\"বাংলায় সংক্ষিপ্ত কিন্তু নির্দিষ্ট যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি ও কোন দামে/কোন শর্তে মত ভুল হবে\"}."},
@@ -784,7 +786,11 @@ async function runOne(env, symbol, tf) {
     },
     generatedAt: new Date().toISOString(),
     candleCloseTime: market.candleCloseTime,
-    marketSource: data.source
+    marketSource: data.source,
+    marketFetchedAt: data.fetchedAt || null,
+    marketTimestamp: data.marketTimestamp || null,
+    inputTimeframe: tf,
+    inputCandleCount: market.candles.length
   };
   const key = "latest:" + symbol + ":" + tf;
   await env.ANALYSIS_KV.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
