@@ -120,7 +120,7 @@ async function sendSignalPush(env,result) {
   // temporary delivery failure would suppress every retry of this signal.
   if(delivered) await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime,notifiedAt:new Date().toISOString()}),{expirationTtl:60*60*24*14});
 }
-const INTERVALS = { "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
+const INTERVALS = { "5m": 5 * 60 * 1000, "15m": 15 * 60 * 1000, "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
 const REVIEW_MODEL = "@cf/zai-org/glm-4.7-flash";
 
 function ema(values, period) {
@@ -384,7 +384,7 @@ const TRADING_FRAMEWORK_BN = `
 ট্রেডিং জ্ঞান ও বাধ্যতামূলক বিশ্লেষণ-পদ্ধতি:
 ১) বাজারের অবস্থা আগে শ্রেণিবদ্ধ করো: uptrend, downtrend, range, breakout, pullback, নাকি high-volatility/choppy market। প্রতিটি অবস্থায় একই কৌশল প্রয়োগ করবে না।
 ২) Market structure: swing high/low, higher-high/higher-low, lower-high/lower-low, support/resistance এবং breakout-এর পর retest যাচাই করো। শুধু একটি candle বা wick-কে breakout ধরবে না; candle close ও volume confirmation দেখো।
-৩) Multi-timeframe: ৪ ঘণ্টা = প্রধান trend/context, ১ ঘণ্টা = intermediate structure, ৩০ মিনিট = entry timing। ছোট timeframe-এর signal বড় timeframe-এর বিপরীত হলে confidence কমাও; জোর করে trade নিও না।
+৩) Multi-timeframe: ৪ ঘণ্টা = প্রধান trend/context, ১ ঘণ্টা = intermediate structure, ১৫/৫ মিনিট = দ্রুত entry timing। ছোট timeframe-এর signal বড় timeframe-এর বিপরীত হলে confidence কমাও; জোর করে trade নিও না।
 ৪) Indicator-গুলোকে আলাদা ভোটের মতো গুনবে না। EMA trend, MACD momentum, RSI momentum/overbought-oversold context, ADX trend strength, Bollinger volatility/mean-reversion context, relative volume confirmation—এগুলো একই price action-এর সম্পর্কিত প্রমাণ। একই তথ্যকে বারবার double-count করবে না।
 ৫) Derivatives: open interest বাড়া/কমা, long-short ratio, funding এবং orderbook imbalance-কে context হিসেবে দেখো; এগুলো একা price direction নিশ্চিত করে না। crowded positioning হলে squeeze/liq risk উল্লেখ করো।
 ৬) LONG-এর পক্ষে: structure ও higher timeframe bullish, price/EMA trend সহায়ক, momentum ও volume confirmation আছে, resistance-এর ঠিক নিচে late entry নয়, এবং invalidation level যুক্তিসঙ্গত।
@@ -485,13 +485,12 @@ function finalDecision(market, council) {
   const score = Number(market.indicators.technicalScore) || 0;
   const technicalSupports = candidate === "LONG" ? score >= 0.48 : score <= -0.48;
   // Require directional agreement from every higher timeframe:
-  // 30m entries need both 1h structure and 4h trend; 1h setups need 4h trend.
+  // fast entries use 15m/1h/4h context; 30m entries use 1h/4h; 1h setups use 4h trend.
   const higher = market.higherTimeframe || {};
-  const requiredHigherSignals = higher.timeframe === "1h"
-    ? [higher.signal, higher.fourHour?.signal]
-    : [higher.signal];
-  const higherAligned = requiredHigherSignals.length > 0 &&
-    requiredHigherSignals.every(signal => signal === candidate);
+  const requiredHigherSignals = higher.requiredSignals || (higher.timeframe === "1h" ? [higher.signal, higher.fourHour?.signal] : [higher.signal]);
+  // WAIT/neutral on a higher timeframe is not automatically a veto; only an explicit opposite trend blocks an entry.
+  const oppositeSignal = candidate === "LONG" ? "SHORT" : "LONG";
+  const higherAligned = requiredHigherSignals.length > 0 && requiredHigherSignals.every(signal => signal !== oppositeSignal);
   const hardRisk = candidate === "LONG"
     ? (market.riskEngine?.supportBreakdown === true || market.riskEngine?.bearishWarning === true)
     : (market.riskEngine?.resistanceBreakout === true || market.riskEngine?.bullishWarning === true);
@@ -836,7 +835,7 @@ export default {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
       const { symbol, timeframe } = body || {};
-      if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h", "4h"].includes(timeframe)) {
+      if (!["BTC", "SOL"].includes(symbol) || !["5m", "15m", "30m", "1h", "4h"].includes(timeframe)) {
         return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
       }
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
@@ -874,7 +873,9 @@ export default {
     const minute = new Date(controller.scheduledTime).getUTCMinutes();
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
-      tasks.push(runOne(env, symbol, "30m"));
+      tasks.push(runOne(env, symbol, "5m"));
+      if (minute % 3 === 0) tasks.push(runOne(env, symbol, "15m"));
+      if (minute % 6 === 0) tasks.push(runOne(env, symbol, "30m"));
       if (minute === 0) tasks.push(runOne(env, symbol, "1h"));
       if (minute === 0 && new Date(controller.scheduledTime).getUTCHours() % 4 === 0) tasks.push(runOne(env, symbol, "4h"));
     }
