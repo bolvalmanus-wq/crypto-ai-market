@@ -721,14 +721,23 @@ async function getDecisionFeedback(env, symbol, tf) {
 
 async function runScheduledOne(env, symbol, tf) {
   if (!env.ANALYSIS_KV) throw new Error("ANALYSIS_KV binding is missing");
-  const lockKey = "analysis-lock:" + symbol + ":" + tf;
-  if (await env.ANALYSIS_KV.get(lockKey)) return { skipped: true, reason: "analysis already running", symbol, timeframe: tf };
-  await env.ANALYSIS_KV.put(lockKey, "1", { expirationTtl: 180 });
-  try { return await runOne(env, symbol, tf); }
-  finally { await env.ANALYSIS_KV.delete(lockKey); }
+  // Scheduled executions are already dispatched by the cron; avoid KV lock
+  // writes because the Free plan has a strict daily write allowance.
+  return await runOne(env, symbol, tf, { persist: false });
 }
 
-async function runOne(env, symbol, tf) {
+async function persistLatestSnapshot(env, symbol, result) {
+  const key = "latest:" + symbol;
+  let snapshot = {};
+  try { snapshot = await env.ANALYSIS_KV.get(key, "json") || {}; }
+  catch (_) { snapshot = {}; }
+  snapshot[result.timeframe] = result;
+  snapshot.updatedAt = new Date().toISOString();
+  snapshot.storagePolicy = "batched-5m";
+  await env.ANALYSIS_KV.put(key, JSON.stringify(snapshot), { expirationTtl: 60 * 60 * 24 * 90 });
+}
+
+async function runOne(env, symbol, tf, options = {}) {
   const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" } });
   if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
   const data = await marketResponse.json();
@@ -849,8 +858,7 @@ async function runOne(env, symbol, tf) {
     inputCandleCount: market.candles.length,
     intradayMovement: market.intradayMovement
   };
-  const key = "latest:" + symbol + ":" + tf;
-  await env.ANALYSIS_KV.put(key, JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
+  if (options.persist !== false) await persistLatestSnapshot(env, symbol, result);
   const decisionId = symbol + ":" + tf + ":" + Date.parse(result.generatedAt);
   if ((analysis.decision === "LONG" || analysis.decision === "SHORT") && Number.isFinite(Number(market.ticker.last)) && Number(market.ticker.last) > 0) {
     const decisionRecord = {
@@ -867,7 +875,8 @@ async function runOne(env, symbol, tf) {
     };
     await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), { expirationTtl: 60 * 60 * 24 * 11 });
   }
-  await env.ANALYSIS_KV.put("history:" + symbol + ":" + tf + ":" + Date.now(), JSON.stringify(result), { expirationTtl: 60 * 60 * 24 * 90 });
+  // Per-run history writes were removed: they exhausted the free daily KV quota.
+  // Signal alerts remain event-driven and are sent only for LONG/SHORT.
   await sendSignalPush(env, result);
   return result;
 }
@@ -1030,16 +1039,11 @@ export default {
         return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
       }
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
-      const lockKey = "analysis-lock:" + symbol + ":" + timeframe;
-      const locked = await env.ANALYSIS_KV.get(lockKey);
-      if (locked) return Response.json({ error: "এই টাইমফ্রেমের বিশ্লেষণ ইতিমধ্যে চলছে; পুরোনো ফলাফলকে নতুন সিদ্ধান্ত হিসেবে দেখানো হবে না।" }, { status: 409, headers: { "Cache-Control": "no-store" } });
-      await env.ANALYSIS_KV.put(lockKey, "1", { expirationTtl: 180 });
       try {
-        const result = await runOne(env, symbol, timeframe);
-        await env.ANALYSIS_KV.delete(lockKey);
+        const result = await runOne(env, symbol, timeframe, { persist: false });
+        await persistLatestSnapshot(env, symbol, result);
         return Response.json({ items: [result], triggered: true }, { headers: { "Cache-Control": "no-store" } });
       } catch (error) {
-        await env.ANALYSIS_KV.delete(lockKey);
         console.error("Manual analysis failed", { symbol, timeframe, error: String(error) });
         return Response.json({ error: error instanceof Error ? error.message : "বিশ্লেষণ ব্যর্থ হয়েছে" }, { status: 502 });
       }
@@ -1051,27 +1055,47 @@ export default {
       return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
     }
     if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
-    const latest = await env.ANALYSIS_KV.get("latest:" + symbol + ":" + timeframe, "json");
+    const snapshot = await env.ANALYSIS_KV.get("latest:" + symbol, "json");
+    // Backward compatibility: read older per-timeframe keys during migration.
+    const latest = snapshot?.[timeframe] || await env.ANALYSIS_KV.get("latest:" + symbol + ":" + timeframe, "json");
     return Response.json({ items: latest ? [latest] : [] }, {
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }
     });
   },
   async scheduled(controller, env, ctx) {
-    await evaluateMaturedDecisions(env);
-    const minute = new Date(controller.scheduledTime).getUTCMinutes();
+    const scheduledDate = new Date(controller.scheduledTime);
+    const minute = scheduledDate.getUTCMinutes();
+    // Outcome evaluation is less time-critical than signal generation; run every 15 minutes.
+    if (minute % 15 === 0) await evaluateMaturedDecisions(env);
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
       tasks.push(runScheduledOne(env, symbol, "1m"));
       if (minute % 5 === 0) tasks.push(runScheduledOne(env, symbol, "5m"));
-      if (minute % 15 === 1) tasks.push(runScheduledOne(env, symbol, "15m"));
-      if (minute % 30 === 2) tasks.push(runScheduledOne(env, symbol, "30m"));
-      if (minute === 3) tasks.push(runScheduledOne(env, symbol, "1h"));
-      if (minute === 4 && new Date(controller.scheduledTime).getUTCHours() % 4 === 0) tasks.push(runScheduledOne(env, symbol, "4h"));
+      if (minute % 15 === 0) tasks.push(runScheduledOne(env, symbol, "15m"));
+      if (minute % 30 === 0) tasks.push(runScheduledOne(env, symbol, "30m"));
+      if (minute === 0) tasks.push(runScheduledOne(env, symbol, "1h"));
+      if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push(runScheduledOne(env, symbol, "4h"));
     }
     const outcomes = await Promise.allSettled(tasks);
+    const successful = outcomes.filter(x => x.status === "fulfilled" && x.value && !x.value.skipped).map(x => x.value);
     const failed = outcomes.filter(x => x.status === "rejected");
-    const skipped = outcomes.filter(x => x.status === "fulfilled" && x.value?.skipped);
+    // Persist one combined snapshot per symbol every five minutes, instead of
+    // writing latest + history + lock for every timeframe execution.
+    if (minute % 5 === 0) {
+      for (const symbol of ["BTC", "SOL"]) {
+        const symbolResults = successful.filter(x => x.symbol === symbol);
+        if (symbolResults.length) {
+          // Keep one latest result per timeframe in a single KV object.
+          let snapshot = {};
+          try { snapshot = await env.ANALYSIS_KV.get("latest:" + symbol, "json") || {}; } catch (_) {}
+          for (const result of symbolResults) snapshot[result.timeframe] = result;
+          snapshot.updatedAt = new Date().toISOString();
+          snapshot.storagePolicy = "batched-5m";
+          await env.ANALYSIS_KV.put("latest:" + symbol, JSON.stringify(snapshot), { expirationTtl: 60 * 60 * 24 * 90 });
+        }
+      }
+    }
     if (failed.length) console.error("Scheduled analysis failures:", failed.map(x => String(x.reason)));
-    console.log("Scheduled analysis finished", { scheduledTime: controller.scheduledTime, success: outcomes.length - failed.length - skipped.length, failed: failed.length, skipped: skipped.length });
+    console.log("Scheduled analysis finished", { scheduledTime: controller.scheduledTime, success: successful.length, failed: failed.length, persistedSymbols: minute % 5 === 0 ? 2 : 0 });
   }
 };
