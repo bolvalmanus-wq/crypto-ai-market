@@ -770,11 +770,8 @@ async function runOne(env, symbol, tf, options = {}) {
   market.agentIndicatorSets = calculateAgentIndicatorSets(market);
   market.riskEngine = { timeframe: "4h", available: fourHour.available === true, supportBreakdown: fourHour.supportBreakdown === true, confirmedSupportBreakdown: fourHour.confirmedSupportBreakdown === true, resistanceBreakout: fourHour.resistanceBreakout === true, confirmedResistanceBreakout: fourHour.confirmedResistanceBreakout === true, bearishWarning: fourHour.bearishWarning === true, bullishWarning: fourHour.bullishWarning === true, warnings: fourHour.warnings || (fourHour.warning ? [fourHour.warning] : []) };
 
-  // Feed verified 10-day outcomes to BOTH AI reviewers; this is prompt feedback, not model retraining.
-  let performanceFeedback = null;
-  try { performanceFeedback = await getDecisionFeedback(env, symbol, tf); }
-  catch (feedbackError) { console.warn("Decision feedback unavailable", String(feedbackError)); }
-  market.performanceFeedback = performanceFeedback;
+  // Removed an unused historical-feedback scan: the AI prompt did not include
+  // market.performanceFeedback, so reading up to 1,000 KV records per run wasted latency.
   // Pass the currently forming candle separately as provisional intrabar evidence.
   // Confirmed candles remain the only input to closed-candle indicator calculations.
   const timeframeBars = analysisData.candles?.[tf] || [];
