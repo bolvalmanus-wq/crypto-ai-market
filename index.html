@@ -760,8 +760,10 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    const resultClose=result?.candleCloseTime?Date.parse(result.candleCloseTime):NaN;
    const expectedCloseMs=expectedClose===null?NaN:expectedClose;
    // A result is current only when it belongs to the latest closed candle for THIS timeframe.
-   const wrongCandle=!Number.isFinite(resultClose)||!Number.isFinite(expectedCloseMs)||resultClose<expectedCloseMs-5000;
-   const resultIsStale=!Number.isFinite(resultAge)||resultAge>intervalMs*1.5||wrongCandle;
+   // Free-tier KV snapshots are persisted every five minutes; expose that cadence honestly.
+   const storageLag=tf==="1m"?5*60*1000:0;
+   const wrongCandle=!Number.isFinite(resultClose)||!Number.isFinite(expectedCloseMs)||resultClose<expectedCloseMs-storageLag-5000;
+   const resultIsStale=!Number.isFinite(resultAge)||resultAge>(tf==="1m"?6*60*1000:intervalMs*1.5)||wrongCandle;
    // UI only reads scheduled results. It must not launch six parallel manual AI runs
    // every minute; manual runs are reserved for the user's explicit retry action.
    if(!response.ok&&payload.error)throw new Error(payload.error);
