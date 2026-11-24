@@ -13,6 +13,8 @@ export async function onRequestGet({ request }) {
   const hosts = ["https://www.okx.com", "https://openapi.okx.com", "https://eea.okx.com"];
   const paths = [
     `/api/v5/market/ticker?instId=${instId}`,
+    `/api/v5/market/candles?instId=${instId}&bar=5m&limit=300`,
+    `/api/v5/market/candles?instId=${instId}&bar=15m&limit=300`,
     `/api/v5/market/candles?instId=${instId}&bar=30m&limit=300`,
     `/api/v5/market/candles?instId=${instId}&bar=1H&limit=300`,
   ];
@@ -44,8 +46,10 @@ export async function onRequestGet({ request }) {
       return payload.result;
     };
     const symbolCode = symbol + "USDT";
-    const [tickerResult, k30, k60, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
+    const [tickerResult, k5, k15, k30, k60, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
       bybitGet("/v5/market/tickers?category=linear&symbol=" + symbolCode),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=5&limit=300"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=15&limit=300"),
       bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=30&limit=300"),
       bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=300"),
       bybitGet("/v5/market/open-interest?category=linear&symbol=" + symbolCode + "&intervalTime=30min&limit=2").catch(() => null),
@@ -56,7 +60,7 @@ export async function onRequestGet({ request }) {
       bybitGet("/v5/market/funding/history?category=linear&symbol=" + symbolCode + "&limit=2").catch(() => null)
     ]);
     const ticker = tickerResult.list?.[0];
-    if (!ticker || !k30.list?.length || !k60.list?.length) throw new Error("Bybit returned incomplete market data");
+    if (!ticker || !k5.list?.length || !k15.list?.length || !k30.list?.length || !k60.list?.length) throw new Error("Bybit returned incomplete market data");
     const mapBars = (rows, intervalMs) => rows.map(row => {
       const start = Number(row[0]);
       return { time:start, open:Number(row[1]), high:Number(row[2]), low:Number(row[3]), close:Number(row[4]), volume:Number(row[5]), confirmed:Date.now() >= start + intervalMs };
@@ -75,7 +79,7 @@ export async function onRequestGet({ request }) {
         orderbook:orderbook?.b&&orderbook?.a?{bids:orderbook.b.map(x=>[Number(x[0]),Number(x[1])]),asks:orderbook.a.map(x=>[Number(x[0]),Number(x[1])]),time:Number(orderbook.ts)}:null,
         fundingHistory:funding?.list?.map(x=>({rate:Number(x.fundingRate),time:Number(x.fundingRateTimestamp)}))||[]
       },
-      candles:{"30m":mapBars(k30.list,30*60*1000),"1h":mapBars(k60.list,60*60*1000)}
+      candles:{"5m":mapBars(k5.list,5*60*1000),"15m":mapBars(k15.list,15*60*1000),"30m":mapBars(k30.list,30*60*1000),"1h":mapBars(k60.list,60*60*1000)}
     },{headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
   } catch(error) {
     lastError = error instanceof Error ? error.message : "Bybit API unavailable";
@@ -86,10 +90,12 @@ export async function onRequestGet({ request }) {
       const payloads = await Promise.all(paths.map(path => requestJson(host, path)));
 
       const ticker = payloads[0].data[0];
-      const candles30m = payloads[1].data;
-      const candles1h = payloads[2].data;
-      if (!ticker || candles30m.length < 30 || candles1h.length < 30) {
-        lastError = `${new URL(host).hostname}: insufficient candle history (30m=${candles30m.length}, 1h=${candles1h.length})`;
+      const candles5m = payloads[1].data;
+      const candles15m = payloads[2].data;
+      const candles30m = payloads[3].data;
+      const candles1h = payloads[4].data;
+      if (!ticker || candles5m.length < 30 || candles15m.length < 30 || candles30m.length < 30 || candles1h.length < 30) {
+        lastError = `${new URL(host).hostname}: insufficient candle history (5m=${candles5m.length}, 15m=${candles15m.length}, 30m=${candles30m.length}, 1h=${candles1h.length})`;
         continue;
       }
 
@@ -110,6 +116,8 @@ export async function onRequestGet({ request }) {
           volume24h: Number(ticker.volCcy24h),
         },
         candles: {
+          "5m": candles5m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})),
+          "15m": candles15m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})),
           "30m": candles30m.map(c => ({
             time: Number(c[0]), open: Number(c[1]), high: Number(c[2]),
             low: Number(c[3]), close: Number(c[4]), volume: Number(c[5]),
