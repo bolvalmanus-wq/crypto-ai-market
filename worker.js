@@ -615,7 +615,9 @@ function finalDecision(market, council) {
   return {
     decision:"WAIT",
     direction:technical==="LONG"?"UPWARD":technical==="SHORT"?"DOWNWARD":"SIDEWAYS",
-    reason:"স্বাধীন AI ভোট: LONG " + counts.LONG + ", SHORT " + counts.SHORT + ", WAIT " + counts.WAIT + " — " + why + "।",
+    confidenceScore,
+    confidenceLabel:"দিকনির্দেশক আত্মবিশ্বাস; লাভের সম্ভাবনা নয়",
+    reason:"স্বাধীন AI ভোট: LONG " + counts.LONG + ", SHORT " + counts.SHORT + ", WAIT " + counts.WAIT + " — দিকনির্দেশক স্কোর " + confidenceScore + "%; সিদ্ধান্তের জন্য ৭০% প্রয়োজন। " + why + "।",
     risk:"স্বাধীন বিশ্লেষকদের মধ্যে যথেষ্ট সমর্থন না থাকলে ট্রেড এড়িয়ে চলুন।",
     dataQuality:dataQualityGood?"GOOD":"LIMITED"
   };
