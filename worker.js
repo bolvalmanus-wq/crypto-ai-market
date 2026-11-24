@@ -121,7 +121,6 @@ async function sendSignalPush(env,result) {
   if(delivered) await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime,notifiedAt:new Date().toISOString()}),{expirationTtl:60*60*24*14});
 }
 const INTERVALS = { "5m": 5 * 60 * 1000, "15m": 15 * 60 * 1000, "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
-const REVIEW_MODEL = "@cf/zai-org/glm-4.7-flash";
 
 function ema(values, period) {
   const k = 2 / (period + 1); let value = values[0];
@@ -501,7 +500,7 @@ async function runIndependentAnalysts(env, symbol, tf, market) {
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
   // Count only unique, successfully responding independent model analysts.
-  const rawIndependentOpinions = council.independentOpinions || opinions.filter(x => x.agent !== "Council Judge");
+  const rawIndependentOpinions = council.independentOpinions || opinions;
   // Never count the same underlying model twice (for example, a fallback GLM
   // answering both the Gemma and GLM specialist prompts).
   const seenModels = new Set();
