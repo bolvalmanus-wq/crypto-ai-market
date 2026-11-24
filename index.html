@@ -778,8 +778,8 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    }
    throw new Error(labels[tf]+"-এর ইন্ডিকেটর সিদ্ধান্তের ফরম্যাট সঠিক নয়");
   }catch(error){
-   if(panel)panel.innerHTML='<div class="ai-head"><span>✦ ইন্ডিকেটর বিশ্লেষণ</span><span class="offline">সংযোগ/বিশ্লেষণ ব্যর্থ</span></div><div class="ai-reason">'+safeText(error?.message||"ইন্ডিকেটর ফলাফল পাওয়া যায়নি")+'</div><div class="ai-risk">এটি বাজারের WAIT সংকেত নয়; AI বিশ্লেষণ সম্পন্ন হয়নি। “আবার বিশ্লেষণ” চাপ দিয়ে পুনরায় চেষ্টা করুন।</div>';
-   if(decision){decision.textContent="AI বিশ্লেষণ ব্যর্থ — ফলাফল নেই";decision.className="trade-action wait-on";}
+   if(panel)panel.innerHTML='<div class="ai-head"><span>✦ ইন্ডিকেটর বিশ্লেষণ</span><span class="offline">সংযোগ/বিশ্লেষণ ব্যর্থ</span></div><div class="ai-reason">'+safeText(error?.message||"ইন্ডিকেটর ফলাফল পাওয়া যায়নি")+'</div><div class="ai-risk">এটি বাজারের WAIT সংকেত নয়; ইন্ডিকেটর বিশ্লেষণ সম্পন্ন হয়নি। “আবার বিশ্লেষণ” চাপ দিয়ে পুনরায় চেষ্টা করুন।</div>';
+   if(decision){decision.textContent="ইন্ডিকেটর বিশ্লেষণ ব্যর্থ — ফলাফল নেই";decision.className="trade-action wait-on";}
    continue;
   }
   if(panel)panel.innerHTML='<div class="ai-head"><span>✦ ইন্ডিকেটর বিশ্লেষণ</span><span>সার্ভারের অপেক্ষায়</span></div><div class="ai-reason">নির্বাচিত টাইমফ্রেমের ক্যান্ডেলের জন্য ইন্ডিকেটরভিত্তিক বিশ্লেষণ লোড হচ্ছে।</div>';
