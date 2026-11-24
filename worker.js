@@ -925,7 +925,7 @@ export default {
     if (url.pathname !== "/latest") return Response.json({ error: "Not found" }, { status: 404 });
     const symbol = url.searchParams.get("symbol");
     const timeframe = url.searchParams.get("timeframe");
-    if (!["BTC", "SOL"].includes(symbol) || !["5m", "15m", "30m", "1h", "4h"].includes(timeframe)) {
+    if (!["BTC", "SOL"].includes(symbol) || !["1m", "5m", "15m", "30m", "1h", "4h"].includes(timeframe)) {
       return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
     }
     if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
