@@ -116,8 +116,8 @@ export async function onRequestGet({ request }) {
           volume24h: Number(ticker.volCcy24h),
         },
         candles: {
-          "5m": candles5m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})),
-          "15m": candles15m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})),
+          "5m": candles5m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})).reverse(),
+          "15m": candles15m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})).reverse(),
           "30m": candles30m.map(c => ({
             time: Number(c[0]), open: Number(c[1]), high: Number(c[2]),
             low: Number(c[3]), close: Number(c[4]), volume: Number(c[5]),
