@@ -278,6 +278,8 @@ function calculateAgentIndicatorSets(market){
   const volumeProfile=(()=>{const rows=b.slice(-50),lo=Math.min(...rows.map(x=>x.low)),hi=Math.max(...rows.map(x=>x.high)),bins=12,step=(hi-lo)/bins,weights=Array(bins).fill(0);for(const x of rows){const index=Math.max(0,Math.min(bins-1,Math.floor(((x.high+x.low+x.close)/3-lo)/(step||1))));weights[index]+=x.volume;}const best=weights.indexOf(Math.max(...weights));return{pointOfControl:lo+(best+.5)*step,binVolume:weights[best],priceVsPoc:p>=lo+(best+.5)*step?"ABOVE":"BELOW"};})();
   const trueRanges=b.slice(1).map((x,i)=>Math.max(x.high-x.low,Math.abs(x.high-b[i].close),Math.abs(x.low-b[i].close)));
   const atrRecent=trueRanges.slice(-14).reduce((s,x)=>s+x,0)/Math.max(1,Math.min(14,trueRanges.length));
+  // ATR-band Supertrend (not an EMA proxy).
+  const supertrendDirection=(()=>{let upper=0,lower=0,direction="DOWN";for(let i=1;i<b.length;i++){const sample=b.slice(Math.max(1,i-9),i+1),trs=sample.map((x,j)=>{const prev=b[Math.max(0,Math.max(1,i-9)+j-1)].close;return Math.max(x.high-x.low,Math.abs(x.high-prev),Math.abs(x.low-prev));}),a=trs.reduce((s,x)=>s+x,0)/Math.max(1,trs.length),midpoint=(b[i].high+b[i].low)/2,bu=midpoint+1.5*a,bl=midpoint-1.5*a,prevClose=b[i-1].close;upper=i===1||bu<upper||prevClose>upper?bu:upper;lower=i===1||bl>lower||prevClose<lower?bl:lower;if(direction==="DOWN"&&b[i].close>upper)direction="UP";else if(direction==="UP"&&b[i].close<lower)direction="DOWN";}return direction;})();
   const atrPercentile=(()=>{const windows=[];for(let i=14;i<=trueRanges.length;i++){const a=trueRanges.slice(i-14,i);windows.push(a.reduce((s,x)=>s+x,0)/14);}return windows.length?windows.filter(x=>x<=atrRecent).length/windows.length*100:50;})();
   const choppiness=(()=>{const n=14,rs=trueRanges.slice(-n).reduce((s,x)=>s+x,0),hh=Math.max(...highs.slice(-n)),ll=Math.min(...lows.slice(-n));return hh>ll?100*Math.log10(rs/(hh-ll))/Math.log10(n):50;})();
   const moneyFlow=(()=>{let pos=0,neg=0;for(let i=Math.max(1,b.length-15);i<b.length;i++){const tp=(b[i].high+b[i].low+b[i].close)/3,prev=(b[i-1].high+b[i-1].low+b[i-1].close)/3,flow=tp*b[i].volume;if(tp>prev)pos+=flow;else if(tp<prev)neg+=flow;}return neg===0?100:100-(100/(1+pos/neg));})();
@@ -294,7 +296,7 @@ function calculateAgentIndicatorSets(market){
   const rsiWindow=rsiSeries.slice(-14).filter(Number.isFinite);
   const stochRsi=rsiWindow.length&&Math.max(...rsiWindow)!==Math.min(...rsiWindow)?(rsiNow-Math.min(...rsiWindow))/(Math.max(...rsiWindow)-Math.min(...rsiWindow))*100:50;
   const pivot=(range.high+range.low+Number(last.close||p))/3;
-  const supertrendDirection=p>=e20-atr?"UP":"DOWN";
+
   return {
     gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci + Volume Profile",ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618},volumeProfile},
     glm:{name:"Parabolic SAR + CCI + Williams %R + Aroon",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20},williamsR,aroon},
