@@ -727,8 +727,14 @@ function showAi(symbol,tf,result){
  const judgeError=debate.judgeError?'<div class="ai-risk">বিশ্লেষণ সমস্যা: '+safeText(debate.judgeError)+'</div>':'';
  const status=aiFailed?"AI চালানো যায়নি — এটি বাজারের WAIT নয়":debate.status==="ANALYSTS_COMPLETE"?"স্বাধীন AI বিশ্লেষণ সম্পন্ন · "+Number(debate.analystCount||councilOpinions.length)+" জন":"স্বাধীন AI বিশ্লেষণ অসম্পূর্ণ · প্রয়োজনীয় ৩টি মডেল পাওয়া যায়নি";
  const candleAudit='<div class="ai-risk"><b>ডেটা যাচাই:</b> '+safeText(labels[tf]||tf)+' · '+Number(result.inputCandleCount||0)+'টি সম্পূর্ণ ক্যান্ডেল · ক্যান্ডেল ক্লোজ '+(result.candleCloseTime?new Date(result.candleCloseTime).toLocaleString("bn-BD"):"অজানা")+' · '+safeText(result.marketSource||"বাজারের উৎস অজানা")+'</div>';
+ const movement=result.intradayMovement||{};
+ const hourLabel=x=>x&&x.time?new Date(x.time).toLocaleTimeString("en-GB",{timeZone:"UTC",hour:"2-digit",minute:"2-digit",hour12:false})+"–"+new Date(x.endTime).toLocaleTimeString("en-GB",{timeZone:"UTC",hour:"2-digit",minute:"2-digit",hour12:false})+" UTC":"সময় অজানা";
+ const movementRows=Array.isArray(movement.hourly)?movement.hourly.map(x=>'<span class="pill">'+hourLabel(x)+' '+(Number(x.changePct)>0?"+":"")+Number(x.changePct).toFixed(3)+'%</span>').join(" "):"";
+ const rise=movement.strongestRise?'<div>সবচেয়ে বেশি ওঠা ঘণ্টা: <b class="long">'+hourLabel(movement.strongestRise)+' · +'+Number(movement.strongestRise.changePct).toFixed(3)+'%</b></div>':"";
+ const fall=movement.strongestFall?'<div>সবচেয়ে বেশি নামা ঘণ্টা: <b class="short">'+hourLabel(movement.strongestFall)+' · '+Number(movement.strongestFall.changePct).toFixed(3)+'%</b></div>':"";
+ const movementLine='<div class="ai-risk"><b>গত ২৪ ঘণ্টার সময়ভিত্তিক ওঠানামা:</b> '+Number(movement.coverageHours||0)+' ঘণ্টার ডেটা · '+Number(movement.candleCount||0)+'টি ৫-মিনিট ক্যান্ডেল · '+(movement.complete24h?'২৪ ঘণ্টার কভারেজ সম্পূর্ণ':'২৪ ঘণ্টার কভারেজ অসম্পূর্ণ')+'<div>'+rise+fall+'</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'+movementRows+'</div></div>';
  el.innerHTML='<div class="ai-head"><span>✦ স্বাধীন AI বিশ্লেষণ · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
-  '<div class="ai-risk">'+safeText(status)+'</div>'+candleAudit+biasLine+voteSummary+confidenceLine+durationLine+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
+  '<div class="ai-risk">'+safeText(status)+'</div>'+candleAudit+movementLine+biasLine+voteSummary+confidenceLine+durationLine+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
   '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
 }
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
