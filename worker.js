@@ -249,7 +249,7 @@ function analyze(data, tf) {
 
 
 
-function calculateAgentIndicatorSets(market){const b=(market.candles||[]).filter(c=>[c.high,c.low,c.close,c.volume].every(Number.isFinite)).slice(-80),hl=n=>{const a=b.slice(-n);return{high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low))}},mid=n=>{const x=hl(n);return(x.high+x.low)/2},last=b[b.length-1]||{},p=Number(market.ticker?.last)||Number(last.close)||0,t=mid(9),k=mid(26),a=(t+k)/2,z=mid(52),v=b.slice(-20).reduce((s,c)=>s+Math.max(0,c.volume),0),vw=v?b.slice(-20).reduce((s,c)=>s+(c.high+c.low+c.close)/3*Math.max(0,c.volume),0)/v:p,r=hl(50),d=r.high-r.low,atr=Number(market.indicators?.atr)||0,e=ema(b.map(c=>c.close).slice(-40),20),ts=b.slice(-20).map(c=>(c.high+c.low+c.close)/3),m=ts.reduce((x,y)=>x+y,0)/Math.max(1,ts.length),dev=ts.reduce((s,x)=>s+Math.abs(x-m),0)/Math.max(1,ts.length),cci=dev?(ts[ts.length-1]-m)/(.015*dev):0,dc=hl(20),st=(Number(last.high)+Number(last.low))/2-3*atr;return{gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci",ichimoku:{tenkan:t,kijun:k,spanA:a,spanB:z,priceVsCloud:p>Math.max(a,z)?"ABOVE":p<Math.min(a,z)?"BELOW":"INSIDE"},vwap:{value:vw,priceVsVwap:p>=vw?"ABOVE":"BELOW"},fibonacci:{r382:r.high-d*.382,r500:r.high-d*.5,r618:r.high-d*.618}},glm:{name:"Supertrend + CCI",supertrend:{line:st,direction:p>=st?"UP":"DOWN"},cci:{value:cci,period:20}},judge:{name:"Donchian Channel + Keltner Channel",donchian:dc,keltner:{mid:e,upper:e+2*atr,lower:e-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e+2*atr?"ABOVE_KELTNER":p<e-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL"}};}
+function calculateAgentIndicatorSets(market){const b=(market.candles||[]).filter(c=>[c.high,c.low,c.close,c.volume].every(Number.isFinite)).slice(-80),hl=n=>{const a=b.slice(-n);return{high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low))}},mid=n=>{const x=hl(n);return(x.high+x.low)/2},last=b[b.length-1]||{},p=Number(market.ticker?.last)||Number(last.close)||0,t=mid(9),k=mid(26),a=(t+k)/2,z=mid(52),v=b.slice(-20).reduce((s,c)=>s+Math.max(0,c.volume),0),vw=v?b.slice(-20).reduce((s,c)=>s+(c.high+c.low+c.close)/3*Math.max(0,c.volume),0)/v:p,r=hl(50),d=r.high-r.low,atr=Number(market.indicators?.atr)||0,e=ema(b.map(c=>c.close).slice(-40),20),ts=b.slice(-20).map(c=>(c.high+c.low+c.close)/3),m=ts.reduce((x,y)=>x+y,0)/Math.max(1,ts.length),dev=ts.reduce((s,x)=>s+Math.abs(x-m),0)/Math.max(1,ts.length),cci=dev?(ts[ts.length-1]-m)/(.015*dev):0,dc=hl(20),st=(Number(last.high)+Number(last.low))/2-3*atr;return{gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci",ichimoku:{tenkan:t,kijun:k,spanA:a,spanB:z,priceVsCloud:p>Math.max(a,z)?"ABOVE":p<Math.min(a,z)?"BELOW":"INSIDE"},vwap:{value:vw,priceVsVwap:p>=vw?"ABOVE":"BELOW"},fibonacci:{r382:r.high-d*.382,r500:r.high-d*.5,r618:r.high-d*.618}},glm:{name:"Supertrend + CCI",supertrend:{line:st,direction:p>=st?"UP":"DOWN"},cci:{value:cci,period:20}},judge:{name:"Donchian Channel + Keltner Channel",donchian:dc,keltner:{mid:e,upper:e+2*atr,lower:e-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e+2*atr?"ABOVE_KELTNER":p<e-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL"},gemini:{name:"Classic Pivot Points + Williams %R",pivot:{p:(r.high+r.low+Number(last.close||p))/3,r1:2*((r.high+r.low+Number(last.close||p))/3)-r.low,s1:2*((r.high+r.low+Number(last.close||p))/3)-r.high},williamsR:(()=>{const x=hl(14);return x.high===x.low? -50:(x.high-p)/(x.high-x.low)*-100;})()}};}
 function buildFourHourCandles(data) {
   const source = (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
   const buckets = new Map();
@@ -447,12 +447,13 @@ async function runCouncilJudge(env, symbol, tf, market, opinions, judgeIndicator
 async function runAICouncil(env, symbol, tf, market, gemini) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
   // Gemini is an optional independent vote: a Pages deployment/model outage must not disable the entire council.
+  const indicatorSets=market.agentIndicatorSets || calculateAgentIndicatorSets(market);
   const geminiOpinions = !gemini.unavailableError
     ? (Array.isArray(gemini.councilOpinions) && gemini.councilOpinions.length
       ? gemini.councilOpinions
       : [{ agent:"Gemini", model:gemini.model || "Gemini", ...gemini.analysis }])
     : [];
-  const indicatorSets=calculateAgentIndicatorSets(market);
+  for(const opinion of geminiOpinions) opinion.indicators=indicatorSets.gemini;
   const specialistModels = [
     {model:"@cf/google/gemma-4-26b-a4b-it",role:"Gemma · Ichimoku/VWAP/Fibonacci",indicators:indicatorSets.gemma,instructions:"শুধু অতিরিক্ত Ichimoku Cloud, VWAP ও Fibonacci বিচার করো। অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"},
     {model:"@cf/zai-org/glm-4.7-flash",role:"GLM · Supertrend/CCI",indicators:indicatorSets.glm,instructions:"শুধু অতিরিক্ত Supertrend ও CCI বিচার করো। অন্য AI-এর ভোট দেখবে না; software indicators double-count করবে না।"}
@@ -590,6 +591,7 @@ async function runOne(env, symbol, tf) {
   } else {
     market.higherTimeframe = { timeframe: "4h", signal: market.indicators.technicalSignal, fourHour };
   }
+  market.agentIndicatorSets = calculateAgentIndicatorSets(market);
   market.riskEngine = { timeframe: "4h", available: fourHour.available === true, supportBreakdown: fourHour.supportBreakdown === true, resistanceBreakout: fourHour.resistanceBreakout === true, bearishWarning: fourHour.bearishWarning === true, bullishWarning: fourHour.bullishWarning === true, warnings: fourHour.warnings || (fourHour.warning ? [fourHour.warning] : []) };
 
   // Feed verified 10-day outcomes to BOTH AI reviewers; this is prompt feedback, not model retraining.
