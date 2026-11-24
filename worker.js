@@ -91,7 +91,7 @@ async function sendSignalPush(env,result) {
   if(!listed.keys.length) return;
   const payload={
     title:decision,
-    body:result.symbol+" · "+(result.timeframe==="30m"?"৩০ মিনিট":result.timeframe==="1h"?"১ ঘণ্টা":"৪ ঘণ্টা"),
+    body:result.symbol+" · "+({"5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"}[result.timeframe]||result.timeframe),
     url:"/",
     tag:result.symbol+"-"+result.timeframe+"-"+decision,
     decision,symbol:result.symbol,timeframe:result.timeframe
@@ -570,11 +570,20 @@ async function runOne(env, symbol, tf) {
   const market = analyze(analysisData, tf);
   // Check adjacent and broader 4h market structure before accepting a direction.
   const fourHour = buildFourHourContext(data);
-  if (tf === "30m") {
+  if (tf === "5m") {
+    let fifteen = "WAIT", hourly = "WAIT";
+    try { fifteen = analyze(data, "15m").indicators.technicalSignal; } catch (_) {}
+    try { hourly = analyze(data, "1h").indicators.technicalSignal; } catch (_) {}
+    market.higherTimeframe = { timeframe: "15m", signal: fifteen, requiredSignals: [fifteen, hourly, fourHour.signal], oneHourSignal: hourly, fourHour };
+  } else if (tf === "15m") {
+    let hourly = "WAIT";
+    try { hourly = analyze(data, "1h").indicators.technicalSignal; } catch (_) {}
+    market.higherTimeframe = { timeframe: "1h", signal: hourly, requiredSignals: [hourly, fourHour.signal], fourHour };
+  } else if (tf === "30m") {
     try {
       const other = analyze(data, "1h");
-      market.higherTimeframe = { timeframe: "1h", signal: other.indicators.technicalSignal, score: other.indicators.technicalScore, rsi: other.indicators.rsi, ema9: other.indicators.ema9, ema21: other.indicators.ema21, fourHour };
-    } catch (_) { market.higherTimeframe = { timeframe: "1h", signal: "WAIT", fourHour }; }
+      market.higherTimeframe = { timeframe: "1h", signal: other.indicators.technicalSignal, score: other.indicators.technicalScore, rsi: other.indicators.rsi, ema9: other.indicators.ema9, ema21: other.indicators.ema21, requiredSignals: [other.indicators.technicalSignal, fourHour.signal], fourHour };
+    } catch (_) { market.higherTimeframe = { timeframe: "1h", signal: "WAIT", requiredSignals: ["WAIT", fourHour.signal], fourHour }; }
   } else if (tf === "1h") {
     market.higherTimeframe = { timeframe: "4h", signal: fourHour.signal, fourHour };
   } else {
