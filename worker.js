@@ -797,48 +797,56 @@ async function runOne(env, symbol, tf, options = {}) {
   const timeframeBars = analysisData.candles?.[tf] || [];
   const formingCandle = [...timeframeBars].reverse().find(c => c && c.confirmed === false && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));
   market.formingCandle = formingCandle ? { time: formingCandle.time, open: formingCandle.open, high: formingCandle.high, low: formingCandle.low, close: formingCandle.close, volume: Number(formingCandle.volume) || 0, status: "FORMING_UNCONFIRMED" } : null;
-  // No Gemini dependency: all five independent analysts run on the configured Workers AI binding.
-  const ai = { analysis:{
-    decision:"WAIT",
-    direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
-    reason:"চূড়ান্ত সিদ্ধান্ত পাঁচটি স্বাধীন AI বিশ্লেষক ও নিজস্ব টেকনিক্যাল ইঞ্জিনের সমর্থনের ভিত্তিতে হবে।",
-    risk:"স্বাধীন AI মডেলের অনুপস্থিতি বা বাজারের ঝুঁকি থাকলে WAIT থাকবে।",
-    dataQuality:"GOOD"
-  }};
-
-  // Five independent model analysts; no judge/council and no Gemini quota dependency.
-  let council = null;
-  let councilError = null;
-  const screening = shouldRunAiCouncil(market);
-  if (screening.review) {
-    try {
-      council = await runIndependentAnalysts(env, symbol, tf, market);
-    } catch (error) {
-      councilError = error instanceof Error ? error.message.slice(0,240) : String(error);
-      console.error("Independent analyst run failed", { symbol, timeframe: tf, error:councilError });
-    }
-  } else {
-    council = { status:"SCREENED_OUT", analystCount:0, opinions:[], independentOpinions:[], errors:[], screened:true };
-  }
-  const analysis = council?.screened
-    ? {
-        decision:"WAIT",
-        direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
-        directionalBias:market.indicators.technicalScore >= 0.18 ? "LONG" : market.indicators.technicalScore <= -0.18 ? "SHORT" : "NO_CLEAR_EDGE",
-        confidenceScore:Math.round(Math.min(69,Math.abs(Number(market.indicators.technicalScore)||0)*100)),
-        reason:screening.reason,
-        risk:"এটি AI কাউন্সিলের সিদ্ধান্ত নয়; বাজারে নতুন মোমেন্টাম/ব্রেকআউট দেখা দিলে পাঁচ AI বিশ্লেষণ চালানো হবে।",
-        dataQuality:"GOOD"
+  // Indicator-only mode: AI analysts are deliberately disabled while the
+  // technical engine is evaluated independently.
+  const technical = market.indicators;
+  const decision = technical.technicalSignal;
+  const analysis = {
+    decision,
+    direction: decision === "LONG" ? "UPWARD" : decision === "SHORT" ? "DOWNWARD" : "SIDEWAYS",
+    directionalBias: decision,
+    confidenceScore: Math.min(95, Math.round(Math.abs(Number(technical.technicalScore) || 0) * 100)),
+    durationMinutes: ({"1m":1,"5m":5,"15m":15,"1h":60,"4h":240}[tf] || 5),
+    reason: technical.reason || (decision === "LONG" ? "EMA, মোমেন্টাম ও টেকনিক্যাল স্কোর ঊর্ধ্বমুখী" : decision === "SHORT" ? "EMA, মোমেন্টাম ও টেকনিক্যাল স্কোর নিম্নমুখী" : "ইন্ডিকেটরগুলোতে এখনো যথেষ্ট একমুখী সংকেত নেই"),
+    risk: "শুধু ইন্ডিকেটরভিত্তিক পরীক্ষামূলক সংকেত; উচ্চতর টাইমফ্রেম ও ঝুঁকি যাচাই করুন। লাভের নিশ্চয়তা নয়।",
+    dataQuality: "GOOD"
+  };
+  const result = {
+    symbol, timeframe: tf,
+    provider: "Technical Indicators Only · AI Disabled",
+    model: "EMA + RSI + MACD + ADX + VWAP + ROC + Donchian + Price Action",
+    analysis,
+    debate: {
+      status: "INDICATOR_ONLY",
+      screening: { reviewed: true, reason: "AI সাময়িকভাবে বন্ধ; সরাসরি ইন্ডিকেটর বিশ্লেষণ" },
+      analystCount: 0,
+      councilOpinions: [],
+      councilVoteCounts: { LONG:0, SHORT:0, WAIT:0 },
+      councilErrors: [],
+      judgeError: null,
+      technicalSignal: technical.technicalSignal,
+      higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE",
+      fourHourContext: market.higherTimeframe?.fourHour || null,
+      riskEngine: market.riskEngine,
+      technicalIndicators: {
+        rsi: technical.rsi, ema9: technical.ema9, ema21: technical.ema21, atr: technical.atr,
+        macdHistogram: technical.macdHistogram, adx: technical.adx, plusDI: technical.plusDI,
+        minusDI: technical.minusDI, bollingerPosition: technical.bbPosition,
+        relativeVolume: technical.relativeVolume, vwap: technical.vwap, roc3: technical.roc3,
+        roc9: technical.roc9, donchianUpper: technical.donchianUpper,
+        donchianLower: technical.donchianLower, priceActionBias: technical.priceActionBias,
+        technicalScore: technical.technicalScore, technicalSignal: technical.technicalSignal
       }
-    : council
-      ? finalDecision(market, council)
-      : {
-          decision:"WAIT",
-          direction:market.indicators.technicalSignal==="LONG"?"UPWARD":market.indicators.technicalSignal==="SHORT"?"DOWNWARD":"SIDEWAYS",
-          reason:"স্বাধীন AI বিশ্লেষণ চালানো যায়নি; নিরাপদে WAIT।",
-          risk:councilError || "AI সেবা সাময়িক অনুপলব্ধ",
-          dataQuality:"LIMITED"
-        };
+    },
+    generatedAt: new Date().toISOString(),
+    candleCloseTime: market.candleCloseTime,
+    marketSource: data.source,
+    marketFetchedAt: data.fetchedAt || null,
+    marketTimestamp: data.marketTimestamp || null,
+    inputTimeframe: tf,
+    inputCandleCount: market.candles.length,
+    intradayMovement: market.intradayMovement
+  };
   const result = {
     symbol, timeframe: tf,
     provider: council?.screened ? "Technical pre-screen · AI council not called" : council ? "Five Independent Cloudflare AI Analysts" : "AI unavailable / WAIT",
@@ -1105,7 +1113,6 @@ export default {
       tasks.push(() => runScheduledOne(env, symbol, "1m"));
       if (minute % 5 === 0) tasks.push(() => runScheduledOne(env, symbol, "5m"));
       if (minute % 15 === 0) tasks.push(() => runScheduledOne(env, symbol, "15m"));
-      if (minute % 30 === 0) tasks.push(() => runScheduledOne(env, symbol, "30m"));
       if (minute === 0) tasks.push(() => runScheduledOne(env, symbol, "1h"));
       if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push(() => runScheduledOne(env, symbol, "4h"));
     }
