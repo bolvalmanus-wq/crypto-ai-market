@@ -603,7 +603,7 @@ body{background:radial-gradient(ellipse at 50% -20%,#163b33 0%,#0b1210 48%,#070b
 const symbols=["BTC","SOL"];
 function updateLiveClock(){const el=document.getElementById("liveClock");if(!el)return;const now=new Date();const date=now.toLocaleDateString("bn-BD",{weekday:"short",day:"numeric",month:"short",year:"numeric"});const time=now.toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit",second:"2-digit"});el.innerHTML='<span class="clock-dot"></span><span>LIVE · '+date+' · '+time+'</span>'}
 updateLiveClock();setInterval(updateLiveClock,1000);
-const labels={"1m":"১ মিনিট","5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"};
+const labels={"1m":"১ মিনিট","5m":"৫ মিনিট","15m":"১৫ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"};
 const fmt=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))?Number(n).toLocaleString("en-US",{maximumFractionDigits:4}):"—";
 function safeText(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
 function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
@@ -660,8 +660,8 @@ function card(symbol,data){
  if(age>180||!Number.isFinite(price)||price<=0)html+='<div class="signal status">ডেটা পুরোনো — নতুন তথ্যের অপেক্ষা</div>';
  else{
   html+='<nav class="timeframe-tabs" aria-label="সময় নির্বাচন"><button type="button" class="timeframe-tab active" id="tf-tab-'+symbol+'-1m" onclick="showTimeframe(\''+symbol+'\',\'1m\')">১ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-5m" onclick="showTimeframe(\''+symbol+'\',\'5m\')">৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-15m" onclick="showTimeframe(\''+symbol+'\',\'15m\')">১৫ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-30m" onclick="showTimeframe(\''+symbol+'\',\'30m\')">৩০ মিনিট</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-1h" onclick="showTimeframe(\''+symbol+'\',\'1h\')">১ ঘণ্টা</button><button type="button" class="timeframe-tab" id="tf-tab-'+symbol+'-4h" onclick="showTimeframe(\''+symbol+'\',\'4h\')">৪ ঘণ্টা</button></nav><div class="timeframe-panels">';
-  for(const tf of ["1m","5m","15m","30m","1h","4h"]){
-   const interval={"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf];
+  for(const tf of ["1m","5m","15m","1h","4h"]){
+   const interval={"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000}[tf];
    const candles=tf==="4h"?buildFourHourCandles(data.candles["1h"]):data.candles[tf];
    const a=analyse(candles,price,interval*1.5,interval,data.derivatives,tf);
    const score=Number.isFinite(a.score)?a.score:null;
@@ -675,7 +675,7 @@ function card(symbol,data){
  html+='</section>';return html;
 }
 function showTimeframe(symbol,tf){
- for(const item of ["1m","5m","15m","30m","1h","4h"]){
+ for(const item of ["1m","5m","15m","1h","4h"]){
   const panel=document.getElementById("tf-panel-"+symbol+"-"+item);
   const tab=document.getElementById("tf-tab-"+symbol+"-"+item);
   if(panel)panel.hidden=item!==tf;
@@ -695,7 +695,7 @@ function renderHistory(){
  el.innerHTML=h.length?h.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #344258">'+safeText(x.time)+' · '+safeText(x.s)+' · '+safeText(labels[x.tf]||x.tf)+' · <b>'+safeText(x.signal)+'</b>'+(Number.isFinite(Number(x.price))?' · $'+fmt(x.price):'')+'</div>').join(""):"এখনো কোনো বিশ্লেষণ সংরক্ষিত হয়নি।";
 }
 
-const aiCacheTtl={"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
+const aiCacheTtl={"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000};
 function aiPanel(symbol,tf){return document.getElementById("ai-"+symbol+"-"+tf)}
 function showAi(symbol,tf,result){
  const el=aiPanel(symbol,tf);if(!el)return;
@@ -726,7 +726,7 @@ function showAi(symbol,tf,result){
 
  const errors=(debate.councilErrors||[]).map(x=>'<div class="ai-risk">'+safeText(x.agent)+': '+safeText(x.error)+'</div>').join("");
  const judgeError=debate.judgeError?'<div class="ai-risk">বিশ্লেষণ সমস্যা: '+safeText(debate.judgeError)+'</div>':'';
- const status=aiFailed?"AI চালানো যায়নি — এটি বাজারের WAIT নয়":screened?"প্রাথমিক স্ক্রিনিং: এখনো AI কাউন্সিল চালানোর মতো সেটআপ নেই":debate.status==="ANALYSTS_COMPLETE"?"স্বাধীন AI বিশ্লেষণ সম্পন্ন · "+Number(debate.analystCount||councilOpinions.length)+" জন":"স্বাধীন AI বিশ্লেষণ অসম্পূর্ণ · প্রয়োজনীয় ৩টি মডেল পাওয়া যায়নি";
+ const status=aiFailed?"AI চালানো যায়নি — এটি বাজারের WAIT নয়":screened?"প্রাথমিক স্ক্রিনিং: এখনো AI কাউন্সিল চালানোর মতো সেটআপ নেই":debate.status==="ANALYSTS_COMPLETE"?"ইন্ডিকেটর বিশ্লেষণ সম্পন্ন · "+Number(debate.analystCount||councilOpinions.length)+" জন":"ইন্ডিকেটর বিশ্লেষণ অসম্পূর্ণ · প্রয়োজনীয় ৩টি মডেল পাওয়া যায়নি";
  const candleAudit='<div class="ai-risk"><b>ডেটা যাচাই:</b> '+safeText(labels[tf]||tf)+' · '+Number(result.inputCandleCount||0)+'টি সম্পূর্ণ ক্যান্ডেল · ক্যান্ডেল ক্লোজ '+(result.candleCloseTime?new Date(result.candleCloseTime).toLocaleString("bn-BD"):"অজানা")+' · '+safeText(result.marketSource||"বাজারের উৎস অজানা")+'</div>';
  const movement=result.intradayMovement||{};
  const hourLabel=x=>x&&x.time?new Date(x.time).toLocaleTimeString("en-GB",{timeZone:"UTC",hour:"2-digit",minute:"2-digit",hour12:false})+"–"+new Date(x.endTime).toLocaleTimeString("en-GB",{timeZone:"UTC",hour:"2-digit",minute:"2-digit",hour12:false})+" UTC":"সময় অজানা";
@@ -738,25 +738,25 @@ function showAi(symbol,tf,result){
  const fallSegments=Array.isArray(movement.topFallSegments)?movement.topFallSegments.map(x=>'<div class="short">↓ '+segmentLabel(x)+' · '+Number(x.changePct).toFixed(3)+'%</div>').join(""):"";
  const segmentLine='<div style="margin-top:7px"><b>উল্লেখযোগ্য ওঠার সময়:</b> '+(riseSegments||"যথেষ্ট স্পষ্ট ঊর্ধ্বমুখী পর্ব নেই")+'<b>উল্লেখযোগ্য নামার সময়:</b> '+(fallSegments||"যথেষ্ট স্পষ্ট নিম্নমুখী পর্ব নেই")+'</div>';
  const movementLine='<div class="ai-risk"><b>আজকের UTC দিনের সময়ভিত্তিক ওঠানামা:</b> '+Number(movement.coverageHours||0)+' ঘণ্টার ডেটা · '+Number(movement.candleCount||0)+'টি ৫-মিনিট ক্যান্ডেল · '+(movement.completeWindow?'এখন পর্যন্ত ক্যান্ডেল কভারেজ সম্পূর্ণ':'কিছু ক্যান্ডেল অনুপস্থিত')+'<div>'+rise+fall+'</div>'+segmentLine+'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'+movementRows+'</div></div>';
- el.innerHTML='<div class="ai-head"><span>✦ স্বাধীন AI বিশ্লেষণ · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
+ el.innerHTML='<div class="ai-head"><span>✦ ইন্ডিকেটর বিশ্লেষণ · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
   '<div class="ai-risk">'+safeText(status)+'</div>'+candleAudit+movementLine+biasLine+voteSummary+confidenceLine+durationLine+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
   '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
 }
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
- for(const tf of ["1m","5m","15m","30m","1h","4h"]){
+ for(const tf of ["1m","5m","15m","1h","4h"]){
   if(onlyTf&&tf!==onlyTf)continue;
   const key="duel_v2_"+symbol+"_"+tf;
   const tfCandles=tf==="4h"?(Array.isArray(data.candles["4h"])?data.candles["4h"]:buildFourHourCandles(data.candles["1h"])):data.candles[tf];
   const lastClosed=(tfCandles||[]).filter(x=>x.confirmed&&Number.isFinite(Number(x.time))).slice(-1)[0];
   const candleKey=lastClosed?Number(lastClosed.time):null;
-  const expectedClose=candleKey===null?null:candleKey+({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf]);
+  const expectedClose=candleKey===null?null:candleKey+({"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000}[tf]);
   const panel=aiPanel(symbol,tf);
   const decision=document.getElementById("decision-"+symbol+"-"+tf);
   try{
    const response=await fetch("/api/scheduled?symbol="+encodeURIComponent(symbol)+"&timeframe="+encodeURIComponent(tf),{cache:"no-store"});
    const payload=await response.json().catch(()=>({}));
    let result=(payload.items||[]).find(x=>x.symbol===symbol&&x.timeframe===tf);
-   const intervalMs=({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[tf]||60000);
+   const intervalMs=({"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000}[tf]||60000);
    const resultAge=result?.generatedAt?Date.now()-Date.parse(result.generatedAt):Infinity;
    const resultClose=result?.candleCloseTime?Date.parse(result.candleCloseTime):NaN;
    const expectedCloseMs=expectedClose===null?NaN:expectedClose;
@@ -771,7 +771,7 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    if(!result||!result.analysis)throw new Error(labels[tf]+"-এর নতুন AI বিশ্লেষণ এখনো সার্ভারে তৈরি হয়নি");
    if(resultIsStale)throw new Error(labels[tf]+"-এর সিদ্ধান্ত পুরোনো; নতুন ক্যান্ডেলের বিশ্লেষণ এখনো আসেনি");
    if(["LONG","SHORT","WAIT"].includes(result.analysis.decision)){
-    result.model=(result.model||"Five Independent Cloudflare AI Analysts")+" · ক্লাউড";
+    result.model=(result.model||"Technical Indicators Only")+" · ক্লাউড";
     localStorage.setItem(key,JSON.stringify({...result,_candleTime:candleKey}));
     showAi(symbol,tf,result);
     continue;
@@ -782,14 +782,14 @@ async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
    if(decision){decision.textContent="AI বিশ্লেষণ ব্যর্থ — ফলাফল নেই";decision.className="trade-action wait-on";}
    continue;
   }
-  if(panel)panel.innerHTML='<div class="ai-head"><span>✦ AI পর্যালোচনা</span><span>সার্ভারের অপেক্ষায়</span></div><div class="ai-reason">নির্বাচিত টাইমফ্রেমের ক্যান্ডেলের জন্য পাঁচটি স্বাধীন Cloudflare AI বিশ্লেষণ লোড হচ্ছে।</div>';
+  if(panel)panel.innerHTML='<div class="ai-head"><span>✦ AI পর্যালোচনা</span><span>সার্ভারের অপেক্ষায়</span></div><div class="ai-reason">নির্বাচিত টাইমফ্রেমের ক্যান্ডেলের জন্য ইন্ডিকেটরভিত্তিক বিশ্লেষণ লোড হচ্ছে।</div>';
   if(decision){decision.textContent="সিদ্ধান্ত: WAIT";decision.className="trade-action wait-on";}
  }
 }
 async function retryAi(symbol,tf){
  const button=document.getElementById("retry-"+symbol+"-"+tf);
  if(!button||button.disabled)return;
- button.disabled=true;button.textContent="AI বিশ্লেষণ চলছে…";
+ button.disabled=true;button.textContent="ইন্ডিকেটর বিশ্লেষণ চলছে…";
  const panel=aiPanel(symbol,tf);
  try{
   const response=await fetch("/api/scheduled",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:tf}),cache:"no-store"});
@@ -896,9 +896,9 @@ async function refreshLivePrices(){
 }
 let lastCountdownSlots={"1m":Math.floor(Date.now()/60000),"5m":Math.floor(Date.now()/300000),"15m":Math.floor(Date.now()/900000),"30m":Math.floor(Date.now()/1800000),"1h":Math.floor(Date.now()/3600000),"4h":Math.floor(Date.now()/14400000)};
 function updateCandleCountdowns(){
- const now=Date.now(),intervals={"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
+ const now=Date.now(),intervals={"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000};
  let boundaryChanged=false;
- for(const tf of ["1m","5m","15m","30m","1h","4h"]){
+ for(const tf of ["1m","5m","15m","1h","4h"]){
   const interval=intervals[tf],slot=Math.floor(now/interval),key=tf;
   if(slot>lastCountdownSlots[key]){boundaryChanged=true;lastCountdownSlots[key]=slot;}
   let remaining=interval-(now%interval);if(remaining===interval)remaining=0;
