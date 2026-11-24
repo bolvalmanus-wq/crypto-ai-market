@@ -299,7 +299,7 @@ function calculateAgentIndicatorSets(market){
 
   return {
     gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci + Volume Profile",ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618},volumeProfile},
-    glm:{name:"Parabolic SAR + CCI + Williams %R + Aroon",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20},williamsR,aroon},
+    glm:{name:"Parabolic SAR + CCI + Williams %R + Aroon",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20},williamsR:williams,aroon},
     openai:{name:"Donchian + Keltner + ATR Squeeze + Choppiness",donchian:dc,keltner:{mid:e20,upper:e20+2*atr,lower:e20-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e20+2*atr?"ABOVE_KELTNER":p<e20-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL",atrPercentile,choppiness},
     llama:{name:"Supertrend + OBV + MFI + Chaikin Oscillator",supertrend:{atr,ema20:e20,direction:supertrendDirection},obv:{value:obv,recentFlow:obvRecent,direction:obvRecent>0?"UP":obvRecent<0?"DOWN":"FLAT"},moneyFlowIndex:moneyFlow,chaikinOscillator:chaikinOsc},
     qwen:{name:"ROC + Ultimate Oscillator + TRIX + DPO",rateOfChange:roc,ultimateOscillator:ultimateOsc,trix,detrendedPriceOscillator:dpo}
