@@ -502,7 +502,7 @@ function finalDecision(market, council) {
   const enough = counts[candidate] >= requiredVotes && margin >= 1 && candidate !== "WAIT";
   // Directional decisions must depend on verified market data, not on Gemini being online.
   // Gemini is an optional vote; its outage must not permanently force WAIT when the
-  // two independent Cloudflare analysts and the judge agree.
+  // Cloudflare analysts and the optional Gemini vote are counted separately.
   const candleData = Array.isArray(market.candles) ? market.candles : [];
   const tickerPrice = Number(market.ticker?.last);
   const fourHourContext = market.higherTimeframe?.fourHour;
@@ -519,7 +519,7 @@ function finalDecision(market, council) {
     return {
       decision:candidate,
       direction:candidate==="LONG"?"UPWARD":"DOWNWARD",
-      reason:"AI Council-এর " + counts[candidate] + "/" + valid + " স্বাধীন মতামত " + candidate + " সমর্থন করেছে; টেকনিক্যাল স্কোরও সমর্থন করছে। " + judgeReason,
+      reason:"আলাদা AI ভোটে " + counts[candidate] + "/" + valid + " " + candidate + " সমর্থন করেছে; নিজস্ব টেকনিক্যাল ইঞ্জিনও সমর্থন করছে।",
       risk:council.judge?.risk || "বাজারের অস্থিরতা ও দ্রুত দিক পরিবর্তনের ঝুঁকি রয়েছে।",
       dataQuality:"GOOD"
     };
