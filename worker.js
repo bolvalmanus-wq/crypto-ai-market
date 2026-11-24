@@ -460,6 +460,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
     source:market.source,
     ticker:{last:market.ticker?.last,mark:market.ticker?.mark,bid:market.ticker?.bid,ask:market.ticker?.ask,volume24h:market.ticker?.volume24h,openInterest:market.ticker?.openInterest,fundingRate:market.ticker?.fundingRate},
     indicators:market.indicators,
+    formingCandle:market.formingCandle || null,
     specialistIndicators,
     higherTimeframe:market.higherTimeframe,
     riskEngine:market.riskEngine,
@@ -472,7 +473,7 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
     recentCandles:(market.candles||[]).slice(-8).map(c=>({open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume}))
   };
   const messages=[
-    {role:"system",content:"তুমি স্বাধীন "+role+" ট্রেডিং বিশ্লেষক। অন্য AI-এর মতামত দেখবে না এবং তাদের সঙ্গে ঐকমত্য করার চেষ্টা করবে না। তোমার কাজ হলো এই নির্দিষ্ট "+tf+" টাইমফ্রেমে এখনকার বাজার দেখে বাধ্যতামূলকভাবে একটি দিক বেছে নেওয়া: LONG অথবা SHORT। WAIT তোমার স্বাভাবিক উত্তর নয়; ডেটা যথেষ্ট থাকলে দুই দিকের যুক্তি তুলনা করে যেদিকে প্রমাণ তুলনামূলক বেশি, সেই দিকেই ভোট দাও। কোনো দিকের প্রমাণ দুর্বল হলে সেটিও গোপন করবে না—reason-এ দুর্বলতা লিখবে এবং confidence ৫০-এর নিচে রাখবে। কেবল ডেটা অনুপস্থিত/অবৈধ বা বাজারের তথ্য বিশ্লেষণ-অযোগ্য হলে WAIT দিতে পারবে। কোনো indicator value বা market data বানাবে না। প্রথমে timeframe অনুযায়ী trend/structure, তারপর নিজের চারটি indicator, volume/volatility, support-resistance ও invalidation যাচাই করো; LONG ও SHORT উভয় সম্ভাবনার বিরুদ্ধে যুক্তি পরীক্ষা করে শেষে একটি দিক নির্বাচন করো। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়; decision অবশ্যই LONG অথবা SHORT (শুধু অযোগ্য ডেটায় WAIT), confidenceScore 0-100 পূর্ণসংখ্যা: {\"decision\":\"LONG|SHORT|WAIT\",\"confidenceScore\":65,\"reason\":\"বাংলায় সংক্ষিপ্ত কিন্তু নির্দিষ্ট যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি ও কোন দামে/কোন শর্তে মত ভুল হবে\"}."},
+    {role:"system",content:"তুমি স্বাধীন "+role+" ট্রেডিং বিশ্লেষক। অন্য AI-এর মতামত দেখবে না এবং তাদের সঙ্গে ঐকমত্য করার চেষ্টা করবে না। তোমার কাজ হলো এই নির্দিষ্ট "+tf+" টাইমফ্রেমে এখনকার বাজার দেখে বাধ্যতামূলকভাবে একটি দিক বেছে নেওয়া: LONG অথবা SHORT। WAIT তোমার স্বাভাবিক উত্তর নয়; ডেটা যথেষ্ট থাকলে দুই দিকের যুক্তি তুলনা করে যেদিকে প্রমাণ তুলনামূলক বেশি, সেই দিকেই ভোট দাও। কোনো দিকের প্রমাণ দুর্বল হলে সেটিও গোপন করবে না—reason-এ দুর্বলতা লিখবে এবং confidence ৫০-এর নিচে রাখবে। কেবল ডেটা অনুপস্থিত/অবৈধ বা বাজারের তথ্য বিশ্লেষণ-অযোগ্য হলে WAIT দিতে পারবে। কোনো indicator value বা market data বানাবে না। প্রথমে timeframe অনুযায়ী trend/structure, তারপর নিজের চারটি indicator, volume/volatility, support-resistance ও invalidation যাচাই করো; LONG ও SHORT উভয় সম্ভাবনার বিরুদ্ধে যুক্তি পরীক্ষা করে শেষে একটি দিক নির্বাচন করো। formingCandle থাকলে সেটি চলমান, এখনো বন্ধ হয়নি—এটিকে দ্রুত আগাম সতর্কতা হিসেবে বিবেচনা করো, কিন্তু নিশ্চিত ক্যান্ডেল বলে দাবি করো না; ticker ও formingCandle-এর দিক/ভলিউম মিলিয়ে দেখো। "+TRADING_FRAMEWORK_BN+" তোমার বিশেষ দায়িত্ব: "+instructions+" উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়; decision অবশ্যই LONG অথবা SHORT (শুধু অযোগ্য ডেটায় WAIT), confidenceScore 0-100 পূর্ণসংখ্যা: {\"decision\":\"LONG|SHORT|WAIT\",\"confidenceScore\":65,\"reason\":\"বাংলায় সংক্ষিপ্ত কিন্তু নির্দিষ্ট যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি ও কোন দামে/কোন শর্তে মত ভুল হবে\"}."},
     {role:"user",content:JSON.stringify({symbol,timeframe:tf,market:compactMarket})}
   ];
   const models=[model].filter(Boolean); // No same-model fallback: each analyst must remain genuinely independent. Each reviewer must give its best evidence-based directional view; WAIT only when neither side has a real edge.
@@ -709,6 +710,11 @@ async function runOne(env, symbol, tf) {
   try { performanceFeedback = await getDecisionFeedback(env, symbol, tf); }
   catch (feedbackError) { console.warn("Decision feedback unavailable", String(feedbackError)); }
   market.performanceFeedback = performanceFeedback;
+  // Pass the currently forming candle separately as provisional intrabar evidence.
+  // Confirmed candles remain the only input to closed-candle indicator calculations.
+  const timeframeBars = analysisData.candles?.[tf] || [];
+  const formingCandle = [...timeframeBars].reverse().find(c => c && c.confirmed === false && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite));
+  market.formingCandle = formingCandle ? { time: formingCandle.time, open: formingCandle.open, high: formingCandle.high, low: formingCandle.low, close: formingCandle.close, volume: Number(formingCandle.volume) || 0, status: "FORMING_UNCONFIRMED" } : null;
   // No Gemini dependency: all five independent analysts run on the configured Workers AI binding.
   const ai = { analysis:{
     decision:"WAIT",
