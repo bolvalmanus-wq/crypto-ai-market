@@ -862,7 +862,9 @@ async function runOne(env, symbol, tf, options = {}) {
     marketFetchedAt:data.fetchedAt||null,marketTimestamp:data.marketTimestamp||null,inputTimeframe:tf,
     inputCandleCount:market.candles.length,intradayMovement:market.intradayMovement};
   if (options.persist !== false) await persistLatestSnapshot(env, symbol, result);
-  const decisionId = symbol + ":" + tf + ":" + Date.parse(result.generatedAt);
+  // One record per symbol/timeframe/closed candle. The scheduler may rerun several
+  // times while the same candle remains latest; do not count those as new decisions.
+  const decisionId = symbol + ":" + tf + ":" + Date.parse(result.candleCloseTime);
   if ((analysis.decision === "LONG" || analysis.decision === "SHORT") && Number.isFinite(Number(market.ticker.last)) && Number(market.ticker.last) > 0) {
     const decisionRecord = {
       id: decisionId,
