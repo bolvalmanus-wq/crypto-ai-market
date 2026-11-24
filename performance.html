@@ -24,7 +24,7 @@ button.refresh{display:block;margin:10px auto 0;border:0;border-radius:10px;padd
 <script>
 "use strict";
 let reportData=null,activeSheet="results";
-const numberValue=n=>{const v=Number(n);return Number.isFinite(v)?v:null;};
+const numberValue=n=>{if(n===null||n===undefined||n==="")return null;const v=Number(n);return Number.isFinite(v)?v:null;};
 const fmt=n=>{const v=numberValue(n);return v===null?"—":v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});};
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const utcTime=s=>{const d=new Date(s);return Number.isNaN(d.getTime())?"সময় অজানা":d.toLocaleTimeString("en-GB",{timeZone:"UTC",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+" UTC";};
