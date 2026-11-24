@@ -915,6 +915,7 @@ export default {
       await env.ANALYSIS_KV.put(lockKey, "1", { expirationTtl: 120 });
       try {
         const result = await runOne(env, symbol, timeframe);
+        await env.ANALYSIS_KV.delete(lockKey);
         return Response.json({ items: [result], triggered: true }, { headers: { "Cache-Control": "no-store" } });
       } catch (error) {
         await env.ANALYSIS_KV.delete(lockKey);
