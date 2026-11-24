@@ -724,8 +724,9 @@ function showAi(symbol,tf,result){
  const errors=(debate.councilErrors||[]).map(x=>'<div class="ai-risk">'+safeText(x.agent)+': '+safeText(x.error)+'</div>').join("");
  const judgeError=debate.judgeError?'<div class="ai-risk">বিশ্লেষণ সমস্যা: '+safeText(debate.judgeError)+'</div>':'';
  const status=aiFailed?"AI চালানো যায়নি — এটি বাজারের WAIT নয়":debate.status==="ANALYSTS_COMPLETE"?"স্বাধীন AI বিশ্লেষণ সম্পন্ন · "+Number(debate.analystCount||councilOpinions.length)+" জন":"স্বাধীন AI বিশ্লেষণ অসম্পূর্ণ · প্রয়োজনীয় ৩টি মডেল পাওয়া যায়নি";
+ const candleAudit='<div class="ai-risk"><b>ডেটা যাচাই:</b> '+safeText(labels[tf]||tf)+' · '+Number(result.inputCandleCount||0)+'টি সম্পূর্ণ ক্যান্ডেল · ক্যান্ডেল ক্লোজ '+(result.candleCloseTime?new Date(result.candleCloseTime).toLocaleString("bn-BD"):"অজানা")+' · '+safeText(result.marketSource||"বাজারের উৎস অজানা")+'</div>';
  el.innerHTML='<div class="ai-head"><span>✦ স্বাধীন AI বিশ্লেষণ · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
-  '<div class="ai-risk">'+safeText(status)+'</div>'+voteSummary+confidenceLine+durationLine+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
+  '<div class="ai-risk">'+safeText(status)+'</div>'+candleAudit+voteSummary+confidenceLine+durationLine+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
   '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
 }
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
