@@ -656,10 +656,11 @@ async function runOne(env, symbol, tf) {
       status: council?.status || "COUNCIL_FAILED",
       gemini: ai.analysis,
       councilOpinions: council?.opinions || [],
+      // Vote totals exclude the judge; only independent analysts count as votes.
       councilVoteCounts: council ? {
-        LONG:council.opinions.filter(x=>x.decision==="LONG").length,
-        SHORT:council.opinions.filter(x=>x.decision==="SHORT").length,
-        WAIT:council.opinions.filter(x=>x.decision==="WAIT").length
+        LONG:(council.independentOpinions || []).filter(x=>x.decision==="LONG").length,
+        SHORT:(council.independentOpinions || []).filter(x=>x.decision==="SHORT").length,
+        WAIT:(council.independentOpinions || []).filter(x=>x.decision==="WAIT").length
       } : null,
       councilErrors: council?.errors || [],
       judgeError: council?.judgeError || councilError,
