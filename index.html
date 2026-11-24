@@ -711,7 +711,7 @@ function showAi(symbol,tf,result){
  if(decision){decision.textContent="চূড়ান্ত সিদ্ধান্ত: "+decisionLabel;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
  const councilOpinions=Array.isArray(debate.councilOpinions)?debate.councilOpinions:[];
  const counts=debate.councilVoteCounts||{LONG:0,SHORT:0,WAIT:0};
- const opinions=councilOpinions.map(o=>'<div class="ai-reason"><b>'+safeText(o.agent||o.model||"AI")+' · '+safeText(o.decision)+'</b> — '+safeText(String(o.reason||"কারণ দেওয়া হয়নি").slice(0,180))+(o.indicators?'<div class="ai-risk"><b>নিজস্ব অতিরিক্ত Indicator:</b> '+safeText(o.indicators.name||JSON.stringify(o.indicators))+'</div>':'<div class="ai-risk">অতিরিক্ত আলাদা Indicator সেট নেই; মূল Market Data ও Technical Engine ব্যবহার করেছে।</div>')+'</div>').join("");
+ const opinions=councilOpinions.map(o=>'<div class="ai-reason"><b>'+safeText(o.agent||o.model||"AI")+' · '+safeText(o.decision)+'</b> — '+safeText(String(o.reason||"কারণ দেওয়া হয়নি").slice(0,180))+(o.indicators?'<div class="ai-risk"><b>নিজস্ব ৪টি Indicator:</b> '+safeText(o.indicators.name||"বিশেষজ্ঞ Indicator সেট")+'<br><b>প্রাপ্ত মান:</b> '+safeText(JSON.stringify(Object.fromEntries(Object.entries(o.indicators).filter(([k])=>k!=="name"))).slice(0,850))+'</div>':'<div class="ai-risk">বিশেষজ্ঞ Indicator ডেটা পাওয়া যায়নি।</div>')+'</div>').join("");
  const voteSummary='<div class="ai-risk"><b>স্বাধীন AI মতামত:</b> LONG '+Number(counts.LONG||0)+' · SHORT '+Number(counts.SHORT||0)+' · WAIT '+Number(counts.WAIT||0)+' · '+safeText(debate.status||"অজানা")+'</div>';
  const h4=debate.fourHourContext||{};
  const signalBn=x=>x==="LONG"?"বুলিশ":x==="SHORT"?"বেয়ারিশ":"নিরপেক্ষ/WAIT";
