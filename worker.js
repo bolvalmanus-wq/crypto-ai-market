@@ -352,6 +352,21 @@ function calculateAgentIndicatorSets(market){
     qwen:{name:"ROC + Ultimate Oscillator + TRIX + DPO",rateOfChange:roc,ultimateOscillator:ultimateOsc,trix,detrendedPriceOscillator:dpo}
   };
 }
+function calculateAdvancedIndicatorScore(sets, baseScore) {
+ const clamp=x=>Math.max(-1,Math.min(1,Number.isFinite(Number(x))?Number(x):0));
+ const sign=x=>x==="UP"||x==="ABOVE"||x==="BREAKOUT_UP"?1:x==="DOWN"||x==="BELOW"||x==="BREAKOUT_DOWN"?-1:0;
+ const g=sets?.gemma||{},l=sets?.glm||{},o=sets?.openai||{},m=sets?.llama||{},q=sets?.qwen||{};
+ const ich=sign(g.ichimoku?.priceVsCloud)*.65+(Number(g.ichimoku?.tenkan)>Number(g.ichimoku?.kijun)?1:-1)*.35;
+ const sar=sign(l.parabolicSAR?.direction),cci=clamp(Number(l.cci?.value)/180),will=clamp((Number(l.williamsR)+50)/50),aroon=clamp((Number(l.aroon?.up)-Number(l.aroon?.down))/100);
+ const don=sign(o.position),kel=Number(o.keltner?.mid)>0?clamp((Number(o.keltner.mid)-Number(o.keltner.mid))*1):0;
+ const supertrend=sign(m.supertrend?.direction),obv=sign(m.obv?.direction),mfi=clamp((Number(m.moneyFlowIndex)-50)/35),chaikin=Math.sign(Number(m.chaikinOscillator)||0);
+ const roc=clamp(Number(q.rateOfChange)/1.5),ultimate=clamp((Number(q.ultimateOscillator)-50)/25),trix=clamp(Number(q.trix)/.15),dpo=clamp(Number(q.detrendedPriceOscillator)/(Math.abs(Number(g.fibonacci?.r500)||1)*.002));
+ const parts=[[ich,.14],[sar,.10],[cci,.06],[will,.04],[aroon,.06],[don,.10],[kel,.04],[supertrend,.12],[obv,.05],[mfi,.06],[chaikin,.04],[roc,.07],[ultimate,.05],[trix,.04],[dpo,.03]];
+ const weight=parts.reduce((a,x)=>a+x[1],0),advanced=parts.reduce((a,x)=>a+x[0]*x[1],0)/weight;
+ const chop=Number(o.choppiness),atrPct=Number(o.atrPercentile),regimeFactor=(Number.isFinite(chop)&&chop>61.8?.72:1)*(Number.isFinite(atrPct)&&atrPct<10?.82:1);
+ return {score:clamp((clamp(baseScore)*.58+advanced*.42)*regimeFactor),advancedScore:advanced,regimeFactor,components:{ichimoku:ich,parabolicSar:sar,cci,williamsR:will,aroon,donchian:don,keltner:kel,supertrend,obv,mfi,chaikin,roc,ultimateOscillator:ultimate,trix,dpo,choppiness:Number.isFinite(chop)?chop:null,atrPercentile:Number.isFinite(atrPct)?atrPct:null}};
+}
+
 function buildFourHourCandles(data) {
   const native = (data.candles?.["4h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
   if (native.length >= 30) return native;
@@ -800,105 +815,35 @@ async function runOne(env, symbol, tf, options = {}) {
   // Indicator-only mode: AI analysts are deliberately disabled while the
   // technical engine is evaluated independently.
   const technical = market.indicators;
-  const decision = technical.technicalSignal;
-  const analysis = {
-    decision,
-    direction: decision === "LONG" ? "UPWARD" : decision === "SHORT" ? "DOWNWARD" : "SIDEWAYS",
-    directionalBias: decision,
-    confidenceScore: Math.min(95, Math.round(Math.abs(Number(technical.technicalScore) || 0) * 100)),
-    durationMinutes: ({"1m":1,"5m":5,"15m":15,"1h":60,"4h":240}[tf] || 5),
-    reason: technical.reason || (decision === "LONG" ? "EMA, মোমেন্টাম ও টেকনিক্যাল স্কোর ঊর্ধ্বমুখী" : decision === "SHORT" ? "EMA, মোমেন্টাম ও টেকনিক্যাল স্কোর নিম্নমুখী" : "ইন্ডিকেটরগুলোতে এখনো যথেষ্ট একমুখী সংকেত নেই"),
-    risk: "শুধু ইন্ডিকেটরভিত্তিক পরীক্ষামূলক সংকেত; উচ্চতর টাইমফ্রেম ও ঝুঁকি যাচাই করুন। লাভের নিশ্চয়তা নয়।",
-    dataQuality: "GOOD"
-  };
-  const result = {
-    symbol, timeframe: tf,
-    provider: "Technical Indicators Only · AI Disabled",
-    model: "EMA + RSI + MACD + ADX + VWAP + ROC + Donchian + Price Action",
-    analysis,
-    debate: {
-      status: "INDICATOR_ONLY",
-      screening: { reviewed: true, reason: "AI সাময়িকভাবে বন্ধ; সরাসরি ইন্ডিকেটর বিশ্লেষণ" },
-      analystCount: 0,
-      councilOpinions: [],
-      councilVoteCounts: { LONG:0, SHORT:0, WAIT:0 },
-      councilErrors: [],
-      judgeError: null,
-      technicalSignal: technical.technicalSignal,
-      higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE",
-      fourHourContext: market.higherTimeframe?.fourHour || null,
-      riskEngine: market.riskEngine,
-      technicalIndicators: {
-        rsi: technical.rsi, ema9: technical.ema9, ema21: technical.ema21, atr: technical.atr,
-        macdHistogram: technical.macdHistogram, adx: technical.adx, plusDI: technical.plusDI,
-        minusDI: technical.minusDI, bollingerPosition: technical.bbPosition,
-        relativeVolume: technical.relativeVolume, vwap: technical.vwap, roc3: technical.roc3,
-        roc9: technical.roc9, donchianUpper: technical.donchianUpper,
-        donchianLower: technical.donchianLower, priceActionBias: technical.priceActionBias,
-        technicalScore: technical.technicalScore, technicalSignal: technical.technicalSignal
-      }
-    },
-    generatedAt: new Date().toISOString(),
-    candleCloseTime: market.candleCloseTime,
-    marketSource: data.source,
-    marketFetchedAt: data.fetchedAt || null,
-    marketTimestamp: data.marketTimestamp || null,
-    inputTimeframe: tf,
-    inputCandleCount: market.candles.length,
-    intradayMovement: market.intradayMovement
-  };
-  const result = {
-    symbol, timeframe: tf,
-    provider: council?.screened ? "Technical pre-screen · AI council not called" : council ? "Five Independent Cloudflare AI Analysts" : "AI unavailable / WAIT",
-    model: council?.screened ? "AI models not invoked: no qualifying setup" : council ? council.independentOpinions.map(x=>x.model).join(" + ") : "Independent AI unavailable",
-    analysis,
-    debate: {
-      status: council?.status || "COUNCIL_FAILED",
-      screening: { reviewed: screening.review, reason: screening.reason },
-      analystCount:council?.analystCount || 0,
-      councilOpinions: council?.opinions || [],
-      // Vote totals exclude the judge; only independent analysts count as votes.
-      councilVoteCounts: council ? {
-        LONG:(council.independentOpinions || []).filter(x=>x.decision==="LONG").length,
-        SHORT:(council.independentOpinions || []).filter(x=>x.decision==="SHORT").length,
-        WAIT:(council.independentOpinions || []).filter(x=>x.decision==="WAIT").length
-      } : null,
-      councilErrors: council?.errors || [],
-      judgeError: councilError,
-      technicalSignal: market.indicators.technicalSignal,
-      higherTimeframeSignal: market.higherTimeframe?.signal || "UNAVAILABLE",
-      fourHourContext: market.higherTimeframe?.fourHour || null,
-      riskEngine: market.riskEngine,
-      technicalIndicators: {
-        rsi: market.indicators.rsi,
-        ema9: market.indicators.ema9,
-        ema21: market.indicators.ema21,
-        atr: market.indicators.atr,
-        macdHistogram: market.indicators.macdHistogram,
-        adx: market.indicators.adx,
-        plusDI: market.indicators.plusDI,
-        minusDI: market.indicators.minusDI,
-        bollingerPosition: market.indicators.bbPosition,
-        relativeVolume: market.indicators.relativeVolume,
-        vwap: market.indicators.vwap,
-        roc3: market.indicators.roc3,
-        roc9: market.indicators.roc9,
-        donchianUpper: market.indicators.donchianUpper,
-        donchianLower: market.indicators.donchianLower,
-        priceActionBias: market.indicators.priceActionBias,
-        technicalScore: market.indicators.technicalScore,
-        technicalSignal: market.indicators.technicalSignal
-      }
-    },
-    generatedAt: new Date().toISOString(),
-    candleCloseTime: market.candleCloseTime,
-    marketSource: data.source,
-    marketFetchedAt: data.fetchedAt || null,
-    marketTimestamp: data.marketTimestamp || null,
-    inputTimeframe: tf,
-    inputCandleCount: market.candles.length,
-    intradayMovement: market.intradayMovement
-  };
+  const advanced = calculateAdvancedIndicatorScore(market.agentIndicatorSets, technical.technicalScore);
+  technical.baseTechnicalScore = technical.technicalScore;
+  technical.advancedIndicatorScore = advanced.advancedScore;
+  technical.technicalScore = advanced.score;
+  technical.technicalSignal = advanced.score >= .48 ? "LONG" : advanced.score <= -.48 ? "SHORT" : "WAIT";
+  technical.reason = technical.technicalSignal === "LONG" ? "মূল ট্রেন্ড ও উন্নত Ichimoku, SAR, Supertrend, Donchian ও momentum সূচক ঊর্ধ্বমুখী" :
+    technical.technicalSignal === "SHORT" ? "মূল ট্রেন্ড ও উন্নত Ichimoku, SAR, Supertrend, Donchian ও momentum সূচক নিম্নমুখী" :
+    "উন্নত সূচকগুলোর সম্মিলিত স্কোরে এখনো যথেষ্ট একমুখী সুবিধা নেই";
+  const candidate=technical.technicalSignal,higher=market.higherTimeframe||{};
+  const higherSignal=(tf==="1m"||tf==="5m"||tf==="15m")?(higher.oneHourSignal||higher.signal||"WAIT"):(higher.fourHour?.signal||higher.signal||"WAIT");
+  const opposite=candidate==="LONG"?"SHORT":"LONG";
+  const hardRisk=candidate==="LONG"?market.riskEngine?.confirmedSupportBreakdown===true:candidate==="SHORT"?market.riskEngine?.confirmedResistanceBreakout===true:false;
+  let decision=candidate,decisionReason=technical.reason;
+  if(candidate!=="WAIT"&&higherSignal===opposite){decision="WAIT";decisionReason="উচ্চতর টাইমফ্রেমের প্রবণতা বিপরীত; তাই ঝুঁকি এড়াতে WAIT";}
+  if(candidate!=="WAIT"&&hardRisk){decision="WAIT";decisionReason="৪ ঘণ্টার কাঠামোয় বিপরীত দিকের নিশ্চিত ব্রেক; তাই WAIT";}
+  const analysis={decision,direction:decision==="LONG"?"UPWARD":decision==="SHORT"?"DOWNWARD":"SIDEWAYS",directionalBias:candidate,
+    confidenceScore:Math.min(95,Math.round(Math.abs(technical.technicalScore)*100)),
+    durationMinutes:({"1m":1,"5m":5,"15m":15,"1h":60,"4h":240}[tf]||5),reason:decisionReason,
+    risk:"শুধু গাণিতিক ইন্ডিকেটর-সম্মিলন; confidence হলো স্কোরের মাত্রা, লাভের সম্ভাবনা নয়। প্রবেশের আগে stop-loss ও position sizing যাচাই করুন।",dataQuality:"GOOD"};
+  const result={symbol,timeframe:tf,provider:"Indicator Engine Only · AI Disabled",
+    model:"EMA/RSI/MACD/ADX + Ichimoku/SAR/Supertrend/Donchian/OBV/MFI/ROC",analysis,
+    debate:{status:"INDICATOR_ONLY",screening:{reviewed:true,reason:"AI সম্পূর্ণ বন্ধ; সব সিদ্ধান্ত গাণিতিক ইন্ডিকেটর থেকে"},
+      analystCount:0,councilOpinions:[],councilVoteCounts:{LONG:0,SHORT:0,WAIT:0},councilErrors:[],judgeError:null,
+      technicalSignal:technical.technicalSignal,higherTimeframeSignal:higherSignal,
+      fourHourContext:market.higherTimeframe?.fourHour||null,riskEngine:market.riskEngine,
+      technicalIndicators:{...technical,advancedScore:advanced.advancedScore,regimeFactor:advanced.regimeFactor,advancedComponents:advanced.components,indicatorSets:market.agentIndicatorSets||{}}},
+    generatedAt:new Date().toISOString(),candleCloseTime:market.candleCloseTime,marketSource:data.source,
+    marketFetchedAt:data.fetchedAt||null,marketTimestamp:data.marketTimestamp||null,inputTimeframe:tf,
+    inputCandleCount:market.candles.length,intradayMovement:market.intradayMovement};
   if (options.persist !== false) await persistLatestSnapshot(env, symbol, result);
   const decisionId = symbol + ":" + tf + ":" + Date.parse(result.generatedAt);
   if ((analysis.decision === "LONG" || analysis.decision === "SHORT") && Number.isFinite(Number(market.ticker.last)) && Number(market.ticker.last) > 0) {
