@@ -563,6 +563,7 @@ function finalDecision(market, council) {
   // Require directional agreement from every higher timeframe:
   // fast entries use 15m/1h/4h context; 30m entries use 1h/4h; 1h setups use 4h trend.
   const higher = market.higherTimeframe || {};
+  const fastTimeframe = ["1m","5m","15m","30m"].includes(market.timeframe);
   const requiredHigherSignals = higher.requiredSignals || (higher.timeframe === "1h" ? [higher.signal, higher.fourHour?.signal] : [higher.signal]);
   // WAIT/neutral on a higher timeframe is not automatically a veto; only an explicit opposite trend blocks an entry.
   const oppositeSignal = candidate === "LONG" ? "SHORT" : "LONG";
@@ -575,7 +576,6 @@ function finalDecision(market, council) {
   // 15m/1h opposition is a caution for fast entries, not an automatic veto; only the 4h context can hard-veto the direction.
   const higherAligned = Boolean(strongestHigherSignal) && strongestHigherSignal !== oppositeSignal;
   const lowerTimeframeConflict = requiredHigherSignals.some(signal => signal === oppositeSignal) && !higherAligned;
-  const fastTimeframe = ["1m","5m","15m","30m"].includes(market.timeframe);
   // Broad 4h trend warnings are context, not automatic vetoes for intraday reversals.
   // Fast entries are blocked only by a volume-confirmed 4h structural break.
   const hardRisk = fastTimeframe
