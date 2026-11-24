@@ -465,21 +465,6 @@ async function runCloudflareAgent(env, model, role, instructions, symbol, tf, ma
   throw new Error("সব Cloudflare বিশ্লেষক মডেল ব্যর্থ: "+failures.join(" | "));
 }
 
-async function runCouncilJudge(env, symbol, tf, market, opinions, judgeIndicators) {
-  const messages=[
-    {role:"system",content:"তুমি AI Council-এর চূড়ান্ত বিচারক ও risk manager। তোমার নিজস্ব অতিরিক্ত Donchian Channel ও Keltner Channel market.specialistIndicators-এ দেওয়া আছে; এগুলো দিয়ে breakout ও volatility channel যাচাই করবে। অন্য AI-এর সিদ্ধান্ত দেখে নিজের সিদ্ধান্ত বদলাবে না, নিজের বিশ্লেষণ আলাদা ভোট হিসেবে দেবে। "+TRADING_FRAMEWORK_BN+" স্বাধীন AI মতামতগুলোর যুক্তি, দ্বিমত, টেকনিক্যাল ডেটা ও ঝুঁকি যাচাই করবে। শুধু ভোট গুনবে না; প্রতিটি মতামতের প্রমাণ, timeframe alignment, market structure, volume confirmation, invalidation ও risk-reward বিচার করবে। দুর্বল যুক্তি বাতিল করবে। ডেটা অপর্যাপ্ত বা গুরুতর বিপরীত ঝুঁকি থাকলে WAIT। জয়ের সম্ভাবনার শতাংশ বানাবে না। reason ও risk প্রতিটি এক বাক্য, সর্বোচ্চ প্রায় ১০০ অক্ষর। উত্তর অবশ্যই একটি সম্পূর্ণ JSON object হবে, কোনো ভূমিকা বা markdown নয়: {\"decision\":\"LONG|SHORT|WAIT\",\"reason\":\"বাংলায় সংক্ষিপ্ত যুক্তি\",\"risk\":\"বাংলায় ঝুঁকি\"}."},
-    {role:"user",content:JSON.stringify({task:"প্রত্যেক AI-এর যুক্তির শক্তি ও দুর্বলতা বিচার করে চূড়ান্ত স্বাধীন মতামত দাও।",symbol,timeframe:tf,market:{source:market.source,ticker:market.ticker,indicators:market.indicators,specialistIndicators:judgeIndicators,higherTimeframe:market.higherTimeframe,riskEngine:market.riskEngine,derivatives:market.derivatives},opinions})}
-  ];
-  const models=[...new Set([REVIEW_MODEL,"@cf/google/gemma-4-26b-a4b-it"].filter(Boolean))];
-  const failures=[];
-  for(const selectedModel of models){
-    try{
-      const output=await env.AI.run(selectedModel,{messages,max_completion_tokens:512,max_tokens:512,response_format:{type:"json_object"},chat_template_kwargs:{enable_thinking:false},temperature:0});
-      return {agent:"Council Judge",model:selectedModel,...parseModelJson(output)};
-    }catch(error){failures.push(selectedModel+": "+String(error?.message||error).slice(0,140));}
-  }
-  throw new Error("চূড়ান্ত বিচারক ও fallback মডেল ব্যর্থ: "+failures.join(" | "));
-}
 
 async function runIndependentAnalysts(env, symbol, tf, market) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
@@ -494,7 +479,7 @@ async function runIndependentAnalysts(env, symbol, tf, market) {
   const settled=await Promise.allSettled(analysts.map(a=>
     runCloudflareAgent(env,a.model,a.role,a.instructions,symbol,tf,market,sets[a.key])
   ));
-  const opinions=settled.flatMap((item)=>item.status==="fulfilled"?[item.value]:[]);
+  const opinions=settled.flatMap((item,index)=>item.status==="fulfilled"?[{...item.value,indicators:analysts[index].key?sets[analysts[index].key]:null}]:[]);
   const errors=settled.flatMap((item,index)=>item.status==="rejected"
     ?[{agent:analysts[index].role,error:String(item.reason).slice(0,220)}]:[]);
   const unique=new Set();
@@ -515,7 +500,7 @@ async function runIndependentAnalysts(env, symbol, tf, market) {
 }
 function finalDecision(market, council) {
   const opinions = council.opinions || [];
-  // Judge is advisory only; count only independent specialist/Gemini votes.
+  // Count only unique, successfully responding independent model analysts.
   const rawIndependentOpinions = council.independentOpinions || opinions.filter(x => x.agent !== "Council Judge");
   // Never count the same underlying model twice (for example, a fallback GLM
   // answering both the Gemma and GLM specialist prompts).
@@ -536,7 +521,7 @@ function finalDecision(market, council) {
   // directional vote plus one WAIT may proceed only if technical, higher-TF,
   // market-data and hard-risk checks all independently confirm it. Opposing
   // LONG/SHORT votes still produce WAIT. Three or more reviewers need majority.
-  const requiredVotes = valid === 2 ? 1 : Math.floor(valid / 2) + 1;
+  const requiredVotes = Math.floor(valid / 2) + 1;
   const technical = market.indicators.technicalSignal;
   const score = Number(market.indicators.technicalScore) || 0;
   const technicalSupports = candidate === "LONG" ? score >= 0.22 : score <= -0.22;
