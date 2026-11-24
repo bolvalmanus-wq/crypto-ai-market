@@ -270,6 +270,24 @@ function calculateAgentIndicatorSets(market){
   const moneyFlowVolume=b.slice(-20).reduce((s,x)=>s+((x.high===x.low?0:((2*x.close-x.high-x.low)/(x.high-x.low))*x.volume)),0);
   const volume20=b.slice(-20).reduce((s,x)=>s+x.volume,0);
   const cmf=volume20?moneyFlowVolume/volume20:0;
+  // Analyst-only, non-overlapping indicator calculations.
+  const closes=b.map(x=>x.close), highs=b.map(x=>x.high), lows=b.map(x=>x.low), volumes=b.map(x=>x.volume);
+  const pct=(a,z)=>z?((a-z)/z)*100:0;
+  const williams=(()=>{const x=hl(14);return x.high===x.low?-50:((x.high-p)/(x.high-x.low)-1)*100;})();
+  const aroon=(()=>{const a=b.slice(-25);let hi=0,lo=0;for(let i=1;i<a.length;i++){if(a[i].high>=a[hi].high)hi=i;if(a[i].low<=a[lo].low)lo=i;}return{up:(hi/Math.max(1,a.length-1))*100,down:(lo/Math.max(1,a.length-1))*100};})();
+  const volumeProfile=(()=>{const rows=b.slice(-50),lo=Math.min(...rows.map(x=>x.low)),hi=Math.max(...rows.map(x=>x.high)),bins=12,step=(hi-lo)/bins,weights=Array(bins).fill(0);for(const x of rows){const index=Math.max(0,Math.min(bins-1,Math.floor(((x.high+x.low+x.close)/3-lo)/(step||1))));weights[index]+=x.volume;}const best=weights.indexOf(Math.max(...weights));return{pointOfControl:lo+(best+.5)*step,binVolume:weights[best],priceVsPoc:p>=lo+(best+.5)*step?"ABOVE":"BELOW"};})();
+  const trueRanges=b.slice(1).map((x,i)=>Math.max(x.high-x.low,Math.abs(x.high-b[i].close),Math.abs(x.low-b[i].close)));
+  const atrRecent=trueRanges.slice(-14).reduce((s,x)=>s+x,0)/Math.max(1,Math.min(14,trueRanges.length));
+  const atrPercentile=(()=>{const windows=[];for(let i=14;i<=trueRanges.length;i++){const a=trueRanges.slice(i-14,i);windows.push(a.reduce((s,x)=>s+x,0)/14);}return windows.length?windows.filter(x=>x<=atrRecent).length/windows.length*100:50;})();
+  const choppiness=(()=>{const n=14,rs=trueRanges.slice(-n).reduce((s,x)=>s+x,0),hh=Math.max(...highs.slice(-n)),ll=Math.min(...lows.slice(-n));return hh>ll?100*Math.log10(rs/(hh-ll))/Math.log10(n):50;})();
+  const moneyFlow=(()=>{let pos=0,neg=0;for(let i=Math.max(1,b.length-15);i<b.length;i++){const tp=(b[i].high+b[i].low+b[i].close)/3,prev=(b[i-1].high+b[i-1].low+b[i-1].close)/3,flow=tp*b[i].volume;if(tp>prev)pos+=flow;else if(tp<prev)neg+=flow;}return neg===0?100:100-(100/(1+pos/neg));})();
+  const adl=b.reduce((v,x)=>v+(x.high===x.low?0:((2*x.close-x.high-x.low)/(x.high-x.low))*x.volume),0);
+  const adlSeries=b.map((x,i)=>b.slice(0,i+1).reduce((v,y)=>v+(y.high===y.low?0:((2*y.close-y.high-y.low)/(y.high-y.low))*y.volume),0));
+  const chaikinOsc=ema(adlSeries.slice(-40),3)-ema(adlSeries.slice(-40),10);
+  const roc=pct(p,closes[Math.max(0,closes.length-11)]);
+  const ultimateOsc=(()=>{const bp=[],tr=[];for(let i=1;i<b.length;i++){const prev=b[i-1].close;bp.push(b[i].close-Math.min(b[i].low,prev));tr.push(Math.max(b[i].high,prev)-Math.min(b[i].low,prev));}const avg=n=>{const x=bp.slice(-n),y=tr.slice(-n);return y.reduce((s,v)=>s+v,0)?x.reduce((s,v)=>s+v,0)/y.reduce((s,v)=>s+v,0):.5;};return 100*(4*avg(7)+2*avg(14)+avg(28))/7;})();
+  const trix=(()=>{const e1=[],e2=[],e3=[];for(let i=0;i<closes.length;i++){e1.push(ema(closes.slice(0,i+1),15));e2.push(ema(e1,15));e3.push(ema(e2,15));}return pct(e3[e3.length-1],e3[Math.max(0,e3.length-2)]);})();
+  const dpo=(()=>{const n=20,offset=Math.floor(n/2)+1,idx=closes.length-1-offset;if(idx<0)return 0;return closes[idx]-ema(closes.slice(0,idx+1),n);})();
   const recentRsi=closes=>rsi(closes,14);
   const rsiSeries=b.slice(-22).map((_,i,arr)=>recentRsi(b.slice(0,Math.max(15,b.length-22+i+1)).map(x=>x.close)));
   const rsiNow=Number(market.indicators?.rsi)||recentRsi(b.map(x=>x.close));
@@ -278,12 +296,11 @@ function calculateAgentIndicatorSets(market){
   const pivot=(range.high+range.low+Number(last.close||p))/3;
   const supertrendDirection=p>=e20-atr?"UP":"DOWN";
   return {
-    gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci",ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618}},
-    glm:{name:"Parabolic SAR + CCI",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20}},
-    openai:{name:"Donchian Channel + Keltner Channel",donchian:dc,keltner:{mid:e20,upper:e20+2*atr,lower:e20-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e20+2*atr?"ABOVE_KELTNER":p<e20-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL"},
-    llama:{name:"Supertrend proxy + On-Balance Volume",supertrend:{atr,ema20:e20,direction:supertrendDirection},obv:{value:obv,recentFlow:obvRecent,direction:obvRecent>0?"UP":obvRecent<0?"DOWN":"FLAT"}},
-    qwen:{name:"Stochastic RSI + Chaikin Money Flow",stochasticRsi:{value:stochRsi,period:14},chaikinMoneyFlow:{value:cmf,period:20}},
-    gemini:{name:"Classic Pivot Points + Williams %R",pivot:{p:pivot,r1:2*pivot-range.low,s1:2*pivot-range.high},williamsR:(()=>{const x=hl(14);return x.high===x.low?-50:(x.high-p)/(x.high-x.low)*-100;})()}
+    gemma:{name:"Ichimoku Cloud + VWAP + Fibonacci + Volume Profile",ichimoku:{tenkan,kijun,spanA,spanB,priceVsCloud:p>Math.max(spanA,spanB)?"ABOVE":p<Math.min(spanA,spanB)?"BELOW":"INSIDE"},vwap:{value:vwap,priceVsVwap:p>=vwap?"ABOVE":"BELOW"},fibonacci:{r382:range.high-width*.382,r500:range.high-width*.5,r618:range.high-width*.618},volumeProfile},
+    glm:{name:"Parabolic SAR + CCI + Williams %R + Aroon",parabolicSAR:{value:sar,direction:up?"UP":"DOWN",priceVsSar:p>=sar?"ABOVE":"BELOW"},cci:{value:cci,period:20},williamsR,aroon},
+    openai:{name:"Donchian + Keltner + ATR Squeeze + Choppiness",donchian:dc,keltner:{mid:e20,upper:e20+2*atr,lower:e20-2*atr},position:p>dc.high?"BREAKOUT_UP":p<dc.low?"BREAKOUT_DOWN":p>e20+2*atr?"ABOVE_KELTNER":p<e20-2*atr?"BELOW_KELTNER":"INSIDE_CHANNEL",atrPercentile,choppiness},
+    llama:{name:"Supertrend + OBV + MFI + Chaikin Oscillator",supertrend:{atr,ema20:e20,direction:supertrendDirection},obv:{value:obv,recentFlow:obvRecent,direction:obvRecent>0?"UP":obvRecent<0?"DOWN":"FLAT"},moneyFlowIndex:moneyFlow,chaikinOscillator:chaikinOsc},
+    qwen:{name:"ROC + Ultimate Oscillator + TRIX + DPO",rateOfChange:roc,ultimateOscillator:ultimateOsc,trix,detrendedPriceOscillator:dpo}
   };
 }
 function buildFourHourCandles(data) {
@@ -469,11 +486,11 @@ async function runIndependentAnalysts(env, symbol, tf, market) {
   if (!env.AI || typeof env.AI.run !== "function") throw new Error("Workers AI binding AI is not configured");
   const sets=market.agentIndicatorSets || calculateAgentIndicatorSets(market);
   const analysts=[
-    {model:"@cf/google/gemma-4-26b-a4b-it",role:"Gemma 4 · Ichimoku/VWAP/Fibonacci",key:"gemma",instructions:"শুধু Ichimoku Cloud, VWAP ও Fibonacci level দিয়ে trend, value ও pullback বিচার করো।"},
-    {model:"@cf/zai-org/glm-4.7-flash",role:"GLM 4.7 · Parabolic SAR/CCI",key:"glm",instructions:"শুধু Parabolic SAR trend flip/price position এবং CCI momentum/extreme বিচার করো।"},
-    {model:"@cf/openai/gpt-oss-20b",role:"GPT OSS · Donchian/Keltner",key:"openai",instructions:"শুধু Donchian breakout/channel এবং Keltner volatility expansion/mean reversion বিচার করো।"},
-    {model:"@cf/meta/llama-3.3-70b-instruct-fp8-fast",role:"Llama 3.3 · Supertrend/OBV",key:"llama",instructions:"শুধু ATR ভিত্তিক Supertrend proxy এবং On-Balance Volume flow বিচার করো।"},
-    {model:"@cf/qwen/qwen3-30b-a3b-fp8",role:"Qwen 3 · Stoch RSI/CMF",key:"qwen",instructions:"শুধু Stochastic RSI momentum এবং Chaikin Money Flow accumulation/distribution বিচার করো।"}
+    {model:"@cf/google/gemma-4-26b-a4b-it",role:"Gemma 4 · Ichimoku/VWAP/Fibonacci/Volume Profile",key:"gemma",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Ichimoku Cloud trend, VWAP fair-value position, Fibonacci retracement levels এবং Volume Profile POC/value area। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"},
+    {model:"@cf/zai-org/glm-4.7-flash",role:"GLM 4.7 · Parabolic SAR/CCI/Williams %R/Aroon",key:"glm",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Parabolic SAR trend flip, CCI momentum/extreme, Williams %R close-location momentum এবং Aroon trend age/direction। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"},
+    {model:"@cf/openai/gpt-oss-20b",role:"GPT OSS · Donchian/Keltner/ATR Squeeze/Choppiness",key:"openai",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Donchian breakout/channel, Keltner volatility envelope, ATR percentile squeeze/expansion এবং Choppiness Index trend-vs-range। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"},
+    {model:"@cf/meta/llama-3.3-70b-instruct-fp8-fast",role:"Llama 3.3 · Supertrend/OBV/MFI/Chaikin Oscillator",key:"llama",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: ATR Supertrend trend, OBV volume confirmation, Money Flow Index buying/selling pressure এবং Chaikin Oscillator accumulation/distribution momentum। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"},
+    {model:"@cf/qwen/qwen3-30b-a3b-fp8",role:"Qwen 3 · ROC/Ultimate Oscillator/TRIX/DPO",key:"qwen",instructions:"তোমার নিজস্ব চারটি indicator-ই ব্যবহার করো: Rate of Change momentum, Ultimate Oscillator multi-period buying pressure, TRIX smoothed momentum এবং Detrended Price Oscillator cycle deviation। অন্য specialist-এর indicator বা মূল engine-এর RSI/EMA/MACD/ADX/BB-কে ভোট হিসেবে গণনা করবে না।"}
   ];
   const settled=await Promise.allSettled(analysts.map(a=>
     runCloudflareAgent(env,a.model,a.role,a.instructions,symbol,tf,market,sets[a.key])
