@@ -378,24 +378,45 @@ function calculateAgentIndicatorSets(market){
     qwen:{name:"ROC + Ultimate Oscillator + TRIX + DPO",rateOfChange:roc,ultimateOscillator:ultimateOsc,trix,detrendedPriceOscillator:dpo}
   };
 }
-function calculateAdvancedIndicatorScore(sets, baseScore) {
+function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {}) {
  const clamp=x=>Math.max(-1,Math.min(1,Number.isFinite(Number(x))?Number(x):0));
  const sign=x=>x==="UP"||x==="ABOVE"||x==="BREAKOUT_UP"?1:x==="DOWN"||x==="BELOW"||x==="BREAKOUT_DOWN"?-1:0;
  const g=sets?.gemma||{},l=sets?.glm||{},o=sets?.openai||{},m=sets?.llama||{},q=sets?.qwen||{};
  const tenkan=Number(g.ichimoku?.tenkan),kijun=Number(g.ichimoku?.kijun);
- const ichimokuCross=Number.isFinite(tenkan)&&Number.isFinite(kijun)?(tenkan>kijun?1:tenkan<kijun?-1:0):0;
+ const ichimokuCross=Number.isFinite(tenkan)&&Number.isFinite(kijun)?Math.sign(tenkan-kijun):0;
  const ich=sign(g.ichimoku?.priceVsCloud)*.65+ichimokuCross*.35;
  const vwapScore=sign(g.vwap?.priceVsVwap),pocScore=sign(g.volumeProfile?.priceVsPoc);
  const fibPrice=Number(g.price),fibMid=Number(g.fibonacci?.r500);
- const fibScore=Number.isFinite(fibPrice)&&Number.isFinite(fibMid)&&fibMid>0?(fibPrice>fibMid?1:fibPrice<fibMid?-1:0):0;
+ const fibScore=Number.isFinite(fibPrice)&&Number.isFinite(fibMid)&&fibMid>0?Math.sign(fibPrice-fibMid):0;
  const sar=sign(l.parabolicSAR?.direction),cci=clamp(Number(l.cci?.value)/180),will=clamp((Number(l.williamsR)+50)/50),aroon=clamp((Number(l.aroon?.up)-Number(l.aroon?.down))/100);
  const don=sign(o.position),kel=sign(o.position==="ABOVE_KELTNER"?"UP":o.position==="BELOW_KELTNER"?"DOWN":"FLAT");
  const supertrend=sign(m.supertrend?.direction),obv=sign(m.obv?.direction),mfi=clamp((Number(m.moneyFlowIndex)-50)/35),chaikin=Math.sign(Number(m.chaikinOscillator)||0);
- const roc=clamp(Number(q.rateOfChange)/1.5),ultimate=clamp((Number(q.ultimateOscillator)-50)/25),trix=clamp(Number(q.trix)/.15),dpo=clamp(Number(q.detrendedPriceOscillator)/(Math.abs(Number(g.fibonacci?.r500)||1)*.002));
- const parts=[[ich,.13],[vwapScore,.05],[pocScore,.04],[fibScore,.03],[sar,.09],[cci,.06],[will,.04],[aroon,.06],[don,.09],[kel,.04],[supertrend,.11],[obv,.05],[mfi,.06],[chaikin,.04],[roc,.07],[ultimate,.05],[trix,.04],[dpo,.03]];
- const weight=parts.reduce((a,x)=>a+x[1],0),advanced=parts.reduce((a,x)=>a+x[0]*x[1],0)/weight;
- const chop=Number(o.choppiness),atrPct=Number(o.atrPercentile),regimeFactor=(Number.isFinite(chop)&&chop>61.8?.72:1)*(Number.isFinite(atrPct)&&atrPct<10?.82:1);
- return {score:clamp((clamp(baseScore)*.58+advanced*.42)*regimeFactor),advancedScore:advanced,regimeFactor,components:{ichimoku:ich,vwap:vwapScore,volumeProfile:pocScore,fibonacci:fibScore,parabolicSar:sar,cci,williamsR:will,aroon,donchian:don,keltner:kel,supertrend,obv,mfi,chaikin,roc,ultimateOscillator:ultimate,trix,dpo,choppiness:Number.isFinite(chop)?chop:null,atrPercentile:Number.isFinite(atrPct)?atrPct:null}};
+ const roc=clamp(Number(q.rateOfChange)/1.5),ultimate=clamp((Number(q.ultimateOscillator)-50)/25),trix=clamp(Number(q.trix)/.15),dpo=clamp(Number(q.detrendedPriceOscillator)/(Math.abs(Number(g.price)||1)*.002));
+ // Group related indicators so a cluster of near-duplicates cannot outvote
+ // genuinely different evidence (trend, momentum, participation, structure).
+ const groups={
+   trend:(ich+sar+supertrend+aroon)/4,
+   momentum:(cci+will+roc+ultimate+trix+dpo)/6,
+   participation:(vwapScore+pocScore+obv+mfi+chaikin)/5,
+   structure:(don+kel+fibScore)/3
+ };
+ const groupWeights={trend:.34,momentum:.24,participation:.22,structure:.20};
+ const grouped=Object.entries(groups).reduce((sum,[key,value])=>sum+value*groupWeights[key],0);
+ const validGroups=Object.values(groups).filter(Number.isFinite);
+ const agreement=validGroups.filter(value=>Math.abs(value)>=.12&&Math.sign(value)===Math.sign(grouped)).length;
+ const disagreement=validGroups.filter(value=>Math.abs(value)>=.25&&Math.sign(value)!==Math.sign(grouped)).length;
+ const adx=Number(marketIndicators.adx),chop=Number(o.choppiness),atrPct=Number(o.atrPercentile);
+ const ranging=(Number.isFinite(chop)&&chop>=61.8)||(Number.isFinite(adx)&&adx<18);
+ const lowVolatility=Number.isFinite(atrPct)&&atrPct<10;
+ const regime=ranging?"RANGE":lowVolatility?"LOW_VOLATILITY":Number.isFinite(adx)&&adx>=25?"TREND":"MIXED";
+ // In uncertain/ranging regimes, suppress directional scores rather than
+ // forcing oscillators to invent a LONG/SHORT edge.
+ const regimeFactor=(ranging?.58:1)*(lowVolatility?.78:1)*(disagreement>=2?.78:1);
+ const combined=clamp(clamp(baseScore)*.46+grouped*.54);
+ const score=clamp(combined*regimeFactor);
+ const entryThreshold=ranging?.76:lowVolatility?.74:regime==="TREND"?.60:.68;
+ return {score,advancedScore:grouped,regimeFactor,entryThreshold,regime,agreement,disagreement,groups,
+   components:{ichimoku:ich,vwap:vwapScore,volumeProfile:pocScore,fibonacci:fibScore,parabolicSar:sar,cci,williamsR:will,aroon,donchian:don,keltner:kel,supertrend,obv,mfi,chaikin,roc,ultimateOscillator:ultimate,trix,dpo,choppiness:Number.isFinite(chop)?chop:null,atrPercentile:Number.isFinite(atrPct)?atrPct:null,adx:Number.isFinite(adx)?adx:null}};
 }
 
 function buildFourHourCandles(data) {
@@ -846,16 +867,18 @@ async function runOne(env, symbol, tf, options = {}) {
   // Indicator-only mode: AI analysts are deliberately disabled while the
   // technical engine is evaluated independently.
   const technical = market.indicators;
-  const advanced = calculateAdvancedIndicatorScore(market.agentIndicatorSets, technical.technicalScore);
+  const advanced = calculateAdvancedIndicatorScore(market.agentIndicatorSets, technical.technicalScore, technical);
   technical.baseTechnicalScore = technical.technicalScore;
   technical.advancedIndicatorScore = advanced.advancedScore;
   technical.technicalScore = advanced.score;
   // Conservative entry threshold: prefer fewer, better-confirmed signals over frequent low-edge calls.
-  const ENTRY_THRESHOLD = .62;
-  technical.technicalSignal = advanced.score >= ENTRY_THRESHOLD ? "LONG" : advanced.score <= -ENTRY_THRESHOLD ? "SHORT" : "WAIT";
-  technical.reason = technical.technicalSignal === "LONG" ? "মূল ট্রেন্ড ও উন্নত Ichimoku, SAR, Supertrend, Donchian ও momentum সূচক ঊর্ধ্বমুখী" :
-    technical.technicalSignal === "SHORT" ? "মূল ট্রেন্ড ও উন্নত Ichimoku, SAR, Supertrend, Donchian ও momentum সূচক নিম্নমুখী" :
-    "উন্নত সূচকগুলোর সম্মিলিত স্কোরে এখনো যথেষ্ট একমুখী সুবিধা নেই";
+  const ENTRY_THRESHOLD = advanced.entryThreshold;
+  const groupAgreement = advanced.agreement >= 3;
+  technical.technicalSignal = advanced.score >= ENTRY_THRESHOLD && groupAgreement ? "LONG" : advanced.score <= -ENTRY_THRESHOLD && groupAgreement ? "SHORT" : "WAIT";
+  technical.reason = technical.technicalSignal === "LONG" ? "ট্রেন্ড, মোমেন্টাম, অংশগ্রহণ ও প্রাইস-স্ট্রাকচার দলের অন্তত ৩টি LONG-এ একমত" :
+    technical.technicalSignal === "SHORT" ? "ট্রেন্ড, মোমেন্টাম, অংশগ্রহণ ও প্রাইস-স্ট্রাকচার দলের অন্তত ৩টি SHORT-এ একমত" :
+    advanced.agreement < 3 ? "চারটি বিশ্লেষণ দলের অন্তত তিনটি একই দিকে একমত নয়; WAIT" :
+    "বাজারের অবস্থা ও সম্মিলিত স্কোরে প্রবেশের যথেষ্ট সুবিধা নেই";
   const candidate=technical.technicalSignal,higher=market.higherTimeframe||{};
   const higherSignals=(tf==="1m"||tf==="5m")?[...(higher.requiredSignals||[]),higher.oneHourSignal,higher.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT"):(tf==="15m"||tf==="30m")?[higher.signal,higher.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT"):[higher.fourHour?.signal||higher.signal].filter(x=>x==="LONG"||x==="SHORT");
   const higherSignal=higherSignals[0]||"WAIT";
@@ -888,7 +911,7 @@ async function runOne(env, symbol, tf, options = {}) {
       analystCount:0,councilOpinions:[],councilVoteCounts:{LONG:0,SHORT:0,WAIT:0},councilErrors:[],judgeError:null,
       technicalSignal:technical.technicalSignal,higherTimeframeSignal:higherSignal,
       fourHourContext:market.higherTimeframe?.fourHour||null,riskEngine:market.riskEngine,
-      technicalIndicators:{...technical,advancedScore:advanced.advancedScore,regimeFactor:advanced.regimeFactor,advancedComponents:advanced.components,indicatorSets:market.agentIndicatorSets||{}}},
+      technicalIndicators:{...technical,advancedScore:advanced.advancedScore,regimeFactor:advanced.regimeFactor,entryThreshold:advanced.entryThreshold,marketRegime:advanced.regime,groupAgreement:advanced.agreement,groupDisagreement:advanced.disagreement,indicatorGroups:advanced.groups,advancedComponents:advanced.components,indicatorSets:market.agentIndicatorSets||{}}},
     generatedAt:new Date().toISOString(),candleCloseTime:market.candleCloseTime,signalPriceBasis:"confirmed-candle-close",entryPriceBasis:"live-ticker-at-decision",marketSource:data.source,
     marketFetchedAt:data.fetchedAt||null,marketTimestamp:data.marketTimestamp||null,inputTimeframe:tf,
     inputCandleCount:market.candles.length,intradayMovement:market.intradayMovement};
