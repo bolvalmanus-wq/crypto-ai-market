@@ -74,7 +74,8 @@ async function loadReport(){
   if(!data||typeof data!=="object"||!Array.isArray(data.records))throw new Error("রিপোর্টের ডেটার কাঠামো সঠিক নয়");
   reportData=data;
   const s=data.summary||{},correct=Number(s.correct)||0,wrong=Number(s.wrong)||0,neutral=Number(s.neutral)||0,evaluated=Number(s.evaluated)||correct+wrong+neutral,unverified=Number(s.unverified)||0;
-  const accuracy=evaluated?(correct/evaluated*100).toFixed(1):"—";
+  const directional=correct+wrong;
+  const accuracy=directional?(correct/directional*100).toFixed(1):"—";
   const tiles=[["মোট সিদ্ধান্ত",s.total||0],["যাচাই সম্পন্ন",evaluated],["সঠিক সিদ্ধান্ত",correct],["ভুল সিদ্ধান্ত",wrong],["নিরপেক্ষ ফল",neutral],["যাচাই অনির্ভরযোগ্য",unverified],["সময় পূর্ণের অপেক্ষায়",s.pending||0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",(s.last24||{}).total||0]];
   stats.innerHTML=tiles.map(([k,n])=>'<div class="stat"><span>'+safe(k)+'</span><b>'+safe(n)+'</b></div>').join("");
   document.getElementById("accuracy").textContent="দিকনির্দেশক সঠিকতার হার (নিরপেক্ষ বাদ): "+accuracy+(accuracy==="—"?"":"%")+" · প্রতিটি সিদ্ধান্তের নিজস্ব নির্ধারিত সময় পূর্ণ হলে ফল গণনা করা হয়।";
