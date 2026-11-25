@@ -1179,13 +1179,51 @@ export default {
       const symbol=body?.symbol, timeframe=body?.timeframe||"15m";
       if(!["BTC","SOL"].includes(symbol)||!["1m","5m","15m","30m","1h","4h"].includes(timeframe))return Response.json({error:"Unsupported symbol or timeframe"},{status:400});
       try{
-        const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol+"&history=1",{headers:{"Cache-Control":"no-cache"}});
-        if(!response.ok)throw new Error("Market API HTTP "+response.status);
-        const data=await response.json();
-        const bars=timeframe==="4h"?buildFourHourCandles(data):(data.candles?.[timeframe]||[]);
+        // Fetch a deeper, paginated Bybit history for research; keep the live market feed untouched.
+        const intervalByTf={"1m":"1","5m":"5","15m":"15","30m":"30","1h":"60","4h":"240"};
+        const intervalMs=INTERVALS[timeframe];
+        const symbolCode=symbol+"USDT";
+        const historical=[];
+        let end=Date.now(),historyError=null;
+        for(let page=0;page<10;page++){
+          const apiUrl="https://api.bybit.com/v5/market/kline?category=linear&symbol="+symbolCode+"&interval="+intervalByTf[timeframe]+"&limit=1000&end="+end;
+          const response=await fetch(apiUrl,{headers:{Accept:"application/json"},signal:AbortSignal.timeout(2500)});
+          if(!response.ok)throw new Error("Bybit history HTTP "+response.status);
+          const payload=await response.json();
+          if(payload.retCode!==0||!Array.isArray(payload.result?.list))throw new Error("Bybit history: "+(payload.retMsg||"invalid response"));
+          const rows=payload.result.list;
+          if(!rows.length)break;
+          historical.push(...rows);
+          const oldest=Math.min(...rows.map(row=>Number(row[0])).filter(Number.isFinite));
+          if(!Number.isFinite(oldest)||oldest<=0||rows.length<1000)break;
+          end=oldest-1;
+        }
+        const unique=new Map();
+        for(const row of historical){
+          const time=Number(row[0]);
+          if(!Number.isFinite(time))continue;
+          unique.set(time,{time,open:Number(row[1]),high:Number(row[2]),low:Number(row[3]),close:Number(row[4]),volume:Number(row[5]),confirmed:time+intervalMs<=Date.now()});
+        }
+        const bars=[...unique.values()].sort((a,b)=>a.time-b.time);
+        if(bars.length<220)throw new Error("Bybit historical candles insufficient: "+bars.length);
         const report=backtestV2({candles:bars,timeframe,feeBps:6,slippageBps:3,holdBars:1,minimumTrades:500});
+        report.historySource="Bybit paginated historical candles";
+        report.historyPages=Math.ceil(bars.length/1000);
         return Response.json({symbol,mode:"TESTING_ONLY",report},{headers:{"Cache-Control":"no-store"}});
-      }catch(error){return Response.json({error:"V2 backtest failed",details:error instanceof Error?error.message:String(error)},{status:502});}
+      }catch(error){
+        historyError=error instanceof Error?error.message:String(error);
+        // If historical pagination is unavailable, retain a clearly-labelled fallback rather than fail the report.
+        try{
+          const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol,{headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(8000)});
+          if(!response.ok)throw new Error("Market API HTTP "+response.status);
+          const data=await response.json();
+          const bars=data.candles?.[timeframe]||[];
+          const report=backtestV2({candles:bars,timeframe,feeBps:6,slippageBps:3,holdBars:1,minimumTrades:500});
+          report.historySource="Live market API fallback (limited history)";
+          report.historyWarning=historyError;
+          return Response.json({symbol,mode:"TESTING_ONLY",report},{headers:{"Cache-Control":"no-store"}});
+        }catch(fallbackError){throw new Error(historyError+"; fallback: "+(fallbackError instanceof Error?fallbackError.message:String(fallbackError)));}
+      }
     }
     if (url.pathname === "/performance" && request.method === "GET") {
       try {
