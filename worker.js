@@ -373,7 +373,12 @@ function calculateAdvancedIndicatorScore(sets, baseScore) {
  const clamp=x=>Math.max(-1,Math.min(1,Number.isFinite(Number(x))?Number(x):0));
  const sign=x=>x==="UP"||x==="ABOVE"||x==="BREAKOUT_UP"?1:x==="DOWN"||x==="BELOW"||x==="BREAKOUT_DOWN"?-1:0;
  const g=sets?.gemma||{},l=sets?.glm||{},o=sets?.openai||{},m=sets?.llama||{},q=sets?.qwen||{};
- const ich=sign(g.ichimoku?.priceVsCloud)*.65+(Number(g.ichimoku?.tenkan)>Number(g.ichimoku?.kijun)?1:-1)*.35; const vwapScore=sign(g.vwap?.priceVsVwap),pocScore=sign(g.volumeProfile?.priceVsPoc),fibScore=Number(g.price)>Number(g.fibonacci?.r500)?1:-1;
+ const tenkan=Number(g.ichimoku?.tenkan),kijun=Number(g.ichimoku?.kijun);
+ const ichimokuCross=Number.isFinite(tenkan)&&Number.isFinite(kijun)?(tenkan>kijun?1:tenkan<kijun?-1:0):0;
+ const ich=sign(g.ichimoku?.priceVsCloud)*.65+ichimokuCross*.35;
+ const vwapScore=sign(g.vwap?.priceVsVwap),pocScore=sign(g.volumeProfile?.priceVsPoc);
+ const fibPrice=Number(g.price),fibMid=Number(g.fibonacci?.r500);
+ const fibScore=Number.isFinite(fibPrice)&&Number.isFinite(fibMid)&&fibMid>0?(fibPrice>fibMid?1:fibPrice<fibMid?-1:0):0;
  const sar=sign(l.parabolicSAR?.direction),cci=clamp(Number(l.cci?.value)/180),will=clamp((Number(l.williamsR)+50)/50),aroon=clamp((Number(l.aroon?.up)-Number(l.aroon?.down))/100);
  const don=sign(o.position),kel=sign(o.position==="ABOVE_KELTNER"?"UP":o.position==="BELOW_KELTNER"?"DOWN":"FLAT");
  const supertrend=sign(m.supertrend?.direction),obv=sign(m.obv?.direction),mfi=clamp((Number(m.moneyFlowIndex)-50)/35),chaikin=Math.sign(Number(m.chaikinOscillator)||0);
@@ -850,7 +855,7 @@ async function runOne(env, symbol, tf, options = {}) {
   if(candidate!=="WAIT"&&hardRisk){decision="WAIT";decisionReason="৪ ঘণ্টার কাঠামোয় বিপরীত দিকের নিশ্চিত ব্রেক; তাই WAIT";}
   const analysis={decision,direction:decision==="LONG"?"UPWARD":decision==="SHORT"?"DOWNWARD":"SIDEWAYS",directionalBias:candidate,
     confidenceScore:Math.min(95,Math.round(Math.abs(technical.technicalScore)*100)),
-    durationMinutes:({"1m":1,"5m":5,"15m":15,"1h":60,"4h":240}[tf]||5),reason:decisionReason,
+    durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||5),reason:decisionReason,
     risk:"শুধু গাণিতিক ইন্ডিকেটর-সম্মিলন; confidence হলো স্কোরের মাত্রা, লাভের সম্ভাবনা নয়। প্রবেশের আগে stop-loss ও position sizing যাচাই করুন।",dataQuality:"GOOD"};
   const result={symbol,timeframe:tf,provider:"Indicator Engine Only · AI Disabled",
     model:"EMA/RSI/MACD/ADX + Ichimoku/SAR/Supertrend/Donchian/OBV/MFI/ROC",analysis,
@@ -1101,8 +1106,7 @@ export default {
   async scheduled(controller, env, ctx) {
     const scheduledDate = new Date(controller.scheduledTime);
     const minute = scheduledDate.getUTCMinutes();
-    // Outcome evaluation is less time-critical than signal generation; run every 15 minutes.
-    // Evaluate matured decisions on every minute tick, not every 15 minutes.
+    // Evaluate matured decisions on every minute tick so short timeframes are checked promptly.
     await evaluateMaturedDecisions(env);
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
