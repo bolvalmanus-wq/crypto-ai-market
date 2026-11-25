@@ -901,47 +901,57 @@ async function evaluateMaturedDecisions(env) {
   const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
   const due = [];
   for (const item of listed.keys) {
-    // Use record metadata to avoid one KV read per decision in this scheduled run.
     const r = item.metadata;
     if (r && (r.decision === "LONG" || r.decision === "SHORT") &&
         r.outcome === "PENDING" && now >= Date.parse(r.expectedEvaluationAt)) {
       due.push({ key: item.name, record: r });
     }
   }
+  if (!due.length) return;
+  // Use a confirmed historical candle near the target horizon, never a later live ticker quote.
   const symbols = [...new Set(due.map(x => x.record.symbol))];
-  const prices = {};
+  const markets = {};
   await Promise.all(symbols.map(async symbol => {
     try {
-      const response = await fetch(PAGE_URL + "/api/price?symbol=" + encodeURIComponent(symbol), {
+      const response = await fetch(PAGE_URL + "/api/market?symbol=" + encodeURIComponent(symbol), {
         headers: { "Cache-Control": "no-cache" }
       });
-      if (!response.ok) return;
-      const data = await response.json();
-      const price = Number(data.last);
-      if (Number.isFinite(price) && price > 0) prices[symbol] = price;
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.candles) markets[symbol] = data.candles;
+      }
     } catch (_) {}
   }));
+  const intervals = {"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
   for (const item of due) {
-    const r = item.record, exitPrice = prices[r.symbol];
-    if (!Number.isFinite(exitPrice)) continue;
-    r.exitPrice = exitPrice;
+    const r = item.record, target = Date.parse(r.expectedEvaluationAt);
+    const duration = intervals[r.timeframe] || 60000;
+    const bars = markets[r.symbol]?.[r.timeframe] || [];
+    let best = null, bestDelta = Infinity;
+    for (const candle of bars) {
+      if (!candle || candle.confirmed !== true || !Number.isFinite(Number(candle.time)) ||
+          !Number.isFinite(Number(candle.close)) || Number(candle.close) <= 0) continue;
+      const delta = Math.abs(Number(candle.time) + duration - target);
+      if (delta < bestDelta) { best = candle; bestDelta = delta; }
+    }
+    const tolerance = Math.max(30000, Math.min(60000, duration * 0.2));
     r.evaluatedAt = new Date(now).toISOString();
-    r.evaluationDelayMs = Math.max(0, now - Date.parse(r.expectedEvaluationAt));
-    const intervalMs = ({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[r.timeframe]||60000);
-    const maxEvaluationDelayMs = Math.max(90000, intervalMs * 0.25);
-    if (r.evaluationDelayMs > maxEvaluationDelayMs) {
+    r.evaluationDelayMs = Math.max(0, now - target);
+    if (!best || bestDelta > tolerance) {
       r.outcome = "UNVERIFIED";
-      r.evaluationNote = "নির্ধারিত সময়ের পরে দেরিতে মূল্য পাওয়া গেছে; এই ফল সঠিক/ভুলের হিসাবে ধরা হবে না";
+      r.evaluationNote = "নির্ধারিত সময়ের কাছাকাছি নিশ্চিত ক্যান্ডেল পাওয়া যায়নি; সঠিকতা গণনায় অন্তর্ভুক্ত নয়";
     } else {
-      r.pnlPct = (r.decision === "LONG"
-        ? (exitPrice / r.entryPrice - 1)
-        : (r.entryPrice / exitPrice - 1)) * 100;
+      const exitPrice = Number(best.close);
+      r.exitPrice = exitPrice;
+      r.exitCandleTime = new Date(Number(best.time) + duration).toISOString();
+      r.exitPriceSource = "confirmed historical candle close";
+      r.horizonDeltaMs = bestDelta;
+      r.pnlPct = (r.decision === "LONG" ? (exitPrice / r.entryPrice - 1) : (r.entryPrice / exitPrice - 1)) * 100;
       r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
-      r.evaluationNote = "নির্ধারিত সময়ের কাছাকাছি বাজারদরে যাচাই";
+      r.evaluationNote = "নির্ধারিত সময়ের সবচেয়ে কাছের নিশ্চিত ঐতিহাসিক ক্যান্ডেলের ক্লোজ দিয়ে যাচাই";
     }
     await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), {
-      expirationTtl: 60 * 60 * 24 * 11,
-      metadata: r
+      expirationTtl: 60 * 60 * 24 * 11, metadata: r
     });
   }
 }
