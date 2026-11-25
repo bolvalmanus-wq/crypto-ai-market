@@ -403,6 +403,10 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
    participation:(vwapScore+pocScore+obv+mfi+chaikin)/5,
    structure:(don+kel+fibScore)/3
  };
+ const adx=Number(marketIndicators.adx),chop=Number(o.choppiness),atrPct=Number(o.atrPercentile);
+ const ranging=(Number.isFinite(chop)&&chop>=61.8)||(Number.isFinite(adx)&&adx<18);
+ const lowVolatility=Number.isFinite(atrPct)&&atrPct<10;
+ const regime=ranging?"RANGE":lowVolatility?"LOW_VOLATILITY":Number.isFinite(adx)&&adx>=25?"TREND":"MIXED";
  // Regime-adaptive weighting: trend-following evidence dominates clean trends;
  // mean-reversion/momentum and participation gain weight in choppy ranges.
  const groupWeights=ranging
@@ -416,10 +420,6 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
  const validGroups=Object.values(groups).filter(Number.isFinite);
  const agreement=validGroups.filter(value=>Math.abs(value)>=.12&&Math.sign(value)===Math.sign(grouped)).length;
  const disagreement=validGroups.filter(value=>Math.abs(value)>=.25&&Math.sign(value)!==Math.sign(grouped)).length;
- const adx=Number(marketIndicators.adx),chop=Number(o.choppiness),atrPct=Number(o.atrPercentile);
- const ranging=(Number.isFinite(chop)&&chop>=61.8)||(Number.isFinite(adx)&&adx<18);
- const lowVolatility=Number.isFinite(atrPct)&&atrPct<10;
- const regime=ranging?"RANGE":lowVolatility?"LOW_VOLATILITY":Number.isFinite(adx)&&adx>=25?"TREND":"MIXED";
  // In uncertain/ranging regimes, suppress directional scores rather than
  // forcing oscillators to invent a LONG/SHORT edge.
  const regimeFactor=(ranging?.58:1)*(lowVolatility?.78:1)*(disagreement>=2?.78:1);
