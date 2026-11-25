@@ -141,7 +141,7 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   const tp1=direction>0?entryPrice+2*stopDistance:direction<0?entryPrice-2*stopDistance:null;
   const tp2=direction>0?entryPrice+3*stopDistance:direction<0?entryPrice-3*stopDistance:null;
   const rr=direction?Math.abs(tp1-entryPrice)/Math.abs(entryPrice-stopLoss):0;
-  if(direction&&rr<2)reasons.push("Risk/Reward 1:2-এর কম");
+  if(direction&&rr+1e-9<2)reasons.push("Risk/Reward 1:2-এর কম");
   const mandatoryOk=reasons.length===0&&score>=75&&direction!==0;
   const decision=mandatoryOk?directionName:"NO TRADE";
   const equity=Number(accountEquity);
