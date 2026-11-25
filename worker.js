@@ -988,12 +988,23 @@ async function runOne(env, symbol, tf, options = {}) {
 async function evaluateMaturedDecisions(env) {
   if (!env.ANALYSIS_KV) return;
   const now = Date.now();
-  const [listed, v2listed] = await Promise.all([
-    env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 }),
-    env.ANALYSIS_KV.list({ prefix: "v2paper:", limit: 1000 })
+  // Read every page: KV list() returns at most 1,000 keys per page.
+  const listAll = async prefix => {
+    const keys = [];
+    let cursor;
+    do {
+      const page = await env.ANALYSIS_KV.list({ prefix, limit: 1000, ...(cursor ? { cursor } : {}) });
+      keys.push(...(page.keys || []));
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+    return keys;
+  };
+  const [legacyKeys, v2Keys] = await Promise.all([
+    listAll("decision:"),
+    listAll("v2paper:")
   ]);
   const due = [];
-  for (const item of [...(listed.keys||[]), ...(v2listed.keys||[])]) {
+  for (const item of [...legacyKeys, ...v2Keys]) {
     const r = item.metadata;
     if (r && (r.decision === "LONG" || r.decision === "SHORT") &&
         r.outcome === "PENDING" && now >= Date.parse(r.expectedEvaluationAt)) {
@@ -1037,17 +1048,41 @@ async function evaluateMaturedDecisions(env) {
       const exitPrice = Number(best.close);
       r.exitPrice = exitPrice;
       r.exitCandleTime = new Date(Number(best.time) + duration).toISOString();
-      r.exitPriceSource = "confirmed historical candle close";
+      r.exitPriceSource = "confirmed historical candle";
       r.horizonDeltaMs = bestDelta;
-      // Raw market direction is separate from trade-directional PnL.
-      // A correct SHORT has positive PnL but a negative market move.
-      r.marketMovePct = (exitPrice / r.entryPrice - 1) * 100;
-      r.pnlPct = r.decision === "LONG" ? r.marketMovePct : -r.marketMovePct;
-      // Tiny/zero moves are neutral, not a directional win or loss.
-      r.outcome = r.pnlPct > 0.01 ? "CORRECT" : r.pnlPct < -0.01 ? "WRONG" : "NEUTRAL";
-      r.evaluationNote = Math.abs(r.pnlPct) <= 0.01
-        ? "দামের পরিবর্তন ০.০১%-এর মধ্যে; নিরপেক্ষ ফল, সঠিকতা গণনায় ধরা হবে না"
-        : "নির্ধারিত সময়ের সবচেয়ে কাছের নিশ্চিত ঐতিহাসিক ক্যান্ডেলের ক্লোজ দিয়ে যাচাই";
+      const direction = r.decision === "LONG" ? 1 : -1;
+      const marketMovePct = (exitPrice / r.entryPrice - 1) * 100;
+      if (r.system === "V2") {
+        // Paper trade evaluation uses the recorded stop/target, not only the final close.
+        const high = Number(best.high), low = Number(best.low);
+        const stop = Number(r.stopLoss), target1 = Number(r.takeProfit1);
+        const stopHit = Number.isFinite(stop) && (direction > 0 ? low <= stop : high >= stop);
+        const targetHit = Number.isFinite(target1) && (direction > 0 ? high >= target1 : low <= target1);
+        if (stopHit && targetHit) {
+          r.outcome = "UNVERIFIED";
+          r.evaluationNote = "একই candle-এ stop-loss ও take-profit দুটিই স্পর্শ করেছে; intrabar ক্রম জানা যায় না";
+        } else if (stopHit || targetHit) {
+          const rawExit = stopHit ? stop : target1;
+          const gross = (rawExit / r.entryPrice - 1) * direction * 100;
+          r.pnlPct = gross - 0.09; // 6 bps fee + 3 bps slippage per side.
+          r.exitPrice = rawExit;
+          r.exitPriceSource = stopHit ? "stop-loss touched (conservative)" : "take-profit-1 touched";
+          r.outcome = r.pnlPct > 0.01 ? "CORRECT" : r.pnlPct < -0.01 ? "WRONG" : "NEUTRAL";
+          r.evaluationNote = (stopHit ? "Stop-loss" : "Take-profit-1") + " candle high/low touch; 0.18% round-trip friction deducted";
+        } else {
+          r.pnlPct = marketMovePct * direction - 0.18;
+          r.outcome = r.pnlPct > 0.01 ? "CORRECT" : r.pnlPct < -0.01 ? "WRONG" : "NEUTRAL";
+          r.evaluationNote = "সময় শেষে candle close; 0.18% round-trip fee/slippage deducted";
+        }
+      } else {
+        // Legacy signal evaluation remains unchanged to avoid altering its historical rules.
+        r.marketMovePct = marketMovePct;
+        r.pnlPct = direction * marketMovePct;
+        r.outcome = r.pnlPct > 0.01 ? "CORRECT" : r.pnlPct < -0.01 ? "WRONG" : "NEUTRAL";
+        r.evaluationNote = Math.abs(r.pnlPct) <= 0.01
+          ? "দামের পরিবর্তন ০.০১%-এর মধ্যে; নিরপেক্ষ ফল, সঠিকতা গণনায় ধরা হবে না"
+          : "নির্ধারিত সময়ের সবচেয়ে কাছের নিশ্চিত ঐতিহাসিক ক্যান্ডেলের ক্লোজ দিয়ে যাচাই";
+      }
     }
     await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), {
       expirationTtl: 60 * 60 * 24 * 11, metadata: r
@@ -1138,7 +1173,7 @@ export default {
       const symbol=body?.symbol, timeframe=body?.timeframe||"15m";
       if(!["BTC","SOL"].includes(symbol)||!["1m","5m","15m","30m","1h","4h"].includes(timeframe))return Response.json({error:"Unsupported symbol or timeframe"},{status:400});
       try{
-        const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol,{headers:{"Cache-Control":"no-cache"}});
+        const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol+"&history=1",{headers:{"Cache-Control":"no-cache"}});
         if(!response.ok)throw new Error("Market API HTTP "+response.status);
         const data=await response.json();
         const bars=timeframe==="4h"?buildFourHourCandles(data):(data.candles?.[timeframe]||[]);
