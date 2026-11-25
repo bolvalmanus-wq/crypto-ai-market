@@ -389,7 +389,10 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
  const fibPrice=Number(g.price),fibMid=Number(g.fibonacci?.r500);
  const fibScore=Number.isFinite(fibPrice)&&Number.isFinite(fibMid)&&fibMid>0?Math.sign(fibPrice-fibMid):0;
  const sar=sign(l.parabolicSAR?.direction),cci=clamp(Number(l.cci?.value)/180),will=clamp((Number(l.williamsR)+50)/50),aroon=clamp((Number(l.aroon?.up)-Number(l.aroon?.down))/100);
- const don=sign(o.position),kel=sign(o.position==="ABOVE_KELTNER"?"UP":o.position==="BELOW_KELTNER"?"DOWN":"FLAT");
+ const don=Number.isFinite(Number(g.price))&&Number.isFinite(Number(o.donchian?.high))&&Number.isFinite(Number(o.donchian?.low))
+   ? (Number(g.price)>Number(o.donchian.high)?1:Number(g.price)<Number(o.donchian.low)?-1:0) : 0;
+ const kel=Number.isFinite(Number(g.price))&&Number.isFinite(Number(o.keltner?.upper))&&Number.isFinite(Number(o.keltner?.lower))
+   ? (Number(g.price)>Number(o.keltner.upper)?1:Number(g.price)<Number(o.keltner.lower)?-1:0) : 0;
  const supertrend=sign(m.supertrend?.direction),obv=sign(m.obv?.direction),mfi=clamp((Number(m.moneyFlowIndex)-50)/35),chaikin=Math.sign(Number(m.chaikinOscillator)||0);
  const roc=clamp(Number(q.rateOfChange)/1.5),ultimate=clamp((Number(q.ultimateOscillator)-50)/25),trix=clamp(Number(q.trix)/.15),dpo=clamp(Number(q.detrendedPriceOscillator)/(Math.abs(Number(g.price)||1)*.002));
  // Group related indicators so a cluster of near-duplicates cannot outvote
@@ -400,7 +403,15 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
    participation:(vwapScore+pocScore+obv+mfi+chaikin)/5,
    structure:(don+kel+fibScore)/3
  };
- const groupWeights={trend:.34,momentum:.24,participation:.22,structure:.20};
+ // Regime-adaptive weighting: trend-following evidence dominates clean trends;
+ // mean-reversion/momentum and participation gain weight in choppy ranges.
+ const groupWeights=ranging
+   ? {trend:.14,momentum:.34,participation:.30,structure:.22}
+   : regime==="LOW_VOLATILITY"
+     ? {trend:.24,momentum:.24,participation:.24,structure:.28}
+     : regime==="TREND"
+       ? {trend:.42,momentum:.22,participation:.22,structure:.14}
+       : {trend:.28,momentum:.26,participation:.25,structure:.21};
  const grouped=Object.entries(groups).reduce((sum,[key,value])=>sum+value*groupWeights[key],0);
  const validGroups=Object.values(groups).filter(Number.isFinite);
  const agreement=validGroups.filter(value=>Math.abs(value)>=.12&&Math.sign(value)===Math.sign(grouped)).length;
@@ -415,7 +426,7 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
  const combined=clamp(clamp(baseScore)*.46+grouped*.54);
  const score=clamp(combined*regimeFactor);
  const entryThreshold=ranging?.76:lowVolatility?.74:regime==="TREND"?.60:.68;
- return {score,advancedScore:grouped,regimeFactor,entryThreshold,regime,agreement,disagreement,groups,
+ return {score,advancedScore:grouped,regimeFactor,entryThreshold,regime,agreement,disagreement,groups,groupWeights,
    components:{ichimoku:ich,vwap:vwapScore,volumeProfile:pocScore,fibonacci:fibScore,parabolicSar:sar,cci,williamsR:will,aroon,donchian:don,keltner:kel,supertrend,obv,mfi,chaikin,roc,ultimateOscillator:ultimate,trix,dpo,choppiness:Number.isFinite(chop)?chop:null,atrPercentile:Number.isFinite(atrPct)?atrPct:null,adx:Number.isFinite(adx)?adx:null}};
 }
 
@@ -1152,7 +1163,9 @@ export default {
         }
         const dailyMap = {};
         for (const r of records) {
-          const day = new Date(r.decidedAt).toISOString().slice(0,10);
+          const dayParts = new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(r.decidedAt));
+          const dayValues = Object.fromEntries(dayParts.filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
+          const day = dayValues.year+"-"+dayValues.month+"-"+dayValues.day;
           if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, records: [] };
           const d = dailyMap[day];
           d.total++;
