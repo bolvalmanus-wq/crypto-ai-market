@@ -166,7 +166,10 @@ function analyze(data, tf) {
   const clamp = (x, lo=-1, hi=1) => Math.max(lo, Math.min(hi, x));
   const trend = clamp((e9 / e21 - 1) * 120);
   const priceTrend = clamp((price / e9 - 1) * 80);
-  const momentum = clamp((price / last.close - 1) * 250);
+  // Three-candle momentum: compare the confirmed close with the close three bars earlier.
+  const momentum = closes.length > 3
+    ? clamp((price / closes[closes.length - 4] - 1) * 250)
+    : 0;
   const rsiBias = clamp((rv - 50) / 22);
   let rawScore = .38*trend + .32*priceTrend + .22*momentum + .08*rsiBias;
   const derivatives = data.derivatives || {};
@@ -330,7 +333,9 @@ function calculateAgentIndicatorSets(market){
   const mean=typical.reduce((s,x)=>s+x,0)/Math.max(1,typical.length);
   const deviation=typical.reduce((s,x)=>s+Math.abs(x-mean),0)/Math.max(1,typical.length);
   const cci=deviation?(typical[typical.length-1]-mean)/(.015*deviation):0;
-  const dc=hl(20);
+  // Donchian breakout must compare the current close with the PREVIOUS 20 bars,
+  // excluding the current candle; otherwise a close cannot exceed its own high.
+  const dc=(()=>{const prior=b.slice(-21,-1);return prior.length?{high:Math.max(...prior.map(x=>x.high)),low:Math.min(...prior.map(x=>x.low))}:{high:p,low:p};})();
   let sar=Number(b[0]?.low)||0,ep=Number(b[0]?.high)||0,af=.02,up=(Number(b[1]?.close)||p)>=(Number(b[0]?.close)||p);
   for(let i=1;i<b.length;i++){const cur=b[i],prev=b[i-1];sar=sar+af*(ep-sar);if(up){sar=Math.min(sar,prev.low,...(b[i-2]?[b[i-2].low]:[]));if(cur.low<sar){up=false;sar=ep;ep=cur.low;af=.02;}else if(cur.high>ep){ep=cur.high;af=Math.min(.2,af+.02);}}else{sar=Math.max(sar,prev.high,...(b[i-2]?[b[i-2].high]:[]));if(cur.high>sar){up=true;sar=ep;ep=cur.high;af=.02;}else if(cur.low<ep){ep=cur.low;af=Math.min(.2,af+.02);}}}
   const obv=b.reduce((state,x,i)=>state+(i===0||x.close===b[i-1].close?0:x.close>b[i-1].close?x.volume:-x.volume),0);
@@ -898,6 +903,18 @@ async function runOne(env, symbol, tf, options = {}) {
       timeframe: tf,
       decision: analysis.decision,
       confidenceScore: Number(result.analysis.confidenceScore) || 0,
+      // Save the indicator readings at signal time so their directional hit-rates
+      // can be measured from later, independently verified outcomes.
+      indicatorSnapshot: {
+        baseScore: Number(technical.baseTechnicalScore),
+        combinedScore: Number(technical.technicalScore),
+        advancedScore: Number(technical.advancedIndicatorScore),
+        rsi: Number(technical.rsi),
+        adx: Number(technical.adx),
+        macdHistogram: Number(technical.macdHistogram),
+        relativeVolume: Number(technical.relativeVolume),
+        components: { ...advanced.components }
+      },
       entryPrice: Number(market.ticker.last),
       decidedAt: result.generatedAt,
       durationMinutes: Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1),
@@ -1095,6 +1112,18 @@ export default {
             neutral: evaluatedLast24.filter(x => x.outcome === "NEUTRAL").length
           }
         };
+        // Per-indicator directional hit-rate. Only future records carrying a
+        // timestamped indicator snapshot are included; old decisions are not guessed.
+        const indicatorKeys = ["ichimoku","vwap","volumeProfile","fibonacci","parabolicSar","cci","williamsR","aroon","donchian","keltner","supertrend","obv","mfi","chaikin","roc","ultimateOscillator","trix","dpo"];
+        const indicatorStats = {};
+        for (const key of indicatorKeys) {
+          const sample = settled.filter(r => {
+            const value = Number(r.indicatorSnapshot?.components?.[key]);
+            return Number.isFinite(value) && Math.abs(value) > 0.000001 && Number.isFinite(Number(r.pnlPct)) && Math.abs(Number(r.pnlPct)) > 0.01;
+          });
+          const correctCount = sample.filter(r => Math.sign(Number(r.indicatorSnapshot.components[key])) === Math.sign(Number(r.pnlPct))).length;
+          indicatorStats[key] = { sample: sample.length, correct: correctCount, wrong: sample.length - correctCount, accuracy: sample.length ? Math.round(correctCount / sample.length * 1000) / 10 : null };
+        }
         const dailyMap = {};
         for (const r of records) {
           const day = new Date(r.decidedAt).toISOString().slice(0,10);
@@ -1108,7 +1137,7 @@ export default {
           else d.pending++;
           d.records.push(r);
         }
-        return Response.json({ summary, daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)), records },
+        return Response.json({ summary, indicatorStats, daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)), records },
           { headers: { "Cache-Control": "no-store" } });
       } catch (error) {
         console.error("Performance report failed", error instanceof Error ? error.stack : String(error));
