@@ -983,7 +983,10 @@ async function evaluateMaturedDecisions(env) {
       r.exitCandleTime = new Date(Number(best.time) + duration).toISOString();
       r.exitPriceSource = "confirmed historical candle close";
       r.horizonDeltaMs = bestDelta;
-      r.pnlPct = (r.decision === "LONG" ? (exitPrice / r.entryPrice - 1) : (r.entryPrice / exitPrice - 1)) * 100;
+      // Raw market direction is separate from trade-directional PnL.
+      // A correct SHORT has positive PnL but a negative market move.
+      r.marketMovePct = (exitPrice / r.entryPrice - 1) * 100;
+      r.pnlPct = r.decision === "LONG" ? r.marketMovePct : -r.marketMovePct;
       // Tiny/zero moves are neutral, not a directional win or loss.
       r.outcome = r.pnlPct > 0.01 ? "CORRECT" : r.pnlPct < -0.01 ? "WRONG" : "NEUTRAL";
       r.evaluationNote = Math.abs(r.pnlPct) <= 0.01
@@ -1119,9 +1122,9 @@ export default {
         for (const key of indicatorKeys) {
           const sample = settled.filter(r => {
             const value = Number(r.indicatorSnapshot?.components?.[key]);
-            return Number.isFinite(value) && Math.abs(value) > 0.000001 && Number.isFinite(Number(r.pnlPct)) && Math.abs(Number(r.pnlPct)) > 0.01;
+            return Number.isFinite(value) && Math.abs(value) > 0.000001 && Number.isFinite(Number(r.marketMovePct)) && Math.abs(Number(r.marketMovePct)) > 0.01;
           });
-          const correctCount = sample.filter(r => Math.sign(Number(r.indicatorSnapshot.components[key])) === Math.sign(Number(r.pnlPct))).length;
+          const correctCount = sample.filter(r => Math.sign(Number(r.indicatorSnapshot.components[key])) === Math.sign(Number(r.marketMovePct))).length;
           indicatorStats[key] = { sample: sample.length, correct: correctCount, wrong: sample.length - correctCount, accuracy: sample.length ? Math.round(correctCount / sample.length * 1000) / 10 : null };
         }
         const dailyMap = {};
