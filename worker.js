@@ -1159,8 +1159,14 @@ export default {
     if (url.pathname === "/v2/performance" && request.method === "GET") {
       try {
         if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
-        const listed=await env.ANALYSIS_KV.list({prefix:"v2paper:",limit:1000});
-        const records=(listed.keys||[]).map(x=>x.metadata).filter(Boolean).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
+        const allKeys=[];
+        let cursor;
+        do {
+          const page=await env.ANALYSIS_KV.list({prefix:"v2paper:",limit:1000,...(cursor?{cursor}:{})});
+          allKeys.push(...(page.keys||[]));
+          cursor=page.list_complete?undefined:page.cursor;
+        } while(cursor);
+        const records=allKeys.map(x=>x.metadata).filter(Boolean).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
         const settled=records.filter(x=>["CORRECT","WRONG","NEUTRAL"].includes(x.outcome));
         const wins=settled.filter(x=>x.outcome==="CORRECT"),losses=settled.filter(x=>x.outcome==="WRONG");
         const net=settled.reduce((a,x)=>a+Number(x.pnlPct||0),0);
