@@ -20,7 +20,8 @@ button.refresh{display:block;margin:10px auto 0;border:0;border-radius:10px;padd
 <body>
 <header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">সমস্ত তারিখ ও ঘড়ির সময় মস্কো স্থানীয় সময় (Europe/Moscow, UTC+3) অনুযায়ী। প্রতিটি LONG/SHORT সিদ্ধান্তের নিজস্ব নির্ধারিত মিনিট পূর্ণ হলে পরবর্তী Worker scheduler run-এ বাজারদর নিয়ে ফল যাচাই হবে। ১০টি দৈনিক শিট এবং সময় শেষে ফলাফলের জন্য আলাদা শিট রয়েছে।</div></header>
 <section class="panel"><h2>সার্বিক ফলাফল · মস্কো সময় অনুযায়ী সর্বশেষ ১০ দিন</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div><div class="muted" id="accuracy" style="margin-top:9px">সঠিকতার হিসাব লোড হচ্ছে…</div></section>
-<section class="panel"><h2>ইন্ডিকেটরভিত্তিক ফলাফল</h2><div class="muted" id="indicatorStats">নতুন সিদ্ধান্তের যাচাইকৃত ফল জমা হলে এখানে ইন্ডিকেটরভিত্তিক হিসাব দেখা যাবে।</div></section><section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
+<section class="panel"><h2>ইন্ডিকেটরভিত্তিক ফলাফল</h2><div class="muted" id="indicatorStats">নতুন সিদ্ধান্তের যাচাইকৃত ফল জমা হলে এখানে ইন্ডিকেটরভিত্তিক হিসাব দেখা যাবে।</div></section>
+<section class="panel"><h2>Trading System V2 · Testing / Paper Trading</h2><div class="muted" id="v2Stats">V2 পরীক্ষার ফল লোড হচ্ছে…</div><button class="refresh" id="v2Backtest" type="button">BTC ও SOL · ১৫ মিনিটের প্রাথমিক Backtest</button><div class="muted" id="v2BacktestResult" style="margin-top:9px">V2 এখন শুধু পরীক্ষামূলক; কোনো লাইভ ট্রেড বা V2 নোটিফিকেশন চালু নেই।</div></section><section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
 <script>
 "use strict";
 let reportData=null,activeSheet="results";
@@ -94,8 +95,33 @@ async function loadReport(){
   records.textContent="সার্ভার/API সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।";
  }finally{btn.disabled=false;}
 }
-document.getElementById("refresh").addEventListener("click",loadReport);
-loadReport();
+async function loadV2Paper(){
+ const target=document.getElementById("v2Stats");
+ try{
+  const res=await fetch("/api/v2/performance",{cache:"no-store"}),d=await res.json();
+  if(!res.ok)throw new Error(d.error||"V2 রিপোর্ট পাওয়া যায়নি");
+  target.innerHTML='<div class="grid">'+[
+   ["মোট V2 paper signal",d.total],["যাচাই সম্পন্ন",d.evaluated],["সঠিক",d.correct],["ভুল",d.wrong],["অপেক্ষমাণ",d.pending],["অনির্ভরযোগ্য",d.unverified],["সঠিকতার হার",d.accuracy===null?"—":Number(d.accuracy).toFixed(1)+"%"],["নেট PnL",Number(d.netPnlPct||0).toFixed(3)+"%"]
+  ].map(([k,v])=>'<div class="stat"><span>'+safe(k)+'</span><b>'+safe(v??0)+'</b></div>').join("")+'</div><div class="muted" style="margin-top:8px">V2 আলাদা ledger-এ চলে। এই ফল পুরোনো সিস্টেমের পরিসংখ্যানের সঙ্গে মেশানো হয় না।</div>';
+ }catch(e){target.textContent="V2 paper report: "+e.message;}
+}
+async function runV2Backtest(){
+ const button=document.getElementById("v2Backtest"),target=document.getElementById("v2BacktestResult");
+ button.disabled=true;target.textContent="BTC ও SOL-এর ১৫ মিনিটের ক্যান্ডেলে পরীক্ষা চলছে…";
+ try{
+  const results=[];
+  for(const symbol of ["BTC","SOL"]){
+   const res=await fetch("/api/v2/backtest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol,timeframe:"15m"})});
+   const d=await res.json();if(!res.ok)throw new Error(d.details||d.error||"Backtest failed");
+   results.push({symbol,report:d.report});
+  }
+  target.innerHTML=results.map(({symbol,report:r})=>'<div class="result"><b>'+symbol+'</b> · '+safe(r.status)+'<br>Bars: '+safe(r.bars)+' · Trades: '+safe(r.trades)+' / '+safe(r.minimumTrades)+'<br>Win rate: '+safe(r.winRate===null?"—":Number(r.winRate).toFixed(1)+"%")+' · Profit factor: '+safe(r.profitFactor===null?"—":Number(r.profitFactor).toFixed(2))+'<br>Expectancy: '+safe(r.expectancyPct===null?"—":Number(r.expectancyPct).toFixed(4)+"%")+' · Max drawdown: '+safe(r.maxDrawdownPct===null?"—":Number(r.maxDrawdownPct).toFixed(2)+"%")+'<br><span class="muted">'+safe(r.note)+'</span></div>').join("");
+ }catch(e){target.textContent="Backtest চালানো যায়নি: "+e.message;}
+ finally{button.disabled=false;}
+}
+document.getElementById("v2Backtest").addEventListener("click",runV2Backtest);
+document.getElementById("refresh").addEventListener("click",()=>{loadReport();loadV2Paper();});
+loadReport();loadV2Paper();
 </script>
 </body>
 </html>
