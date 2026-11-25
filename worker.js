@@ -965,8 +965,22 @@ async function runOne(env, symbol, tf, options = {}) {
       metadata: decisionRecord
     });
   }
-  // Per-run history writes were removed: they exhausted the free daily KV quota.
-  // Signal alerts remain event-driven and are sent only for LONG/SHORT.
+  // Separate V2 paper-trade ledger. It never sends alerts or affects legacy decisions.
+  if ((v2Testing.decision === "LONG" || v2Testing.decision === "SHORT") && Number.isFinite(Number(v2Testing.entryPrice)) && Number(v2Testing.entryPrice) > 0) {
+    const v2Id = symbol + ":" + tf + ":" + Date.parse(result.candleCloseTime);
+    const v2Record = {
+      id:v2Id, system:"V2", symbol, timeframe:tf, decision:v2Testing.decision,
+      strategy:v2Testing.selectedStrategy, confidenceScore:v2Testing.confidenceScore,
+      entryPrice:Number(v2Testing.entryPrice), stopLoss:Number(v2Testing.stopLoss),
+      takeProfit1:Number(v2Testing.takeProfit1), takeProfit2:Number(v2Testing.takeProfit2),
+      riskReward:Number(v2Testing.riskReward), decidedAt:result.generatedAt,
+      durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15),
+      expectedEvaluationAt:new Date(Date.parse(result.generatedAt)+({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15)*60000).toISOString(),
+      outcome:"PENDING"
+    };
+    await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:v2Record});
+  }
+  // Existing notification behavior remains tied only to the legacy signal.
   await sendSignalPush(env, result);
   return result;
 }
@@ -974,9 +988,12 @@ async function runOne(env, symbol, tf, options = {}) {
 async function evaluateMaturedDecisions(env) {
   if (!env.ANALYSIS_KV) return;
   const now = Date.now();
-  const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+  const [listed, v2listed] = await Promise.all([
+    env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 }),
+    env.ANALYSIS_KV.list({ prefix: "v2paper:", limit: 1000 })
+  ]);
   const due = [];
-  for (const item of listed.keys) {
+  for (const item of [...(listed.keys||[]), ...(v2listed.keys||[])]) {
     const r = item.metadata;
     if (r && (r.decision === "LONG" || r.decision === "SHORT") &&
         r.outcome === "PENDING" && now >= Date.parse(r.expectedEvaluationAt)) {
@@ -1103,6 +1120,17 @@ export default {
     }
     if (url.pathname === "/v2/status" && request.method === "GET") {
       return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check","preliminary-backtest"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented","Backtest endpoint is preliminary single-timeframe simulation, not full walk-forward validation"] }, {headers:{"Cache-Control":"no-store"}});
+    }
+    if (url.pathname === "/v2/performance" && request.method === "GET") {
+      try {
+        if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
+        const listed=await env.ANALYSIS_KV.list({prefix:"v2paper:",limit:1000});
+        const records=(listed.keys||[]).map(x=>x.metadata).filter(Boolean).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
+        const settled=records.filter(x=>["CORRECT","WRONG","NEUTRAL"].includes(x.outcome));
+        const wins=settled.filter(x=>x.outcome==="CORRECT"),losses=settled.filter(x=>x.outcome==="WRONG");
+        const net=settled.reduce((a,x)=>a+Number(x.pnlPct||0),0);
+        return Response.json({version:"V2",mode:"PAPER_TRADING_ONLY",liveTrading:false,total:records.length,evaluated:settled.length,correct:wins.length,wrong:losses.length,neutral:settled.filter(x=>x.outcome==="NEUTRAL").length,pending:records.filter(x=>x.outcome==="PENDING").length,unverified:records.filter(x=>x.outcome==="UNVERIFIED").length,accuracy:wins.length+losses.length?Math.round(wins.length/(wins.length+losses.length)*1000)/10:null,netPnlPct:net,records:records.slice(0,200)},{headers:{"Cache-Control":"no-store"}});
+      }catch(error){return Response.json({error:"V2 paper report failed",details:error instanceof Error?error.message:String(error)},{status:500});}
     }
     if (url.pathname === "/v2/backtest" && request.method === "POST") {
       let body;
