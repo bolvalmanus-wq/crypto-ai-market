@@ -153,8 +153,10 @@ function analyze(data, tf) {
   const closeTime = last.time + interval;
   if (Date.now() < closeTime) throw new Error("Latest candle is not closed yet");
   if (Date.now() - closeTime > interval * 1.5) throw new Error("Latest confirmed candle is stale");
-  const price = Number(data.ticker.last);
-  const closes = [...bars.map(c => c.close).slice(0, -1), price];
+  // Keep every indicator on fully confirmed candle data. The live ticker is
+  // retained separately for the actual entry quote, never mixed into closed-bar signals.
+  const price = Number(last.close);
+  const closes = bars.map(c => Number(c.close));
   const e9 = ema(closes.slice(-40), 9), e21 = ema(closes.slice(-60), 21), rv = rsi(closes);
   const ranges = bars.slice(-15).map((c, i) => {
     const p = bars[bars.length - 16 + i];
@@ -318,7 +320,7 @@ function calculateAgentIndicatorSets(market){
   const b=(market.candles||[]).filter(c=>[c.high,c.low,c.close,c.volume].every(Number.isFinite)).slice(-80);
   const hl=n=>{const a=b.slice(-n);return{high:Math.max(...a.map(x=>x.high)),low:Math.min(...a.map(x=>x.low))};};
   const mid=n=>{const x=hl(n);return(x.high+x.low)/2;};
-  const last=b[b.length-1]||{},p=Number(market.ticker?.last)||Number(last.close)||0;
+  const last=b[b.length-1]||{},p=Number(last.close)||Number(market.ticker?.last)||0;
   const tenkan=mid(9),kijun=mid(26),spanA=(tenkan+kijun)/2,spanB=mid(52);
   const vol=b.slice(-20).reduce((s,x)=>s+Math.max(0,x.volume),0);
   const vwap=vol?b.slice(-20).reduce((s,x)=>s+(x.high+x.low+x.close)/3*Math.max(0,x.volume),0)/vol:p;
@@ -882,7 +884,7 @@ async function runOne(env, symbol, tf, options = {}) {
       technicalSignal:technical.technicalSignal,higherTimeframeSignal:higherSignal,
       fourHourContext:market.higherTimeframe?.fourHour||null,riskEngine:market.riskEngine,
       technicalIndicators:{...technical,advancedScore:advanced.advancedScore,regimeFactor:advanced.regimeFactor,advancedComponents:advanced.components,indicatorSets:market.agentIndicatorSets||{}}},
-    generatedAt:new Date().toISOString(),candleCloseTime:market.candleCloseTime,marketSource:data.source,
+    generatedAt:new Date().toISOString(),candleCloseTime:market.candleCloseTime,signalPriceBasis:"confirmed-candle-close",entryPriceBasis:"live-ticker-at-decision",marketSource:data.source,
     marketFetchedAt:data.fetchedAt||null,marketTimestamp:data.marketTimestamp||null,inputTimeframe:tf,
     inputCandleCount:market.candles.length,intradayMovement:market.intradayMovement};
   if (options.persist !== false) await persistLatestSnapshot(env, symbol, result);
