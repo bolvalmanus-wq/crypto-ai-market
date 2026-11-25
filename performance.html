@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#080e1b">
-<title>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ · UTC</title>
+<title>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ · Moscow Time</title>
 <style>
 :root{color-scheme:dark;--bg:#080e1b;--panel:#111c2e;--line:#2a405d;--muted:#a9bad1;--text:#f3f7ff;--green:#31d69a;--red:#ff7185;--amber:#f5c768}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;padding:14px;background:radial-gradient(ellipse at 50% -15%,#1d3c68 0%,#0b1425 42%,var(--bg) 78%);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:760px;margin-inline:auto}
@@ -18,8 +18,8 @@ button.refresh{display:block;margin:10px auto 0;border:0;border-radius:10px;padd
 </style>
 </head>
 <body>
-<header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">সমস্ত তারিখ ও ঘড়ির সময় UTC অনুযায়ী। প্রতিটি LONG/SHORT সিদ্ধান্তের নিজস্ব নির্ধারিত মিনিট পূর্ণ হলে পরবর্তী Worker scheduler run-এ বাজারদর নিয়ে ফল যাচাই হবে। ১০টি দৈনিক শিট এবং সময় শেষে ফলাফলের জন্য আলাদা শিট রয়েছে।</div></header>
-<section class="panel"><h2>সার্বিক ফলাফল · UTC ভিত্তিক সর্বশেষ ১০ দিন</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div><div class="muted" id="accuracy" style="margin-top:9px">সঠিকতার হিসাব লোড হচ্ছে…</div></section>
+<header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">সমস্ত তারিখ ও ঘড়ির সময় মস্কো স্থানীয় সময় (Europe/Moscow, UTC+3) অনুযায়ী। প্রতিটি LONG/SHORT সিদ্ধান্তের নিজস্ব নির্ধারিত মিনিট পূর্ণ হলে পরবর্তী Worker scheduler run-এ বাজারদর নিয়ে ফল যাচাই হবে। ১০টি দৈনিক শিট এবং সময় শেষে ফলাফলের জন্য আলাদা শিট রয়েছে।</div></header>
+<section class="panel"><h2>সার্বিক ফলাফল · মস্কো সময় অনুযায়ী সর্বশেষ ১০ দিন</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div><div class="muted" id="accuracy" style="margin-top:9px">সঠিকতার হিসাব লোড হচ্ছে…</div></section>
 <section class="panel"><h2>ইন্ডিকেটরভিত্তিক ফলাফল</h2><div class="muted" id="indicatorStats">নতুন সিদ্ধান্তের যাচাইকৃত ফল জমা হলে এখানে ইন্ডিকেটরভিত্তিক হিসাব দেখা যাবে।</div></section><section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
 <script>
 "use strict";
@@ -27,12 +27,15 @@ let reportData=null,activeSheet="results";
 const numberValue=n=>{if(n===null||n===undefined||n==="")return null;const v=Number(n);return Number.isFinite(v)?v:null;};
 const fmt=n=>{const v=numberValue(n);return v===null?"—":v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});};
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const utcTime=s=>{const d=new Date(s);return Number.isNaN(d.getTime())?"সময় অজানা":d.toLocaleTimeString("en-GB",{timeZone:"UTC",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+" UTC";};
-const utcDate=d=>new Date(d+"T00:00:00Z").toLocaleDateString("en-GB",{timeZone:"UTC",weekday:"short",day:"2-digit",month:"short",year:"numeric"});
-function utcDays(){const today=new Date(),midnight=Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate());return Array.from({length:10},(_,i)=>new Date(midnight-i*86400000).toISOString().slice(0,10));}
+const ZONE="Europe/Moscow";
+const moscowParts=d=>Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:ZONE,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(d).filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
+const moscowKey=d=>{const p=moscowParts(d);return p.year+"-"+p.month+"-"+p.day;};
+const utcTime=s=>{const d=new Date(s);return Number.isNaN(d.getTime())?"সময় অজানা":d.toLocaleTimeString("bn-BD",{timeZone:ZONE,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+" মস্কো";};
+const moscowDate=key=>{const [y,m,d]=key.split("-").map(Number);return new Date(Date.UTC(y,m-1,d,12)).toLocaleDateString("bn-BD",{timeZone:ZONE,weekday:"short",day:"2-digit",month:"short",year:"numeric"});};
+function moscowDays(){const p=moscowParts(new Date()),midnight=Date.UTC(Number(p.year),Number(p.month)-1,Number(p.day));return Array.from({length:10},(_,i)=>new Date(midnight-i*86400000).toISOString().slice(0,10));}
 function allRecords(){return Array.isArray(reportData?.records)?reportData.records:[];}
 function renderTabs(){
- const tabs=[{id:"results",label:"সময় শেষে ফলাফল"},...utcDays().map(d=>({id:d,label:utcDate(d)}))];
+ const tabs=[{id:"results",label:"সময় শেষে ফলাফল"},...moscowDays().map(d=>({id:d,label:moscowDate(d)}))];
  const target=document.getElementById("tabs");
  target.innerHTML=tabs.map(t=>'<button type="button" class="tab '+(activeSheet===t.id?"active":"")+'" data-sheet="'+t.id+'">'+safe(t.label)+'</button>').join("");
  target.querySelectorAll("[data-sheet]").forEach(b=>b.addEventListener("click",()=>{activeSheet=b.dataset.sheet;renderTabs();renderSheet();}));
@@ -60,9 +63,9 @@ function renderSheet(){
   target.innerHTML=settled.length?'<div class="day-summary">নির্ধারিত সময় পার হয়ে ফল যাচাই সম্পন্ন হয়েছে এমন সিদ্ধান্ত: '+settled.length+'টি। নতুন ফল এখানে যোগ হবে।</div>'+settled.map(r=>recordCard(r,true)).join(""):"এখনো কোনো সিদ্ধান্তের নির্ধারিত সময় পূর্ণ হয়নি।";
   return;
  }
- const daily=rows.filter(r=>r.decidedAt&&String(r.decidedAt).slice(0,10)===activeSheet);
+ const daily=rows.filter(r=>r.decidedAt&&moscowKey(new Date(r.decidedAt))===activeSheet);
  const correct=daily.filter(r=>r.outcome==="CORRECT").length,wrong=daily.filter(r=>r.outcome==="WRONG").length,neutral=daily.filter(r=>r.outcome==="NEUTRAL").length,pending=daily.filter(r=>r.outcome==="PENDING").length,unverified=daily.filter(r=>r.outcome==="UNVERIFIED").length;
- target.innerHTML='<div class="day-summary">'+utcDate(activeSheet)+' · মোট '+daily.length+'টি সিদ্ধান্ত · সঠিক '+correct+' · ভুল '+wrong+' · নিরপেক্ষ '+neutral+' · অপেক্ষমাণ '+pending+' · অনির্ভরযোগ্য '+unverified+'</div>'+(daily.length?daily.map(r=>recordCard(r,false)).join(""):"এই UTC দিনে কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।");
+ target.innerHTML='<div class="day-summary">'+moscowDate(activeSheet)+' · মোট '+daily.length+'টি সিদ্ধান্ত · সঠিক '+correct+' · ভুল '+wrong+' · নিরপেক্ষ '+neutral+' · অপেক্ষমাণ '+pending+' · অনির্ভরযোগ্য '+unverified+'</div>'+(daily.length?daily.map(r=>recordCard(r,false)).join(""):"এই UTC দিনে কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।");
 }
 async function loadReport(){
  const stats=document.getElementById("stats"),records=document.getElementById("records"),btn=document.getElementById("refresh");
@@ -83,7 +86,7 @@ async function loadReport(){
   const indicatorStats=data.indicatorStats||{},indicatorTarget=document.getElementById("indicatorStats");
   const indicatorRows=Object.entries(labels).map(([key,label])=>({label,...(indicatorStats[key]||{})})).filter(x=>Number(x.sample)>0);
   indicatorTarget.innerHTML=indicatorRows.length?'<div class="grid">'+indicatorRows.map(x=>'<div class="stat"><span>'+safe(x.label)+' · নমুনা '+safe(x.sample)+'</span><b>'+safe(x.accuracy===null||x.accuracy===undefined?"—":Number(x.accuracy).toFixed(1)+"%")+'</b><span>সঠিক '+safe(x.correct||0)+' · ভুল '+safe(x.wrong||0)+'</span></div>').join("")+'</div><div class="muted" style="margin-top:9px">শুধু নতুন সিদ্ধান্তের সংরক্ষিত ইন্ডিকেটর মান ও যাচাইকৃত ফল দিয়ে হিসাব। নমুনা কম হলে হার নির্ভরযোগ্য নয়।</div>':'এখনো পর্যাপ্ত নতুন যাচাইকৃত নমুনা নেই। পুরোনো সিদ্ধান্তের ইন্ডিকেটর মান সংরক্ষিত ছিল না, তাই সেগুলোর হার অনুমান করে দেখানো হচ্ছে না।';
-  if(activeSheet!=="results"&&!utcDays().includes(activeSheet))activeSheet="results";
+  if(activeSheet!=="results"&&!moscowDays().includes(activeSheet))activeSheet="results";
   renderTabs();renderSheet();
  }catch(err){
   stats.innerHTML='<div class="muted">রিপোর্ট লোড হয়নি: '+safe(err.message)+'</div>';
