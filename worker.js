@@ -841,7 +841,9 @@ async function runOne(env, symbol, tf, options = {}) {
   technical.baseTechnicalScore = technical.technicalScore;
   technical.advancedIndicatorScore = advanced.advancedScore;
   technical.technicalScore = advanced.score;
-  technical.technicalSignal = advanced.score >= .48 ? "LONG" : advanced.score <= -.48 ? "SHORT" : "WAIT";
+  // Conservative entry threshold: prefer fewer, better-confirmed signals over frequent low-edge calls.
+  const ENTRY_THRESHOLD = .62;
+  technical.technicalSignal = advanced.score >= ENTRY_THRESHOLD ? "LONG" : advanced.score <= -ENTRY_THRESHOLD ? "SHORT" : "WAIT";
   technical.reason = technical.technicalSignal === "LONG" ? "মূল ট্রেন্ড ও উন্নত Ichimoku, SAR, Supertrend, Donchian ও momentum সূচক ঊর্ধ্বমুখী" :
     technical.technicalSignal === "SHORT" ? "মূল ট্রেন্ড ও উন্নত Ichimoku, SAR, Supertrend, Donchian ও momentum সূচক নিম্নমুখী" :
     "উন্নত সূচকগুলোর সম্মিলিত স্কোরে এখনো যথেষ্ট একমুখী সুবিধা নেই";
@@ -851,8 +853,22 @@ async function runOne(env, symbol, tf, options = {}) {
   const opposite=candidate==="LONG"?"SHORT":"LONG";
   const hardRisk=candidate==="LONG"?market.riskEngine?.confirmedSupportBreakdown===true:candidate==="SHORT"?market.riskEngine?.confirmedResistanceBreakout===true:false;
   let decision=candidate,decisionReason=technical.reason;
-  if(candidate!=="WAIT"&&higherSignals.includes(opposite)){decision="WAIT";decisionReason="এক বা একাধিক উচ্চতর টাইমফ্রেমে বিপরীত সংকেত; তাই ঝুঁকি এড়াতে WAIT";}
-  if(candidate!=="WAIT"&&hardRisk){decision="WAIT";decisionReason="৪ ঘণ্টার কাঠামোয় বিপরীত দিকের নিশ্চিত ব্রেক; তাই WAIT";}
+  // Require genuinely separate momentum/strength confirmation. EMA and price-derived
+  // indicators alone are not enough to authorize a directional call.
+  const trendStrength=Number(technical.adx);
+  const macdValue=Number(technical.macdHistogram);
+  const plusDI=Number(technical.plusDI),minusDI=Number(technical.minusDI);
+  const momentumConfirmed=candidate==="LONG"
+    ? Number.isFinite(macdValue)&&macdValue>0&&Number.isFinite(plusDI)&&Number.isFinite(minusDI)&&plusDI>minusDI
+    : candidate==="SHORT"
+      ? Number.isFinite(macdValue)&&macdValue<0&&Number.isFinite(plusDI)&&Number.isFinite(minusDI)&&minusDI>plusDI
+      : false;
+  if(candidate!=="WAIT"&&(!Number.isFinite(trendStrength)||trendStrength<18)){decision="WAIT";decisionReason="ADX ১৮-এর নিচে; প্রবণতার শক্তি যথেষ্ট নয়";}
+  if(candidate!=="WAIT"&&decision!=="WAIT"&&!momentumConfirmed){decision="WAIT";decisionReason="MACD ও directional movement একই দিকে নিশ্চিত নয়";}
+  if(candidate!=="WAIT"&&decision!=="WAIT"&&higherSignals.includes(opposite)){decision="WAIT";decisionReason="এক বা একাধিক উচ্চতর টাইমফ্রেমে বিপরীত সংকেত; তাই ঝুঁকি এড়াতে WAIT";}
+  const needsHigherAgreement=["1m","5m","15m","30m","1h"].includes(tf);
+  if(candidate!=="WAIT"&&decision!=="WAIT"&&needsHigherAgreement&&!higherSignals.includes(candidate)){decision="WAIT";decisionReason="উচ্চতর টাইমফ্রেমে একই দিকের সমর্থন নেই; তাই WAIT";}
+  if(candidate!=="WAIT"&&decision!=="WAIT"&&hardRisk){decision="WAIT";decisionReason="৪ ঘণ্টার কাঠামোয় বিপরীত দিকের নিশ্চিত ব্রেক; তাই WAIT";}
   const analysis={decision,direction:decision==="LONG"?"UPWARD":decision==="SHORT"?"DOWNWARD":"SIDEWAYS",directionalBias:candidate,
     confidenceScore:Math.min(95,Math.round(Math.abs(technical.technicalScore)*100)),
     durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||5),reason:decisionReason,
