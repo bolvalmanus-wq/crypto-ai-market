@@ -710,6 +710,8 @@ function showAi(symbol,tf,result){
  const screened=debate.status==="SCREENED_OUT";
  const biasLine=screened?'<div class="ai-risk"><b>টেকনিক্যাল ইঞ্জিনের প্রাথমিক পক্ষপাত:</b> '+safeText(bias)+' · AI বন্ধ; এটি সরাসরি ইন্ডিকেটর স্কোর</div>':a.decision==="WAIT"?'<div class="ai-risk"><b>ইন্ডিকেটরের দিকনির্দেশক পক্ষপাত:</b> '+safeText(bias)+' · এটি চূড়ান্ত ট্রেড সংকেত নয়; প্রবেশের শর্ত পূরণ হয়নি</div>':'<div class="ai-risk"><b>ইন্ডিকেটর নির্বাচিত দিক:</b> '+safeText(bias)+'</div>';
  const decision=document.getElementById("decision-"+symbol+"-"+tf);
+ const v2=result.testing?.v2;
+ const v2Panel=v2?'<div class="ai-risk" style="margin-top:10px;border:1px solid #3b6590;padding:9px;border-radius:9px"><b>V2 · পরীক্ষামূলক সিদ্ধান্ত (লাইভ ট্রেড নয়)</b><div>Regime: '+safeText(v2.marketRegime)+' · Strategy: '+safeText(v2.selectedStrategy)+' · সিদ্ধান্ত: <b>'+safeText(v2.decision)+'</b></div><div>Validation score: '+safeText(v2.confidenceScore)+'/100 · এটি জয়ের সম্ভাবনা নয়</div><div>Entry: '+safeText(v2.entryPrice??"—")+' · SL: '+safeText(v2.stopLoss??"—")+' · TP1/TP2: '+safeText(v2.takeProfit1??"—")+'/'+safeText(v2.takeProfit2??"—")+' · R/R: '+safeText(v2.riskReward??"—")+'</div><div>4H/1H/15M: '+safeText(v2.timeframeAgreement?.["4h"]||"—")+'/'+safeText(v2.timeframeAgreement?.["1h"]||"—")+'/'+safeText(v2.timeframeAgreement?.["15m"]||"—")+'</div><div>'+safeText((v2.contradictingEvidence||[]).join(" · ")||"Entry conditions validated")+'</div></div>':'<div class="ai-risk" style="margin-top:10px">V2 পরীক্ষার ফল এই রেকর্ডে নেই।</div>';
  const aiFailed=debate.status==="COUNCIL_FAILED";
  const decisionLabel=aiFailed?"ইন্ডিকেটর বিশ্লেষণ ব্যর্থ — বাজারের সিদ্ধান্ত নেই":a.decision==="LONG"?"LONG / BUY":a.decision==="SHORT"?"SHORT / SELL":"WAIT / অপেক্ষা";
  if(decision){decision.textContent="চূড়ান্ত সিদ্ধান্ত: "+decisionLabel;decision.className="trade-action "+(a.decision==="LONG"?"long-on":a.decision==="SHORT"?"short-on":"wait-on");}
@@ -740,7 +742,7 @@ function showAi(symbol,tf,result){
  const movementLine='<div class="ai-risk"><b>আজকের UTC দিনের সময়ভিত্তিক ওঠানামা:</b> '+Number(movement.coverageHours||0)+' ঘণ্টার ডেটা · '+Number(movement.candleCount||0)+'টি ৫-মিনিট ক্যান্ডেল · '+(movement.completeWindow?'এখন পর্যন্ত ক্যান্ডেল কভারেজ সম্পূর্ণ':'কিছু ক্যান্ডেল অনুপস্থিত')+'<div>'+rise+fall+'</div>'+segmentLine+'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'+movementRows+'</div></div>';
  el.innerHTML='<div class="ai-head"><span>✦ ইন্ডিকেটর বিশ্লেষণ · '+model+' · '+dir+'</span><span>'+new Date(result.generatedAt).toLocaleTimeString("bn-BD",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
   '<div class="ai-risk">'+safeText(status)+'</div>'+candleAudit+movementLine+biasLine+voteSummary+confidenceLine+durationLine+htfLine+h4Evidence+opinions+errors+judgeError+indicatorSummary+
-  '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>';
+  '<div class="ai-reason"><b>চূড়ান্ত সিদ্ধান্ত: '+safeText(decisionLabel)+'</b> — '+safeText(String(a.reason||"").slice(0,220))+'</div><div class="ai-risk">চূড়ান্ত ঝুঁকি: '+safeText(String(a.risk||"").slice(0,180))+'</div>'+v2Panel;
 }
 async function loadAiForSymbol(symbol,data,force=false,onlyTf=null){
  for(const tf of ["1m","5m","15m","1h","4h"]){
