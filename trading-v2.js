@@ -21,10 +21,14 @@ function stats(bars){
   const atr=trs.slice(-14).reduce((a,b)=>a+b,0)/14;
   const tr14=trs.slice(-14),hh=Math.max(...h.slice(-14)),ll=Math.min(...l.slice(-14));
   const chop=hh>ll?100*Math.log10(tr14.reduce((a,b)=>a+b,0)/(hh-ll))/Math.log10(14):100;
-  // Wilder ADX with a transparent rolling approximation, used as a regime filter.
-  let plus=0,minus=0;
-  for(let i=bars.length-14;i<bars.length;i++){if(i<=0)continue;const up=h[i]-h[i-1],dn=l[i-1]-l[i];if(up>dn&&up>0)plus+=up;if(dn>up&&dn>0)minus+=dn;}
-  const adx=100*Math.abs(plus-minus)/Math.max(1e-12,plus+minus);
+  // Wilder-smoothed directional movement and ADX(14).
+  const dmPlus=[],dmMinus=[],trAll=[];
+  for(let i=1;i<bars.length;i++){const up=h[i]-h[i-1],dn=l[i-1]-l[i];dmPlus.push(up>dn&&up>0?up:0);dmMinus.push(dn>up&&dn>0?dn:0);trAll.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));}
+  let smTR=trAll.slice(0,14).reduce((a,b)=>a+b,0),smPlus=dmPlus.slice(0,14).reduce((a,b)=>a+b,0),smMinus=dmMinus.slice(0,14).reduce((a,b)=>a+b,0);
+  const dx=[];
+  for(let i=14;i<trAll.length;i++){smTR=smTR-smTR/14+trAll[i];smPlus=smPlus-smPlus/14+dmPlus[i];smMinus=smMinus-smMinus/14+dmMinus[i];const pdi=smTR?smPlus/smTR*100:0,mdi=smTR?smMinus/smTR*100:0;dx.push(100*Math.abs(pdi-mdi)/Math.max(1e-12,pdi+mdi));}
+  const adx=dx.length>=14?dx.slice(-14).reduce((a,b)=>a+b,0)/14:dx.length?dx.reduce((a,b)=>a+b,0)/dx.length:0;
+  const plusDI=smTR?smPlus/smTR*100:0,minusDI=smTR?smMinus/smTR*100:0;
   const atrPct=atr/c[c.length-1]*100;
   const atrHist=[];
   for(let i=Math.max(15,trs.length-100);i<=trs.length;i++){const x=trs.slice(i-14,i);if(x.length===14)atrHist.push(x.reduce((a,b)=>a+b,0)/14/c[c.length-1]*100);}
@@ -38,9 +42,18 @@ function stats(bars){
   const vwapVol=bars.slice(-20).reduce((a,x)=>a+x.volume,0);
   const vwap=vwapVol?bars.slice(-20).reduce((a,x)=>a+(x.high+x.low+x.close)/3*x.volume,0)/vwapVol:last.close;
   const price=last.close, slope=finite(prev20)&&prev20!==0?(e20/prev20-1)*100:0;
-  const bull=price>e20&&e20>e50&&e50>e200&&slope>0;
-  const bear=price<e20&&e20<e50&&e50<e200&&slope<0;
-  return {valid:true,count:c.length,price,ema20:e20,ema50:e50,ema200:e200,emaSlope:slope,adx,choppiness:chop,atr,atrPct,atrPercentile:atrRank,rsi,relativeVolume:relVol,vwap,donchianHigh:dcHigh,donchianLow:dcLow,bull,bear,last,high20:Math.max(...h.slice(-20)),low20:Math.min(...l.slice(-20)),_prior10:bars.slice(-11,-1),_older10:bars.slice(-21,-11)};
+  const mid=n=>(Math.max(...h.slice(-n))+Math.min(...l.slice(-n)))/2;
+  const tenkan=mid(9),kijun=mid(26),spanA=(tenkan+kijun)/2,spanB=mid(52),cloudHigh=Math.max(spanA,spanB),cloudLow=Math.min(spanA,spanB);
+  const ichimokuBull=price>cloudHigh&&tenkan>kijun,ichimokuBear=price<cloudLow&&tenkan<kijun;
+  const typical=bars.slice(-20).map(x=>(x.high+x.low+x.close)/3),typicalMean=typical.reduce((a,b)=>a+b,0)/typical.length,typicalDev=typical.reduce((a,b)=>a+Math.abs(b-typicalMean),0)/typical.length;
+  const cci=typicalDev?(typical[typical.length-1]-typicalMean)/(.015*typicalDev):0;
+  const keltnerUpper=e20+2*atr,keltnerLower=e20-2*atr;
+  let supertrend=price>=e20?"UP":"DOWN",stUpper=0,stLower=0;
+  const start=Math.max(1,bars.length-40);
+  for(let i=start;i<bars.length;i++){const mp=(h[i]+l[i])/2,pc=c[i-1],a=Math.max(atr,1e-12),bu=mp+1.5*a,bl=mp-1.5*a;stUpper=i===start||bu<stUpper||pc>stUpper?bu:stUpper;stLower=i===start||bl>stLower||pc<stLower?bl:stLower;if(supertrend==="DOWN"&&c[i]>stUpper)supertrend="UP";else if(supertrend==="UP"&&c[i]<stLower)supertrend="DOWN";}
+  const bull=price>e20&&e20>e50&&e50>e200&&slope>0&&ichimokuBull&&supertrend==="UP";
+  const bear=price<e20&&e20<e50&&e50<e200&&slope<0&&ichimokuBear&&supertrend==="DOWN";
+  return {valid:true,count:c.length,price,ema20:e20,ema50:e50,ema200:e200,emaSlope:slope,adx,plusDI,minusDI,choppiness:chop,atr,atrPct,atrPercentile:atrRank,rsi,cci,relativeVolume:relVol,vwap,keltnerUpper,keltnerLower,ichimokuBull,ichimokuBear,supertrend,donchianHigh:dcHigh,donchianLow:dcLow,bull,bear,last,high20:Math.max(...h.slice(-20)),low20:Math.min(...l.slice(-20)),_prior10:bars.slice(-11,-1),_older10:bars.slice(-21,-11)};
 }
 function regimeOf(x){
   if(!x.valid)return "INSUFFICIENT_DATA";
@@ -60,10 +73,11 @@ function strategyScores(x, regime){
   };
   const c=x.last,range=Math.max(1e-12,c.high-c.low),closePos=(2*c.close-c.high-c.low)/range;
   const trend=x.bull?1:x.bear?-1:0;
-  const trendScore=trend&&sign(x.rsi-50)===trend&&sign(c.close-x.vwap)===trend?trend:0;
+  const pullback=Math.abs(c.close-x.ema20)<=x.atr*1.25;
+  const trendScore=trend&&sign(x.rsi-50)===trend&&sign(c.close-x.vwap)===trend&&pullback&&sign(closePos)===trend?trend:0;
   const breakout=c.close>x.donchianHigh&&x.relativeVolume>=1.3?1:c.close<x.donchianLow&&x.relativeVolume>=1.3?-1:0;
   const nearLow=c.close<=x.low20+x.atr*.35,nearHigh=c.close>=x.high20-x.atr*.35;
-  const rangeScore=regime==="SIDEWAYS"?(nearLow&&x.rsi<38&&closePos>0.25?1:nearHigh&&x.rsi>62&&closePos<-.25?-1:0):0;
+  const rangeScore=regime==="SIDEWAYS"?(nearLow&&x.rsi<38&&x.cci<-80&&c.close>x.keltnerLower&&closePos>0.25?1:nearHigh&&x.rsi>62&&x.cci>80&&c.close<x.keltnerUpper&&closePos<-.25?-1:0):0;
   const prior10=x._prior10||[],older10=x._older10||[];
   const priorHigh=prior10.length?Math.max(...prior10.map(z=>z.high)):NaN;
   const priorLow=prior10.length?Math.min(...prior10.map(z=>z.low)):NaN;
