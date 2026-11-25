@@ -1,3 +1,4 @@
+import { evaluateV2, backtestV2 } from "./trading-v2.js";
 const PAGE_URL = "https://crypto-ai-market.pages.dev";
 const b64u = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const unb64u = value => {
@@ -916,6 +917,9 @@ async function runOne(env, symbol, tf, options = {}) {
     confidenceScore:Math.min(95,Math.round(Math.abs(technical.technicalScore)*100)),
     durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||5),reason:decisionReason,
     risk:"শুধু গাণিতিক ইন্ডিকেটর-সম্মিলন; confidence হলো স্কোরের মাত্রা, লাভের সম্ভাবনা নয়। প্রবেশের আগে stop-loss ও position sizing যাচাই করুন।",dataQuality:"GOOD"};
+  // Isolated V2 research path: consumes only confirmed candles and never changes legacy signals.
+  const v2Data = { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } };
+  const v2Testing = evaluateV2({ symbol, timeframe: tf, data: v2Data, market, now: Date.now(), accountEquity: null, config: { riskPct: 0.5, maxSpreadPct: 0.10, atrStopMultiple: 1.5 } });
   const result={symbol,timeframe:tf,provider:"Indicator Engine Only · AI Disabled",
     model:"EMA/RSI/MACD/ADX + Ichimoku/SAR/Supertrend/Donchian/OBV/MFI/ROC",analysis,
     debate:{status:"INDICATOR_ONLY",screening:{reviewed:true,reason:"AI সম্পূর্ণ বন্ধ; সব সিদ্ধান্ত গাণিতিক ইন্ডিকেটর থেকে"},
@@ -923,6 +927,7 @@ async function runOne(env, symbol, tf, options = {}) {
       technicalSignal:technical.technicalSignal,higherTimeframeSignal:higherSignal,
       fourHourContext:market.higherTimeframe?.fourHour||null,riskEngine:market.riskEngine,
       technicalIndicators:{...technical,advancedScore:advanced.advancedScore,regimeFactor:advanced.regimeFactor,entryThreshold:advanced.entryThreshold,marketRegime:advanced.regime,groupAgreement:advanced.agreement,groupDisagreement:advanced.disagreement,indicatorGroups:advanced.groups,advancedComponents:advanced.components,indicatorSets:market.agentIndicatorSets||{}}},
+    testing:{ v2: v2Testing },
     generatedAt:new Date().toISOString(),candleCloseTime:market.candleCloseTime,signalPriceBasis:"confirmed-candle-close",entryPriceBasis:"live-ticker-at-decision",marketSource:data.source,
     marketFetchedAt:data.fetchedAt||null,marketTimestamp:data.marketTimestamp||null,inputTimeframe:tf,
     inputCandleCount:market.candles.length,intradayMovement:market.intradayMovement};
@@ -1095,6 +1100,23 @@ export default {
         await env.ANALYSIS_KV.delete("push:sub:" + id);
       }
       return Response.json({ ok: true });
+    }
+    if (url.pathname === "/v2/status" && request.method === "GET") {
+      return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check","preliminary-backtest"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented","Backtest endpoint is preliminary single-timeframe simulation, not full walk-forward validation"] }, {headers:{"Cache-Control":"no-store"}});
+    }
+    if (url.pathname === "/v2/backtest" && request.method === "POST") {
+      let body;
+      try { body = await request.json(); } catch { return Response.json({error:"Invalid request"},{status:400}); }
+      const symbol=body?.symbol, timeframe=body?.timeframe||"15m";
+      if(!["BTC","SOL"].includes(symbol)||!["1m","5m","15m","30m","1h","4h"].includes(timeframe))return Response.json({error:"Unsupported symbol or timeframe"},{status:400});
+      try{
+        const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol,{headers:{"Cache-Control":"no-cache"}});
+        if(!response.ok)throw new Error("Market API HTTP "+response.status);
+        const data=await response.json();
+        const bars=timeframe==="4h"?buildFourHourCandles(data):(data.candles?.[timeframe]||[]);
+        const report=backtestV2({candles:bars,timeframe,feeBps:6,slippageBps:3,holdBars:1,minimumTrades:500});
+        return Response.json({symbol,mode:"TESTING_ONLY",report},{headers:{"Cache-Control":"no-store"}});
+      }catch(error){return Response.json({error:"V2 backtest failed",details:error instanceof Error?error.message:String(error)},{status:502});}
     }
     if (url.pathname === "/performance" && request.method === "GET") {
       try {
