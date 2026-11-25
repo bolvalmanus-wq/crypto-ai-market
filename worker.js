@@ -965,8 +965,11 @@ async function evaluateMaturedDecisions(env) {
       r.exitPriceSource = "confirmed historical candle close";
       r.horizonDeltaMs = bestDelta;
       r.pnlPct = (r.decision === "LONG" ? (exitPrice / r.entryPrice - 1) : (r.entryPrice / exitPrice - 1)) * 100;
-      r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
-      r.evaluationNote = "নির্ধারিত সময়ের সবচেয়ে কাছের নিশ্চিত ঐতিহাসিক ক্যান্ডেলের ক্লোজ দিয়ে যাচাই";
+      // Tiny/zero moves are neutral, not a directional win or loss.
+      r.outcome = r.pnlPct > 0.01 ? "CORRECT" : r.pnlPct < -0.01 ? "WRONG" : "NEUTRAL";
+      r.evaluationNote = Math.abs(r.pnlPct) <= 0.01
+        ? "দামের পরিবর্তন ০.০১%-এর মধ্যে; নিরপেক্ষ ফল, সঠিকতা গণনায় ধরা হবে না"
+        : "নির্ধারিত সময়ের সবচেয়ে কাছের নিশ্চিত ঐতিহাসিক ক্যান্ডেলের ক্লোজ দিয়ে যাচাই";
     }
     await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), {
       expirationTtl: 60 * 60 * 24 * 11, metadata: r
@@ -1052,6 +1055,10 @@ export default {
         for (const record of records) {
           const delay = Number(record.evaluationDelayMs);
           const tolerance = Math.max(90000, (intervalMs[record.timeframe]||60000) * 0.25);
+          if ((record.outcome === "CORRECT" || record.outcome === "WRONG") && Number.isFinite(Number(record.pnlPct)) && Math.abs(Number(record.pnlPct)) <= 0.01) {
+            record.outcome = "NEUTRAL";
+            record.evaluationNote = "দামের পরিবর্তন ০.০১%-এর মধ্যে; নিরপেক্ষ ফল, সঠিকতা গণনায় ধরা হবে না";
+          }
           if ((record.outcome === "CORRECT" || record.outcome === "WRONG") && Number.isFinite(delay) && delay > tolerance) {
             record.outcome = "UNVERIFIED";
             record.evaluationNote = "পুরোনো ফল নির্ধারিত সময়ের অনেক পরে যাচাই হয়েছিল; সঠিকতার হিসাব থেকে বাদ";
@@ -1059,25 +1066,31 @@ export default {
         }
         records.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
         const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
-        const settled = records.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG");
+        const settled = records.filter(x => ["CORRECT","WRONG","NEUTRAL"].includes(x.outcome));
         const correct = settled.filter(x => x.outcome === "CORRECT").length;
+        const wrong = settled.filter(x => x.outcome === "WRONG").length;
+        const neutral = settled.filter(x => x.outcome === "NEUTRAL").length;
+        const directional = correct + wrong;
         const evaluatedLast24 = settled.filter(x => Date.parse(x.evaluatedAt || 0) >= now - 86400000);
         const summary = {
-          total: records.length, correct, wrong: settled.length - correct,
+          total: records.length, correct, wrong, neutral,
+          evaluated: settled.length,
           pending: records.filter(x => x.outcome === "PENDING").length,
           unverified: records.filter(x => x.outcome === "UNVERIFIED").length,
-          accuracy: settled.length ? Math.round(correct / settled.length * 1000) / 10 : null,
+          accuracy: directional ? Math.round(correct / directional * 1000) / 10 : null,
           last24: {
             total: last24.length,
             correct: last24.filter(x => x.outcome === "CORRECT").length,
             wrong: last24.filter(x => x.outcome === "WRONG").length,
+            neutral: last24.filter(x => x.outcome === "NEUTRAL").length,
             pending: last24.filter(x => x.outcome === "PENDING").length,
             unverified: last24.filter(x => x.outcome === "UNVERIFIED").length
           },
           evaluatedLast24: {
             total: evaluatedLast24.length,
             correct: evaluatedLast24.filter(x => x.outcome === "CORRECT").length,
-            wrong: evaluatedLast24.filter(x => x.outcome === "WRONG").length
+            wrong: evaluatedLast24.filter(x => x.outcome === "WRONG").length,
+            neutral: evaluatedLast24.filter(x => x.outcome === "NEUTRAL").length
           }
         };
         const dailyMap = {};
@@ -1088,6 +1101,7 @@ export default {
           d.total++;
           if (r.outcome === "CORRECT") d.correct++;
           else if (r.outcome === "WRONG") d.wrong++;
+          else if (r.outcome === "NEUTRAL") d.neutral = (d.neutral||0) + 1;
           else if (r.outcome === "UNVERIFIED") d.unverified = (d.unverified||0) + 1;
           else d.pending++;
           d.records.push(r);
