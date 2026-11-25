@@ -20,7 +20,7 @@ button.refresh{display:block;margin:10px auto 0;border:0;border-radius:10px;padd
 <body>
 <header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">সমস্ত তারিখ ও ঘড়ির সময় UTC অনুযায়ী। প্রতিটি LONG/SHORT সিদ্ধান্তের নিজস্ব নির্ধারিত মিনিট পূর্ণ হলে পরবর্তী Worker scheduler run-এ বাজারদর নিয়ে ফল যাচাই হবে। ১০টি দৈনিক শিট এবং সময় শেষে ফলাফলের জন্য আলাদা শিট রয়েছে।</div></header>
 <section class="panel"><h2>সার্বিক ফলাফল · UTC ভিত্তিক সর্বশেষ ১০ দিন</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div><div class="muted" id="accuracy" style="margin-top:9px">সঠিকতার হিসাব লোড হচ্ছে…</div></section>
-<section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
+<section class="panel"><h2>ইন্ডিকেটরভিত্তিক ফলাফল</h2><div class="muted" id="indicatorStats">নতুন সিদ্ধান্তের যাচাইকৃত ফল জমা হলে এখানে ইন্ডিকেটরভিত্তিক হিসাব দেখা যাবে।</div></section><section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
 <script>
 "use strict";
 let reportData=null,activeSheet="results";
@@ -79,6 +79,10 @@ async function loadReport(){
   const tiles=[["মোট সিদ্ধান্ত",s.total||0],["যাচাই সম্পন্ন",evaluated],["সঠিক সিদ্ধান্ত",correct],["ভুল সিদ্ধান্ত",wrong],["নিরপেক্ষ ফল",neutral],["যাচাই অনির্ভরযোগ্য",unverified],["সময় পূর্ণের অপেক্ষায়",s.pending||0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",(s.last24||{}).total||0]];
   stats.innerHTML=tiles.map(([k,n])=>'<div class="stat"><span>'+safe(k)+'</span><b>'+safe(n)+'</b></div>').join("");
   document.getElementById("accuracy").textContent="দিকনির্দেশক সঠিকতার হার (নিরপেক্ষ বাদ): "+accuracy+(accuracy==="—"?"":"%")+" · প্রতিটি সিদ্ধান্তের নিজস্ব নির্ধারিত সময় পূর্ণ হলে ফল গণনা করা হয়।";
+  const labels={ichimoku:"Ichimoku",vwap:"VWAP",volumeProfile:"Volume Profile",fibonacci:"Fibonacci",parabolicSar:"Parabolic SAR",cci:"CCI",williamsR:"Williams %R",aroon:"Aroon",donchian:"Donchian",keltner:"Keltner",supertrend:"Supertrend",obv:"OBV",mfi:"MFI",chaikin:"Chaikin",roc:"ROC",ultimateOscillator:"Ultimate Oscillator",trix:"TRIX",dpo:"DPO"};
+  const indicatorStats=data.indicatorStats||{},indicatorTarget=document.getElementById("indicatorStats");
+  const indicatorRows=Object.entries(labels).map(([key,label])=>({label,...(indicatorStats[key]||{})})).filter(x=>Number(x.sample)>0);
+  indicatorTarget.innerHTML=indicatorRows.length?'<div class="grid">'+indicatorRows.map(x=>'<div class="stat"><span>'+safe(x.label)+' · নমুনা '+safe(x.sample)+'</span><b>'+safe(x.accuracy===null||x.accuracy===undefined?"—":Number(x.accuracy).toFixed(1)+"%")+'</b><span>সঠিক '+safe(x.correct||0)+' · ভুল '+safe(x.wrong||0)+'</span></div>').join("")+'</div><div class="muted" style="margin-top:9px">শুধু নতুন সিদ্ধান্তের সংরক্ষিত ইন্ডিকেটর মান ও যাচাইকৃত ফল দিয়ে হিসাব। নমুনা কম হলে হার নির্ভরযোগ্য নয়।</div>':'এখনো পর্যাপ্ত নতুন যাচাইকৃত নমুনা নেই। পুরোনো সিদ্ধান্তের ইন্ডিকেটর মান সংরক্ষিত ছিল না, তাই সেগুলোর হার অনুমান করে দেখানো হচ্ছে না।';
   if(activeSheet!=="results"&&!utcDays().includes(activeSheet))activeSheet="results";
   renderTabs();renderSheet();
  }catch(err){
