@@ -52,6 +52,12 @@ function regimeOf(x){
 }
 function sign(x){return x>0?1:x<0?-1:0;}
 function strategyScores(x, regime){
+  if(!x?.valid||!x.last)return {
+    trend:{direction:0,score:0,evidence:[]},
+    breakout:{direction:0,score:0,evidence:[]},
+    range:{direction:0,score:0,evidence:[]},
+    reversal:{direction:0,score:0,evidence:[]}
+  };
   const c=x.last,range=Math.max(1e-12,c.high-c.low),closePos=(2*c.close-c.high-c.low)/range;
   const trend=x.bull?1:x.bear?-1:0;
   const trendScore=trend&&sign(x.rsi-50)===trend&&sign(c.close-x.vwap)===trend?trend:0;
