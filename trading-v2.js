@@ -40,7 +40,7 @@ function stats(bars){
   const price=last.close, slope=finite(prev20)&&prev20!==0?(e20/prev20-1)*100:0;
   const bull=price>e20&&e20>e50&&e50>e200&&slope>0;
   const bear=price<e20&&e20<e50&&e50<e200&&slope<0;
-  return {valid:true,count:c.length,price,ema20:e20,ema50:e50,ema200:e200,emaSlope:slope,adx,choppiness:chop,atr,atrPct,atrPercentile:atrRank,rsi,relativeVolume:relVol,vwap,donchianHigh:dcHigh,donchianLow:dcLow,bull,bear,last,high20:Math.max(...h.slice(-20)),low20:Math.min(...l.slice(-20))};
+  return {valid:true,count:c.length,price,ema20:e20,ema50:e50,ema200:e200,emaSlope:slope,adx,choppiness:chop,atr,atrPct,atrPercentile:atrRank,rsi,relativeVolume:relVol,vwap,donchianHigh:dcHigh,donchianLow:dcLow,bull,bear,last,high20:Math.max(...h.slice(-20)),low20:Math.min(...l.slice(-20)),_prior10:bars.slice(-11,-1),_older10:bars.slice(-21,-11)};
 }
 function regimeOf(x){
   if(!x.valid)return "INSUFFICIENT_DATA";
@@ -58,14 +58,23 @@ function strategyScores(x, regime){
   const breakout=c.close>x.donchianHigh&&x.relativeVolume>=1.3?1:c.close<x.donchianLow&&x.relativeVolume>=1.3?-1:0;
   const nearLow=c.close<=x.low20+x.atr*.35,nearHigh=c.close>=x.high20-x.atr*.35;
   const rangeScore=regime==="SIDEWAYS"?(nearLow&&x.rsi<38&&closePos>0.25?1:nearHigh&&x.rsi>62&&closePos<-.25?-1:0):0;
-  const sweptLow=c.low<Math.min(...[...Array(10)].map((_,i)=>x.last===c?0:0))?false:false;
-  const prev=x._previousStructure||null;
-  const reversal=prev?0:0; // Structural reversal requires a confirmed swing sequence; unavailable data stays neutral.
+  const prior10=x._prior10||[],older10=x._older10||[];
+  const priorHigh=prior10.length?Math.max(...prior10.map(z=>z.high)):NaN;
+  const priorLow=prior10.length?Math.min(...prior10.map(z=>z.low)):NaN;
+  const olderHigh=older10.length?Math.max(...older10.map(z=>z.high)):NaN;
+  const olderLow=older10.length?Math.min(...older10.map(z=>z.low)):NaN;
+  const priorBear=priorHigh<olderHigh&&priorLow<olderLow;
+  const priorBull=priorHigh>olderHigh&&priorLow>olderLow;
+  const sweptLow=finite(priorLow)&&c.low<priorLow&&c.close>priorLow&&closePos>0.2;
+  const sweptHigh=finite(priorHigh)&&c.high>priorHigh&&c.close<priorHigh&&closePos<-.2;
+  const bosUp=finite(priorHigh)&&c.close>priorHigh;
+  const bosDown=finite(priorLow)&&c.close<priorLow;
+  const reversal=priorBear&&sweptLow&&bosUp&&x.relativeVolume>=1.1?1:priorBull&&sweptHigh&&bosDown&&x.relativeVolume>=1.1?-1:0;
   return {
     trend:{direction:trendScore,score:trendScore?78:0,evidence:["EMA20/50/200 alignment","EMA slope","RSI and VWAP confirmation"]},
     breakout:{direction:breakout,score:breakout?82:0,evidence:["Close beyond previous 20-candle Donchian level","Relative volume >= 1.3"]},
     range:{direction:rangeScore,score:rangeScore?76:0,evidence:["Sideways regime","Support/resistance proximity","RSI rejection and candle close position"]},
-    reversal:{direction:reversal,score:0,evidence:["BOS/CHoCH and liquidity sweep need confirmed swing history; no unsupported vote"]}
+    reversal:{direction:reversal,score:reversal?80:0,evidence:["Prior swing structure","Liquidity sweep and close back through level","Confirmed structure break/CHoCH","Relative volume >= 1.1"]}
   };
 }
 function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=null,config={}}){
@@ -91,9 +100,20 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   if(!s4.valid||!s1.valid||!s15.valid||!se.valid)reasons.push("4H/1H/15M/entry timeframe-এ পর্যাপ্ত নিশ্চিত candle নেই");
   if(regime==="HIGH_VOLATILITY")reasons.push("High-volatility regime: নতুন trade বন্ধ");
   if(!selected)reasons.push("কোনো strategy-তে পূর্ণ entry setup নেই");
-  const htfAligned=direction!==0&&((direction>0&&s4.bull&&s1.bull)||(direction<0&&s4.bear&&s1.bear));
+  const htfAligned=direction!==0&&(
+    selected?.[0]==="range"
+      ? regimes[0]==="SIDEWAYS"&&regimes[1]==="SIDEWAYS"
+      : (direction>0&&s4.bull&&s1.bull)||(direction<0&&s4.bear&&s1.bear)
+  );
   if(direction!==0&&!htfAligned)reasons.push("4H ও 1H trend একই দিকে নিশ্চিত নয়");
-  const entryAligned=direction!==0&&(direction>0?s15.bull||s15.price>s15.ema20: s15.bear||s15.price<s15.ema20);
+  const s15Entry=strategyScores(s15,regimes[2])[selected?.[0]||"trend"];
+  const entryAligned=direction!==0&&(
+    selected?.[0]==="range"
+      ? regimes[2]==="SIDEWAYS"&&s15Entry?.direction===direction
+      : selected?.[0]==="breakout"
+        ? s15Entry?.direction===direction
+        : direction>0?s15.bull||s15.price>s15.ema20:s15.bear||s15.price<s15.ema20
+  );
   if(direction!==0&&!entryAligned)reasons.push("15M entry confirmation অনুপস্থিত");
   if(!finite(price)||price<=0)reasons.push("Live ticker price অনুপস্থিত বা অবৈধ");
   if(spreadPct===null)reasons.push("Bid/Ask spread data অনুপস্থিত");
@@ -101,9 +121,9 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   if(se.atr<=0||!finite(se.atr))reasons.push("ATR/stop distance অবৈধ");
   const scoreParts={
     trend:htfAligned?25:0,
-    structure:selected?.[0]==="breakout"||selected?.[0]==="reversal"?20:0,
+    structure:selected?20:0,
     momentum:selected&&sign(se.rsi-50)===direction?15:0,
-    volume:selected?.[0]==="breakout"&&se.relativeVolume>=1.3?15:0,
+    volume:selected&&finite(se.relativeVolume)&&se.relativeVolume>=(selected[0]==="reversal"?1.1:1.3)?15:0,
     multiTimeframe:htfAligned&&entryAligned?15:0,
     regime:regime!=="HIGH_VOLATILITY"&&regime!=="INSUFFICIENT_DATA"?10:0
   };
