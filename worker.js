@@ -86,14 +86,16 @@ async function sendSignalPush(env,result) {
   if(!["LONG","SHORT"].includes(decision)) return;
   const stateKey="lastsignal:"+result.symbol+":"+result.timeframe;
   const previous=await env.ANALYSIS_KV.get(stateKey,"json");
-  if(previous?.decision===decision&&previous?.notifiedAt) return;
+  // Deduplicate only the exact same candle's decision. A fresh candle must
+  // notify again even when its direction matches the previous LONG/SHORT.
+  if(previous?.candleCloseTime===result.candleCloseTime&&previous?.decision===decision&&previous?.notifiedAt) return;
   const listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});
   if(!listed.keys.length) return;
   const payload={
     title:decision,
     body:result.symbol+" · "+({"1m":"১ মিনিট","5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"}[result.timeframe]||result.timeframe),
     url:"/",
-    tag:result.symbol+"-"+result.timeframe+"-"+decision,
+    tag:result.symbol+"-"+result.timeframe+"-"+decision+"-"+String(result.candleCloseTime||result.generatedAt||Date.now()),
     decision,symbol:result.symbol,timeframe:result.timeframe
   };
   const deliveries=await Promise.allSettled(listed.keys.map(async item=>{
