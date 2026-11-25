@@ -40,8 +40,8 @@ function renderTabs(){
 function recordCard(r,showOutcome){
  const decision=r.decision==="LONG"?"LONG":r.decision==="SHORT"?"SHORT":String(r.decision||"UNKNOWN");
  const dir=decision==="LONG"?"long":"short";
- const good=r.outcome==="CORRECT",bad=r.outcome==="WRONG";
- const state=good?'<span class="correct">সঠিক</span>':bad?'<span class="wrong">ভুল</span>':'<span class="pending">সময় পূর্ণ হলে যাচাই হবে · '+safe(r.durationMinutes??"—")+' মিনিট</span>';
+ const good=r.outcome==="CORRECT",bad=r.outcome==="WRONG",neutral=r.outcome==="NEUTRAL",unverified=r.outcome==="UNVERIFIED";
+ const state=good?'<span class="correct">সঠিক</span>':bad?'<span class="wrong">ভুল</span>':neutral?'<span class="pending">নিরপেক্ষ · সঠিকতা গণনায় নয়</span>':unverified?'<span class="pending">যাচাই অনির্ভরযোগ্য · হিসাবের বাইরে</span>':'<span class="pending">সময় পূর্ণ হলে যাচাই হবে · '+safe(r.durationMinutes??"—")+' মিনিট</span>';
  const exitValue=numberValue(r.exitPrice);
  const exit=exitValue!==null?'<div>নির্ধারিত সময় শেষে মূল্য: <b class="price">$'+fmt(exitValue)+'</b></div>':"";
  const pnlValue=numberValue(r.pnlPct);
@@ -56,13 +56,13 @@ function recordCard(r,showOutcome){
 function renderSheet(){
  const target=document.getElementById("records"),rows=allRecords().slice().sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
  if(activeSheet==="results"){
-  const settled=rows.filter(r=>r.outcome==="CORRECT"||r.outcome==="WRONG");
+  const settled=rows.filter(r=>["CORRECT","WRONG","NEUTRAL"].includes(r.outcome));
   target.innerHTML=settled.length?'<div class="day-summary">নির্ধারিত সময় পার হয়ে ফল যাচাই সম্পন্ন হয়েছে এমন সিদ্ধান্ত: '+settled.length+'টি। নতুন ফল এখানে যোগ হবে।</div>'+settled.map(r=>recordCard(r,true)).join(""):"এখনো কোনো সিদ্ধান্তের নির্ধারিত সময় পূর্ণ হয়নি।";
   return;
  }
  const daily=rows.filter(r=>r.decidedAt&&String(r.decidedAt).slice(0,10)===activeSheet);
- const correct=daily.filter(r=>r.outcome==="CORRECT").length,wrong=daily.filter(r=>r.outcome==="WRONG").length,pending=daily.filter(r=>r.outcome==="PENDING").length;
- target.innerHTML='<div class="day-summary">'+utcDate(activeSheet)+' · মোট '+daily.length+'টি সিদ্ধান্ত · সঠিক '+correct+' · ভুল '+wrong+' · অপেক্ষমাণ '+pending+'</div>'+(daily.length?daily.map(r=>recordCard(r,false)).join(""):"এই UTC দিনে কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।");
+ const correct=daily.filter(r=>r.outcome==="CORRECT").length,wrong=daily.filter(r=>r.outcome==="WRONG").length,neutral=daily.filter(r=>r.outcome==="NEUTRAL").length,pending=daily.filter(r=>r.outcome==="PENDING").length,unverified=daily.filter(r=>r.outcome==="UNVERIFIED").length;
+ target.innerHTML='<div class="day-summary">'+utcDate(activeSheet)+' · মোট '+daily.length+'টি সিদ্ধান্ত · সঠিক '+correct+' · ভুল '+wrong+' · নিরপেক্ষ '+neutral+' · অপেক্ষমাণ '+pending+' · অনির্ভরযোগ্য '+unverified+'</div>'+(daily.length?daily.map(r=>recordCard(r,false)).join(""):"এই UTC দিনে কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।");
 }
 async function loadReport(){
  const stats=document.getElementById("stats"),records=document.getElementById("records"),btn=document.getElementById("refresh");
@@ -73,11 +73,11 @@ async function loadReport(){
   if(!res.ok)throw new Error([data.error||"রিপোর্ট পাওয়া যায়নি",data.details||data.upstreamStatus?("বিস্তারিত: "+(data.details||("HTTP "+data.upstreamStatus))):""].filter(Boolean).join(" · "));
   if(!data||typeof data!=="object"||!Array.isArray(data.records))throw new Error("রিপোর্টের ডেটার কাঠামো সঠিক নয়");
   reportData=data;
-  const s=data.summary||{},correct=Number(s.correct)||0,wrong=Number(s.wrong)||0,evaluated=correct+wrong;
+  const s=data.summary||{},correct=Number(s.correct)||0,wrong=Number(s.wrong)||0,neutral=Number(s.neutral)||0,evaluated=Number(s.evaluated)||correct+wrong+neutral,unverified=Number(s.unverified)||0;
   const accuracy=evaluated?(correct/evaluated*100).toFixed(1):"—";
-  const tiles=[["মোট সিদ্ধান্ত",s.total||0],["যাচাই সম্পন্ন",evaluated],["সঠিক সিদ্ধান্ত",correct],["ভুল সিদ্ধান্ত",wrong],["সময় পূর্ণের অপেক্ষায়",s.pending||0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",(s.last24||{}).total||0]];
+  const tiles=[["মোট সিদ্ধান্ত",s.total||0],["যাচাই সম্পন্ন",evaluated],["সঠিক সিদ্ধান্ত",correct],["ভুল সিদ্ধান্ত",wrong],["নিরপেক্ষ ফল",neutral],["যাচাই অনির্ভরযোগ্য",unverified],["সময় পূর্ণের অপেক্ষায়",s.pending||0],["গত ২৪ ঘণ্টায় সিদ্ধান্ত",(s.last24||{}).total||0]];
   stats.innerHTML=tiles.map(([k,n])=>'<div class="stat"><span>'+safe(k)+'</span><b>'+safe(n)+'</b></div>').join("");
-  document.getElementById("accuracy").textContent="যাচাইকৃত সিদ্ধান্তের সঠিকতার হার: "+accuracy+(accuracy==="—"?"":"%")+" · প্রতিটি সিদ্ধান্তের নিজস্ব নির্ধারিত সময় পূর্ণ হলে ফল গণনা করা হয়।";
+  document.getElementById("accuracy").textContent="দিকনির্দেশক সঠিকতার হার (নিরপেক্ষ বাদ): "+accuracy+(accuracy==="—"?"":"%")+" · প্রতিটি সিদ্ধান্তের নিজস্ব নির্ধারিত সময় পূর্ণ হলে ফল গণনা করা হয়।";
   if(activeSheet!=="results"&&!utcDays().includes(activeSheet))activeSheet="results";
   renderTabs();renderSheet();
  }catch(err){
