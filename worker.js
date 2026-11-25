@@ -841,11 +841,12 @@ async function runOne(env, symbol, tf, options = {}) {
     technical.technicalSignal === "SHORT" ? "মূল ট্রেন্ড ও উন্নত Ichimoku, SAR, Supertrend, Donchian ও momentum সূচক নিম্নমুখী" :
     "উন্নত সূচকগুলোর সম্মিলিত স্কোরে এখনো যথেষ্ট একমুখী সুবিধা নেই";
   const candidate=technical.technicalSignal,higher=market.higherTimeframe||{};
-  const higherSignal=(tf==="1m"||tf==="5m"||tf==="15m")?(higher.oneHourSignal||higher.signal||"WAIT"):(higher.fourHour?.signal||higher.signal||"WAIT");
+  const higherSignals=(tf==="1m"||tf==="5m")?[...(higher.requiredSignals||[]),higher.oneHourSignal,higher.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT"):(tf==="15m"||tf==="30m")?[higher.signal,higher.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT"):[higher.fourHour?.signal||higher.signal].filter(x=>x==="LONG"||x==="SHORT");
+  const higherSignal=higherSignals[0]||"WAIT";
   const opposite=candidate==="LONG"?"SHORT":"LONG";
   const hardRisk=candidate==="LONG"?market.riskEngine?.confirmedSupportBreakdown===true:candidate==="SHORT"?market.riskEngine?.confirmedResistanceBreakout===true:false;
   let decision=candidate,decisionReason=technical.reason;
-  if(candidate!=="WAIT"&&higherSignal===opposite){decision="WAIT";decisionReason="উচ্চতর টাইমফ্রেমের প্রবণতা বিপরীত; তাই ঝুঁকি এড়াতে WAIT";}
+  if(candidate!=="WAIT"&&higherSignals.includes(opposite)){decision="WAIT";decisionReason="এক বা একাধিক উচ্চতর টাইমফ্রেমে বিপরীত সংকেত; তাই ঝুঁকি এড়াতে WAIT";}
   if(candidate!=="WAIT"&&hardRisk){decision="WAIT";decisionReason="৪ ঘণ্টার কাঠামোয় বিপরীত দিকের নিশ্চিত ব্রেক; তাই WAIT";}
   const analysis={decision,direction:decision==="LONG"?"UPWARD":decision==="SHORT"?"DOWNWARD":"SIDEWAYS",directionalBias:candidate,
     confidenceScore:Math.min(95,Math.round(Math.abs(technical.technicalScore)*100)),
@@ -921,10 +922,18 @@ async function evaluateMaturedDecisions(env) {
     r.exitPrice = exitPrice;
     r.evaluatedAt = new Date(now).toISOString();
     r.evaluationDelayMs = Math.max(0, now - Date.parse(r.expectedEvaluationAt));
-    r.pnlPct = (r.decision === "LONG"
-      ? (exitPrice / r.entryPrice - 1)
-      : (r.entryPrice / exitPrice - 1)) * 100;
-    r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
+    const intervalMs = ({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000}[r.timeframe]||60000);
+    const maxEvaluationDelayMs = Math.max(90000, intervalMs * 0.25);
+    if (r.evaluationDelayMs > maxEvaluationDelayMs) {
+      r.outcome = "UNVERIFIED";
+      r.evaluationNote = "নির্ধারিত সময়ের পরে দেরিতে মূল্য পাওয়া গেছে; এই ফল সঠিক/ভুলের হিসাবে ধরা হবে না";
+    } else {
+      r.pnlPct = (r.decision === "LONG"
+        ? (exitPrice / r.entryPrice - 1)
+        : (r.entryPrice / exitPrice - 1)) * 100;
+      r.outcome = r.pnlPct > 0 ? "CORRECT" : "WRONG";
+      r.evaluationNote = "নির্ধারিত সময়ের কাছাকাছি বাজারদরে যাচাই";
+    }
     await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), {
       expirationTtl: 60 * 60 * 24 * 11,
       metadata: r
@@ -1006,6 +1015,15 @@ export default {
           if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
               Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
         }
+        const intervalMs = ({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000});
+        for (const record of records) {
+          const delay = Number(record.evaluationDelayMs);
+          const tolerance = Math.max(90000, (intervalMs[record.timeframe]||60000) * 0.25);
+          if ((record.outcome === "CORRECT" || record.outcome === "WRONG") && Number.isFinite(delay) && delay > tolerance) {
+            record.outcome = "UNVERIFIED";
+            record.evaluationNote = "পুরোনো ফল নির্ধারিত সময়ের অনেক পরে যাচাই হয়েছিল; সঠিকতার হিসাব থেকে বাদ";
+          }
+        }
         records.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
         const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
         const settled = records.filter(x => x.outcome === "CORRECT" || x.outcome === "WRONG");
@@ -1014,12 +1032,14 @@ export default {
         const summary = {
           total: records.length, correct, wrong: settled.length - correct,
           pending: records.filter(x => x.outcome === "PENDING").length,
+          unverified: records.filter(x => x.outcome === "UNVERIFIED").length,
           accuracy: settled.length ? Math.round(correct / settled.length * 1000) / 10 : null,
           last24: {
             total: last24.length,
             correct: last24.filter(x => x.outcome === "CORRECT").length,
             wrong: last24.filter(x => x.outcome === "WRONG").length,
-            pending: last24.filter(x => x.outcome === "PENDING").length
+            pending: last24.filter(x => x.outcome === "PENDING").length,
+            unverified: last24.filter(x => x.outcome === "UNVERIFIED").length
           },
           evaluatedLast24: {
             total: evaluatedLast24.length,
@@ -1035,6 +1055,7 @@ export default {
           d.total++;
           if (r.outcome === "CORRECT") d.correct++;
           else if (r.outcome === "WRONG") d.wrong++;
+          else if (r.outcome === "UNVERIFIED") d.unverified = (d.unverified||0) + 1;
           else d.pending++;
           d.records.push(r);
         }
@@ -1081,7 +1102,8 @@ export default {
     const scheduledDate = new Date(controller.scheduledTime);
     const minute = scheduledDate.getUTCMinutes();
     // Outcome evaluation is less time-critical than signal generation; run every 15 minutes.
-    if (minute % 15 === 0) await evaluateMaturedDecisions(env);
+    // Evaluate matured decisions on every minute tick, not every 15 minutes.
+    await evaluateMaturedDecisions(env);
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
       tasks.push(() => runScheduledOne(env, symbol, "1m"));
