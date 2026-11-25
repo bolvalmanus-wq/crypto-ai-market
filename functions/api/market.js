@@ -49,11 +49,11 @@ export async function onRequestGet({ request }) {
     const symbolCode = symbol + "USDT";
     const [tickerResult, k1, k5, k15, k60, k240, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
       bybitGet("/v5/market/tickers?category=linear&symbol=" + symbolCode),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=1&limit=300"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=5&limit=300"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=15&limit=300"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=300"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=240&limit=300"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=1&limit=1000"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=5&limit=1000"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=15&limit=1000"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=1000"),
+      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=240&limit=1000"),
       bybitGet("/v5/market/open-interest?category=linear&symbol=" + symbolCode + "&intervalTime=30min&limit=2").catch(() => null),
       bybitGet("/v5/market/open-interest?category=linear&symbol=" + symbolCode + "&intervalTime=1h&limit=2").catch(() => null),
       bybitGet("/v5/market/account-ratio?category=linear&symbol=" + symbolCode + "&period=30min&limit=2").catch(() => null),
