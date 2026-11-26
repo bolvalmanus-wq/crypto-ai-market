@@ -64,12 +64,19 @@ export async function onRequestGet({ request }) {
       bybitGet("/v5/market/funding/history?category=linear&symbol=" + symbolCode + "&limit=2").catch(() => null)
     ]);
     const ticker = tickerResult.list?.[0];
-    if (!ticker || !k1.list?.length || !k5.list?.length || !k15.list?.length || !k30.list?.length || !k60.list?.length || !k240.list?.length) throw new Error("Bybit returned incomplete market data");
-    const mapBars = (rows, intervalMs) => rows.map(row => {
-      const start = Number(row[0]);
-      return { time:start, open:Number(row[1]), high:Number(row[2]), low:Number(row[3]), close:Number(row[4]), volume:Number(row[5]), confirmed:Date.now() >= start + intervalMs };
-    }).reverse();
     const timestamp = Date.now();
+    const mapBars = (rows, intervalMs) => {
+      const unique=new Map();
+      for(const row of Array.isArray(rows)?rows:[]){
+        if(!Array.isArray(row)||row.length<6)continue;
+        const [time,open,high,low,close,volume]=row.slice(0,6).map(Number);
+        if(![time,open,high,low,close,volume].every(Number.isFinite)||time<=0||low<=0||high<low||open<low||open>high||close<low||close>high||volume<0)continue;
+        unique.set(time,{time,open,high,low,close,volume,confirmed:timestamp>=time+intervalMs});
+      }
+      return [...unique.values()].sort((a,b)=>a.time-b.time);
+    };
+    const candles={"1m":mapBars(k1.list,60000),"5m":mapBars(k5.list,300000),"15m":mapBars(k15.list,900000),"30m":mapBars(k30.list,1800000),"1h":mapBars(k60.list,3600000),"4h":mapBars(k240.list,14400000)};
+    if(!ticker||!Number.isFinite(Number(ticker.lastPrice))||Number(ticker.lastPrice)<=0||!Number.isFinite(Number(ticker.bid1Price))||!Number.isFinite(Number(ticker.ask1Price))||Number(ticker.bid1Price)<=0||Number(ticker.ask1Price)<Number(ticker.bid1Price)||Object.values(candles).some(rows=>rows.length<30))throw new Error("Bybit returned invalid or incomplete market data");
     const prev = Number(ticker.prevPrice24h);
     return Response.json({
       symbol, instrument:symbolCode, source:"Bybit USDT perpetual",
@@ -83,7 +90,7 @@ export async function onRequestGet({ request }) {
         orderbook:orderbook?.b&&orderbook?.a?{bids:orderbook.b.map(x=>[Number(x[0]),Number(x[1])]),asks:orderbook.a.map(x=>[Number(x[0]),Number(x[1])]),time:Number(orderbook.ts)}:null,
         fundingHistory:funding?.list?.map(x=>({rate:Number(x.fundingRate),time:Number(x.fundingRateTimestamp)}))||[]
       },
-      candles:{"1m":mapBars(k1.list,60*1000),"5m":mapBars(k5.list,5*60*1000),"15m":mapBars(k15.list,15*60*1000),"30m":mapBars(k30.list,30*60*1000),"1h":mapBars(k60.list,60*60*1000),"4h":mapBars(k240.list,4*60*60*1000)}
+      candles
     },{headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
   } catch(error) {
     lastError = error instanceof Error ? error.message : "Bybit API unavailable";
