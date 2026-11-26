@@ -77,7 +77,7 @@ async function sendOnePush(env,subscription,payload) {
       "Authorization":"vapid t="+token+", k="+env.VAPID_PUBLIC_KEY,
       "Content-Type":"application/octet-stream","Content-Encoding":"aes128gcm",
       "TTL":"300","Urgency":"high"
-    },body
+    },body,signal:AbortSignal.timeout(8000)
   });
 }
 async function sendSignalPush(env,result) {
@@ -1248,7 +1248,9 @@ export default {
       try { endpoint = new URL(subscription?.endpoint); } catch (_) { return Response.json({ error: "Invalid push endpoint" }, { status: 400 }); }
       const host=endpoint.hostname.toLowerCase();
       const allowedHost=host==="fcm.googleapis.com"||host==="web.push.apple.com"||host==="push.apple.com"||host.endsWith(".push.services.mozilla.com")||host.endsWith(".notify.windows.com");
-      if(endpoint.protocol!=="https:"||!allowedHost||subscription.endpoint.length>2048||!subscription?.keys?.p256dh||!subscription?.keys?.auth||String(subscription.keys.p256dh).length>256||String(subscription.keys.auth).length>256){
+      let publicKeyBytes,authBytes;
+      try{publicKeyBytes=unb64u(subscription?.keys?.p256dh);authBytes=unb64u(subscription?.keys?.auth);}catch(_){return Response.json({error:"Invalid push encryption keys"},{status:400});}
+      if(endpoint.protocol!=="https:"||!allowedHost||subscription.endpoint.length>2048||publicKeyBytes.length!==65||authBytes.length!==16){
         return Response.json({ error: "Invalid or unsupported push subscription" }, { status: 400 });
       }
       const digest = await crypto.subtle.digest("SHA-256", utf8(subscription.endpoint));
