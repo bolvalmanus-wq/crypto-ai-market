@@ -50,8 +50,8 @@ function recordCard(r,showOutcome){
  const exit=exitValue!==null?'<div>নির্ধারিত সময় শেষে মূল্য: <b class="price">$'+fmt(exitValue)+'</b></div>':"";
  const pnlValue=numberValue(r.pnlPct);
  const pnl=pnlValue!==null?'<div>পরিবর্তন: <b class="'+(pnlValue>=0?"correct":"wrong")+'">'+(pnlValue>0?"+":"")+pnlValue.toFixed(3)+'%</b></div>':"";
- const evaluated=r.evaluatedAt?'<div>ফল যাচাইয়ের UTC সময়: '+utcTime(r.evaluatedAt)+' · '+safe(String(r.evaluatedAt).slice(0,10))+'</div>':"";
- const expected=r.expectedEvaluationAt?'<div>'+safe(r.durationMinutes??"—")+' মিনিট পরে ফল যাচাই: '+safe(String(r.expectedEvaluationAt).slice(0,10))+' '+utcTime(r.expectedEvaluationAt)+'</div>':"";
+ const evaluated=r.evaluatedAt?'<div>ফল যাচাইয়ের মস্কো সময়: '+utcTime(r.evaluatedAt)+' · '+safe(moscowKey(new Date(r.evaluatedAt)))+'</div>':"";
+ const expected=r.expectedEvaluationAt?'<div>'+safe(r.durationMinutes??"—")+' মিনিট পরে ফল যাচাই: '+safe(moscowKey(new Date(r.expectedEvaluationAt)))+' '+utcTime(r.expectedEvaluationAt)+'</div>':"";
  const score=numberValue(r.confidenceScore);
  const details='<div class="detail">এন্ট্রি মূল্য: <b class="price">$'+fmt(r.entryPrice)+'</b> · দিকনির্দেশক স্কোর: <b>'+(score===null?"—":safe(score))+'%</b> · সময়: <b>'+safe(r.durationMinutes??"—")+' মিনিট</b></div>';
  const result='<div class="result">'+state+exit+pnl+evaluated+'</div>';
@@ -66,7 +66,7 @@ function renderSheet(){
  }
  const daily=rows.filter(r=>r.decidedAt&&moscowKey(new Date(r.decidedAt))===activeSheet);
  const correct=daily.filter(r=>r.outcome==="CORRECT").length,wrong=daily.filter(r=>r.outcome==="WRONG").length,neutral=daily.filter(r=>r.outcome==="NEUTRAL").length,pending=daily.filter(r=>r.outcome==="PENDING").length,unverified=daily.filter(r=>r.outcome==="UNVERIFIED").length;
- target.innerHTML='<div class="day-summary">'+moscowDate(activeSheet)+' · মোট '+daily.length+'টি সিদ্ধান্ত · সঠিক '+correct+' · ভুল '+wrong+' · নিরপেক্ষ '+neutral+' · অপেক্ষমাণ '+pending+' · অনির্ভরযোগ্য '+unverified+'</div>'+(daily.length?daily.map(r=>recordCard(r,false)).join(""):"এই UTC দিনে কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।");
+ target.innerHTML='<div class="day-summary">'+moscowDate(activeSheet)+' · মোট '+daily.length+'টি সিদ্ধান্ত · সঠিক '+correct+' · ভুল '+wrong+' · নিরপেক্ষ '+neutral+' · অপেক্ষমাণ '+pending+' · অনির্ভরযোগ্য '+unverified+'</div>'+(daily.length?daily.map(r=>recordCard(r,false)).join(""):"এই মস্কো দিনের জন্য কোনো চূড়ান্ত LONG/SHORT সিদ্ধান্ত রেকর্ড হয়নি।");
 }
 async function loadReport(){
  const stats=document.getElementById("stats"),records=document.getElementById("records"),btn=document.getElementById("refresh");
