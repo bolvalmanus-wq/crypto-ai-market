@@ -148,7 +148,11 @@ function rsi(values, period = 14) {
 }
 function analyze(data, tf) {
   const interval = INTERVALS[tf];
-  const bars = (data.candles?.[tf] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0);
+  const bars = (data.candles?.[tf] || []).filter(c => c && c.confirmed === true &&
+    [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) &&
+    c.time > 0 && c.low > 0 && c.high >= c.low &&
+    c.open >= c.low && c.open <= c.high && c.close >= c.low && c.close <= c.high
+  ).sort((a,b) => a.time - b.time);
   if (bars.length < 30) throw new Error("Not enough confirmed candles for " + tf);
   const last = bars[bars.length - 1];
   const closeTime = last.time + interval;
@@ -175,9 +179,12 @@ function analyze(data, tf) {
   let rawScore = .38*trend + .32*priceTrend + .22*momentum + .08*rsiBias;
   const derivatives = data.derivatives || {};
   const oi = tf === "30m" ? derivatives.openInterest30m : tf === "1h" ? derivatives.openInterest1h : null;
-  if (Array.isArray(oi) && oi.length >= 2 && Number(oi[0].value) > 0) {
-    const delta = Number(oi[oi.length - 1].value) / Number(oi[0].value) - 1;
-    rawScore += clamp(delta * 18) * .08;
+  if (Array.isArray(oi) && oi.length >= 2) {
+    const oiStart = Number(oi[0].value), oiEnd = Number(oi[oi.length - 1].value);
+    if (Number.isFinite(oiStart) && oiStart > 0 && Number.isFinite(oiEnd) && oiEnd > 0) {
+      const delta = oiEnd / oiStart - 1;
+      rawScore += clamp(delta * 18) * .08;
+    }
   }
   const ratios = tf === "30m" ? derivatives.longShort30m : tf === "1h" ? derivatives.longShort1h : null;
   if (Array.isArray(ratios) && ratios.length) {
