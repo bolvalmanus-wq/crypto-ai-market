@@ -1,4 +1,4 @@
-const CACHE_NAME = "crypto-ai-market-v57";
+const CACHE_NAME = "crypto-ai-market-v58";
 const APP_FILES = ["/", "/index.html", "/manifest.webmanifest", "/app-icon.svg"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_FILES)));
