@@ -957,7 +957,9 @@ async function runOne(env, symbol, tf, options = {}) {
       entryPrice: Number(market.ticker.last),
       decidedAt: result.generatedAt,
       durationMinutes: Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1),
-      expectedEvaluationAt: new Date(Date.parse(result.generatedAt) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
+      candleCloseTime: result.candleCloseTime,
+      // Anchor the horizon to the actual closed signal candle, not scheduler execution latency.
+      expectedEvaluationAt: new Date(Date.parse(result.candleCloseTime) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":30,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
       outcome: "PENDING"
     };
     await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {
@@ -974,8 +976,9 @@ async function runOne(env, symbol, tf, options = {}) {
       entryPrice:Number(v2Testing.entryPrice), stopLoss:Number(v2Testing.stopLoss),
       takeProfit1:Number(v2Testing.takeProfit1), takeProfit2:Number(v2Testing.takeProfit2),
       riskReward:Number(v2Testing.riskReward), decidedAt:result.generatedAt,
+      candleCloseTime:result.candleCloseTime,
       durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15),
-      expectedEvaluationAt:new Date(Date.parse(result.generatedAt)+({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15)*60000).toISOString(),
+      expectedEvaluationAt:new Date(Date.parse(result.candleCloseTime)+({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15)*60000).toISOString(),
       outcome:"PENDING"
     };
     await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:v2Record});
@@ -1004,11 +1007,22 @@ async function evaluateMaturedDecisions(env) {
     listAll("v2paper:")
   ]);
   const due = [];
+  const intervalsForRecords = {"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
   for (const item of [...legacyKeys, ...v2Keys]) {
     const r = item.metadata;
-    if (r && (r.decision === "LONG" || r.decision === "SHORT") &&
-        r.outcome === "PENDING" && now >= Date.parse(r.expectedEvaluationAt)) {
-      due.push({ key: item.name, record: r });
+    if (r && (r.decision === "LONG" || r.decision === "SHORT")) {
+      // Repair older records whose target was anchored to scheduler runtime.
+      const retryable = r.outcome === "PENDING" ||
+        (r.outcome === "UNVERIFIED" && /নির্ধারিত সময়ের কাছাকাছি নিশ্চিত ক্যান্ডেল পাওয়া যায়নি/.test(r.evaluationNote || ""));
+      if (!retryable) continue;
+      const duration = intervalsForRecords[r.timeframe] || 60000;
+      const keyEpoch = Number(String(item.name).split(":").pop());
+      const candleClose = Date.parse(r.candleCloseTime || "") || (Number.isFinite(keyEpoch) && keyEpoch > 0 ? keyEpoch : NaN);
+      if (Number.isFinite(candleClose)) {
+        r.candleCloseTime = new Date(candleClose).toISOString();
+        r.expectedEvaluationAt = new Date(candleClose + duration).toISOString();
+      }
+      if (now >= Date.parse(r.expectedEvaluationAt)) due.push({ key: item.name, record: r });
     }
   }
   if (!due.length) return;
