@@ -868,11 +868,11 @@ async function getDecisionFeedback(env, symbol, tf) {
   };
 }
 
-async function runScheduledOne(env, symbol, tf) {
+async function runScheduledOne(env, symbol, tf, marketData) {
   if (!env.ANALYSIS_KV) throw new Error("ANALYSIS_KV binding is missing");
-  // Scheduled executions are already dispatched by the cron; avoid KV lock
-  // writes because the Free plan has a strict daily write allowance.
-  return await runOne(env, symbol, tf, { persist: false });
+  if (!marketData || marketData.__fetchError) throw new Error(marketData?.__fetchError || "Scheduled market snapshot unavailable");
+  // Reuse one validated market snapshot for every timeframe in this cron run.
+  return await runOne(env, symbol, tf, { persist: false, marketData });
 }
 
 async function persistLatestSnapshot(env, symbol, result) {
@@ -907,9 +907,12 @@ function shouldRunAiCouncil(market) {
 }
 
 async function runOne(env, symbol, tf, options = {}) {
-  const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" }, signal: AbortSignal.timeout(18000) });
-  if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
-  const data = await marketResponse.json();
+  let data=options.marketData||null;
+  if(!data){
+    const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" }, signal: AbortSignal.timeout(18000) });
+    if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
+    data = await marketResponse.json();
+  }
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
   const analysisData = tf === "4h"
     ? { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } }
@@ -1517,23 +1520,36 @@ export default {
     // Evaluate matured decisions on every minute tick so short timeframes are checked promptly.
     try{await evaluateMaturedDecisions(env);}
     catch(error){console.error("Matured-decision evaluation failed; scheduled analysis will continue",String(error));}
+    // Fetch each symbol's validated market snapshot once per cron tick. Reusing
+    // it avoids 6 duplicate exchange fan-outs on 5-minute boundaries and keeps
+    // every timeframe decision anchored to the same market-data observation.
+    const marketDataBySymbol={};
+    await Promise.all(["BTC","SOL"].map(async symbol=>{
+      try{
+        const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol,{headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(18000)});
+        if(!response.ok)throw new Error("Market API HTTP "+response.status);
+        const data=await response.json();
+        if(!data?.candles||!data?.ticker)throw new Error("Market API returned incomplete data");
+        marketDataBySymbol[symbol]=data;
+      }catch(error){marketDataBySymbol[symbol]={__fetchError:error instanceof Error?error.message:String(error)};}
+    }));
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
-      tasks.push(() => runScheduledOne(env, symbol, "1m"));
-      if (minute % 5 === 0) tasks.push(() => runScheduledOne(env, symbol, "5m"));
-      if (minute % 15 === 0) tasks.push(() => runScheduledOne(env, symbol, "15m"));
-      if (minute % 30 === 0) tasks.push(() => runScheduledOne(env, symbol, "30m"));
-      if (minute === 0) tasks.push(() => runScheduledOne(env, symbol, "1h"));
-      if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push(() => runScheduledOne(env, symbol, "4h"));
+      tasks.push({symbol,timeframe:"1m"});
+      if (minute % 5 === 0) tasks.push({symbol,timeframe:"5m"});
+      if (minute % 15 === 0) tasks.push({symbol,timeframe:"15m"});
+      if (minute % 30 === 0) tasks.push({symbol,timeframe:"30m"});
+      if (minute === 0) tasks.push({symbol,timeframe:"1h"});
+      if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push({symbol,timeframe:"4h"});
     }
-    // Bound concurrent timeframe jobs: each qualifying job may call five models.
-    // Running all 12 jobs together could burst up to 60 simultaneous AI requests.
+    // The market feed is shared; keep CPU-heavy analysis work bounded.
     const outcomes = new Array(tasks.length);
     let nextTask = 0;
     const runners = Array.from({ length: 2 }, async () => {
       while (nextTask < tasks.length) {
         const index = nextTask++;
-        try { outcomes[index] = { status: "fulfilled", value: await tasks[index]() }; }
+        const task=tasks[index];
+        try { outcomes[index] = { status: "fulfilled", value: await runScheduledOne(env,task.symbol,task.timeframe,marketDataBySymbol[task.symbol]) }; }
         catch (reason) { outcomes[index] = { status: "rejected", reason }; }
       }
     });
