@@ -1055,9 +1055,12 @@ async function evaluateMaturedDecisions(env) {
       // Retry scheduler-late results that the report excludes as UNVERIFIED.
       // KV metadata still retains the original CORRECT/WRONG result, so detect it by delay.
       const delayedResult = ["CORRECT","WRONG"].includes(r.outcome) &&
+        !r.recheckedForDelayAt &&
         Number.isFinite(Number(r.evaluationDelayMs)) && Number(r.evaluationDelayMs) > tolerance;
-      const retryable = r.outcome === "PENDING" || delayedResult ||
-        (r.outcome === "UNVERIFIED" && /নির্ধারিত সময়ের কাছাকাছি নিশ্চিত ক্যান্ডেল পাওয়া যায়নি/.test(r.evaluationNote || ""));
+      const missingCandleRetry = r.outcome === "UNVERIFIED" &&
+        /নির্ধারিত সময়ের কাছাকাছি নিশ্চিত ক্যান্ডেল পাওয়া যায়নি/.test(r.evaluationNote || "") &&
+        (!r.lastEvaluationAttemptAt || now - Date.parse(r.lastEvaluationAttemptAt) >= 5 * 60 * 1000);
+      const retryable = r.outcome === "PENDING" || delayedResult || missingCandleRetry;
       if (!retryable) continue;
       const keyEpoch = Number(String(item.name).split(":").pop());
       const candleClose = Date.parse(r.candleCloseTime || "") || (Number.isFinite(keyEpoch) && keyEpoch > 0 ? keyEpoch : NaN);
@@ -1123,7 +1126,11 @@ async function evaluateMaturedDecisions(env) {
       }
     }
     r.evaluatedAt = new Date(now).toISOString();
+    r.lastEvaluationAttemptAt = new Date(now).toISOString();
     r.evaluationDelayMs = Math.max(0, now - target);
+    if (["CORRECT","WRONG","NEUTRAL"].includes(r.outcome) && r.evaluationDelayMs > Math.max(90000,duration*0.25)) {
+      r.recheckedForDelayAt = new Date(now).toISOString();
+    }
     if (!best || bestDelta > tolerance) {
       r.outcome = "UNVERIFIED";
       r.evaluationNote = "নির্ধারিত সময়ের কাছাকাছি নিশ্চিত ক্যান্ডেল পাওয়া যায়নি; সঠিকতা গণনায় অন্তর্ভুক্ত নয়";
@@ -1328,7 +1335,7 @@ export default {
         for (const record of records) {
           const delay = Number(record.evaluationDelayMs);
           const tolerance = Math.max(90000, (intervalMs[record.timeframe]||60000) * 0.25);
-          if ((record.outcome === "CORRECT" || record.outcome === "WRONG") && Number.isFinite(Number(record.pnlPct)) && Math.abs(Number(record.pnlPct)) <= 0.01) {
+          if ((record.outcome === "CORRECT" || record.outcome === "WRONG") && record.pnlPct !== null && record.pnlPct !== undefined && Number.isFinite(Number(record.pnlPct)) && Math.abs(Number(record.pnlPct)) <= 0.01) {
             record.outcome = "NEUTRAL";
             record.evaluationNote = "দামের পরিবর্তন ০.০১%-এর মধ্যে; নিরপেক্ষ ফল, সঠিকতা গণনায় ধরা হবে না";
           }
