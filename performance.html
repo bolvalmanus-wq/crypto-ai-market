@@ -122,6 +122,8 @@ async function runV2Backtest(){
 document.getElementById("v2Backtest").addEventListener("click",runV2Backtest);
 document.getElementById("refresh").addEventListener("click",()=>{loadReport();loadV2Paper();});
 loadReport();loadV2Paper();
+// Keep the report current while the page remains open; skip background refreshes.
+setInterval(()=>{if(!document.hidden){loadReport();loadV2Paper();}},60000);
 </script>
 </body>
 </html>
