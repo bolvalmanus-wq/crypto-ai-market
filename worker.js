@@ -165,11 +165,15 @@ function rsi(values, period = 14) {
 }
 function analyze(data, tf) {
   const interval = INTERVALS[tf];
-  const bars = (data.candles?.[tf] || []).filter(c => c && c.confirmed === true &&
-    [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) &&
+  const sortedBars = (data.candles?.[tf] || []).filter(c => c && c.confirmed === true &&
+    [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) &&
     c.time > 0 && c.low > 0 && c.high >= c.low &&
-    c.open >= c.low && c.open <= c.high && c.close >= c.low && c.close <= c.high
+    c.open >= c.low && c.open <= c.high && c.close >= c.low && c.close <= c.high && c.volume >= 0
   ).sort((a,b) => a.time - b.time);
+  // Keep only the latest uninterrupted run; rolling indicators must not bridge missing candles.
+  let segmentStart=0;
+  for(let i=1;i<sortedBars.length;i++)if(sortedBars[i].time-sortedBars[i-1].time!==interval)segmentStart=i;
+  const bars=sortedBars.slice(segmentStart);
   if (bars.length < 30) throw new Error("Not enough confirmed candles for " + tf);
   const last = bars[bars.length - 1];
   const closeTime = last.time + interval;
