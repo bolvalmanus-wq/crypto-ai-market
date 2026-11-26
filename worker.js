@@ -1303,8 +1303,9 @@ export default {
         const records=allKeys.map(x=>x.metadata).filter(Boolean).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
         const settled=records.filter(x=>["CORRECT","WRONG","NEUTRAL"].includes(x.outcome));
         const wins=settled.filter(x=>x.outcome==="CORRECT"),losses=settled.filter(x=>x.outcome==="WRONG");
-        const net=settled.reduce((a,x)=>a+Number(x.pnlPct||0),0);
-        return Response.json({version:"V2",mode:"PAPER_TRADING_ONLY",liveTrading:false,total:records.length,evaluated:settled.length,correct:wins.length,wrong:losses.length,neutral:settled.filter(x=>x.outcome==="NEUTRAL").length,pending:records.filter(x=>x.outcome==="PENDING").length,unverified:records.filter(x=>x.outcome==="UNVERIFIED").length,accuracy:wins.length+losses.length?Math.round(wins.length/(wins.length+losses.length)*1000)/10:null,netPnlPct:net,records:records.slice(0,200)},{headers:{"Cache-Control":"no-store"}});
+        const directionalCount=wins.length+losses.length;
+        const sumTradeReturnPct=settled.reduce((a,x)=>a+(Number.isFinite(Number(x.pnlPct))?Number(x.pnlPct):0),0);
+        return Response.json({version:"V2",mode:"PAPER_TRADING_ONLY",liveTrading:false,total:records.length,evaluated:settled.length,correct:wins.length,wrong:losses.length,neutral:settled.filter(x=>x.outcome==="NEUTRAL").length,pending:records.filter(x=>x.outcome==="PENDING").length,unverified:records.filter(x=>x.outcome==="UNVERIFIED").length,directionalTrades:directionalCount,minimumDirectionalTrades:100,accuracy:directionalCount>=100?Math.round(wins.length/directionalCount*1000)/10:null,accuracyStatus:directionalCount>=100?"SAMPLE_THRESHOLD_REACHED_NOT_VALIDATED":"INSUFFICIENT_PAPER_SAMPLE",netPnlPct:null,sumTradeReturnPct,netPnlNote:"অ্যাকাউন্ট ইকুইটি ও বাস্তব position sizing ছাড়া portfolio net PnL গণনা করা যায় না; এটি শুধু প্রতি-trade price return-এর যোগফল",records:records.slice(0,200)},{headers:{"Cache-Control":"no-store"}});
       }catch(error){return Response.json({error:"V2 paper report failed",details:error instanceof Error?error.message:String(error)},{status:500});}
     }
     if (url.pathname === "/v2/backtest" && request.method === "POST") {
