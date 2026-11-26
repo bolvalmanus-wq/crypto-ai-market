@@ -331,10 +331,11 @@ function buildIntradayMovement(data){
     h.close=c.close;h.high=Math.max(h.high,c.high);h.low=Math.min(h.low,c.low);h.candles++;
   }
   const hourly=[...hours.values()].sort((a,b)=>a.time-b.time).map(h=>({time:new Date(h.time).toISOString(),endTime:new Date(h.time+3600000).toISOString(),open:Number(h.open.toFixed(8)),close:Number(h.close.toFixed(8)),high:Number(h.high.toFixed(8)),low:Number(h.low.toFixed(8)),changePct:Number(((h.close/h.open-1)*100).toFixed(3)),direction:h.close>h.open?"UP":h.close<h.open?"DOWN":"FLAT",candles:h.candles}));
-  const ranked=hourly.filter(h=>h.candles>=3);
+  const ranked=hourly.filter(h=>h.candles===12);
   const segments=[];
-  let segment=null,previousClose=null;
+  let segment=null,previousClose=null,previousTime=null;
   for(const c of bars){
+    if(previousTime!==null&&c.time-previousTime!==300000){if(segment)segments.push(segment);segment=null;previousClose=null;}
     const direction=previousClose===null?(c.close>c.open?"UP":c.close<c.open?"DOWN":"FLAT"):(c.close>previousClose?"UP":c.close<previousClose?"DOWN":"FLAT");
     if(!segment||segment.direction!==direction){
       if(segment)segments.push(segment);
@@ -342,7 +343,7 @@ function buildIntradayMovement(data){
     }else{
       segment.endTime=c.time+300000;segment.endPrice=c.close;segment.high=Math.max(segment.high,c.high);segment.low=Math.min(segment.low,c.low);segment.candles++;
     }
-    previousClose=c.close;
+    previousClose=c.close;previousTime=c.time;
   }
   if(segment)segments.push(segment);
   const movementSegments=segments.filter(s=>s.direction!=="FLAT"&&s.candles>=2).map(s=>({startTime:new Date(s.startTime).toISOString(),endTime:new Date(s.endTime).toISOString(),startPrice:Number(s.startPrice.toFixed(8)),endPrice:Number(s.endPrice.toFixed(8)),high:Number(s.high.toFixed(8)),low:Number(s.low.toFixed(8)),durationMinutes:s.candles*5,candles:s.candles,direction:s.direction,changePct:Number(((s.endPrice/s.startPrice-1)*100).toFixed(3))}));
