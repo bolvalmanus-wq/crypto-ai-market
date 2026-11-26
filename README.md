@@ -21,8 +21,18 @@ BTC/SOL perpetual-market analysis application.
 
 ## Operating modes and validation
 
-- Legacy indicator decisions and LONG/SHORT notifications remain separate from V2.
-- V2 is testing/paper-only. It never places orders.
+- Legacy analysis is currently indicator-only; AI model calls are disabled. Existing LONG/SHORT notifications remain separate from V2.
+- V2 is a rule-based research engine in testing/paper-only mode. It never places orders.
 - Backtest reports are explicitly `NOT_VALIDATED`; single-timeframe results are not equivalent to live multi-timeframe decisions.
 - Do not treat an accuracy number as validated until live-equivalent walk-forward tests and at least 100 independently evaluated paper trades are complete.
 - No paid data provider or paid trading service is required by this repository.
+
+## Automated quality gates
+
+- Every push to `main` and pull request targeting `main` runs the repository-wide JavaScript/inline-script syntax and configuration checks.
+- Node's built-in test runner covers market-provider validation, V2 closed-candle/timeframe safety, backtest status, and Worker push/origin validation.
+- V2 candle history is truncated to the latest uninterrupted segment; gaps cannot silently contaminate rolling indicators.
+- Live price polling is limited to one refresh every five seconds per open app session.
+- Run locally with Node.js 22+: `npm run check` and `npm test`.
+
+These automated checks do not replace Cloudflare deployment verification, live provider monitoring, exchange execution simulation, or independent trading-performance validation.
