@@ -1198,6 +1198,10 @@ async function evaluateMaturedDecisions(env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const protectedPostPaths = new Set(["/analyze","/v2/backtest","/push/subscribe","/push/unsubscribe","/push/test"]);
+    if(request.method==="POST"&&protectedPostPaths.has(url.pathname)&&request.headers.get("Origin")!==PAGE_URL){
+      return Response.json({error:"এই কাজটি শুধু অফিসিয়াল অ্যাপ থেকে করা যাবে"},{status:403,headers:{"Cache-Control":"no-store"}});
+    }
     if (url.pathname === "/push/health" && request.method === "GET") {
       let privateKeyBytes = 0, publicKeyBytes = 0, privateKeyError = null;
       const privateKeyPresent = !!env.VAPID_PRIVATE_KEY;
