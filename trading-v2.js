@@ -92,7 +92,7 @@ function strategyScores(x, regime){
     trend:{direction:trendScore,score:trendScore?78:0,evidence:["EMA20/50/200 alignment","EMA slope","RSI and VWAP confirmation"]},
     breakout:{direction:breakout,score:breakout?82:0,evidence:["Close beyond previous 20-candle Donchian level","Relative volume >= 1.3"]},
     range:{direction:rangeScore,score:rangeScore?76:0,evidence:["Sideways regime","Support/resistance proximity","RSI rejection and candle close position"]},
-    reversal:{direction:reversal,score:reversal?80:0,evidence:["Prior swing structure","Liquidity sweep and close back through level","Confirmed structure break/CHoCH","Relative volume >= 1.1"]}
+    reversal:{direction:reversal,score:0,evidence:["Disabled pending independent swing-point and CHoCH validation"]}
   };
 }
 function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=null,config={}}){
