@@ -130,7 +130,7 @@ export async function onRequestGet({ request }) {
         "15m":mapOkxBars(candles15m,900000),"30m":mapOkxBars(candles30m,1800000),
         "1h":mapOkxBars(candles1h,3600000),"4h":mapOkxBars(candles4h,14400000)
       };
-      if(!Number.isFinite(timestamp)||timestamp<=0||ageSeconds>180||!Number.isFinite(Number(ticker.last))||Number(ticker.last)<=0||!Number.isFinite(Number(ticker.open24h))||Number(ticker.open24h)<=0||!Number.isFinite(Number(ticker.bidPx))||!Number.isFinite(Number(ticker.askPx))||Number(ticker.bidPx)<=0||Number(ticker.askPx)<=0||Number(ticker.askPx)<Number(ticker.bidPx)||Object.values(okxCandles).some(rows=>rows.length<30)){
+      if(!Number.isFinite(timestamp)||timestamp<=0||timestamp>Date.now()+10000||ageSeconds>180||!Number.isFinite(Number(ticker.last))||Number(ticker.last)<=0||!Number.isFinite(Number(ticker.open24h))||Number(ticker.open24h)<=0||!Number.isFinite(Number(ticker.bidPx))||!Number.isFinite(Number(ticker.askPx))||Number(ticker.bidPx)<=0||Number(ticker.askPx)<=0||Number(ticker.askPx)<Number(ticker.bidPx)||Object.values(okxCandles).some(rows=>rows.length<30)){
         lastError="OKX returned stale or invalid ticker/candle data";continue;
       }
       return Response.json({
