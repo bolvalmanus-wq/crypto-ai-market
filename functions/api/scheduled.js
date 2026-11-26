@@ -7,7 +7,7 @@ export async function onRequest({ request, env }) {
       const body = await request.json();
       const response = await fetch(target.toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json", Origin: "https://crypto-ai-market.pages.dev" },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(120000)
       });
