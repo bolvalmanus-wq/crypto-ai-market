@@ -17,7 +17,7 @@ export async function onRequestGet({ request }) {
       const t = j.result?.list?.[0];
       const ticker = t && { last:t.lastPrice, open24h:t.prevPrice24h, bid:t.bid1Price, ask:t.ask1Price };
       const timestamp = Number(j.time);
-      if (j.retCode === 0 && validTicker(ticker) && Number.isFinite(timestamp) && timestamp > 0 && Date.now()-timestamp <= 60000) {
+      if (j.retCode === 0 && validTicker(ticker) && Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now()+10000 && Date.now()-timestamp <= 60000) {
         return Response.json({ symbol, source:"Bybit", last:Number(ticker.last), open24h:Number(ticker.open24h), bid:Number(ticker.bid), ask:Number(ticker.ask), timestamp }, {
           headers: { "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" }
         });
