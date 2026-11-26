@@ -263,7 +263,8 @@ function analyze(data, tf) {
   const lastRange=Math.max(last.high-last.low,price*0.00001);
   const candlePressure=clamp((2*last.close-last.high-last.low)/lastRange);
   const priceActionBias=clamp(rocBias*0.38+vwapBias*0.22+donchianBias*0.25+candlePressure*0.15);
-  // Add bounded price-action confirmation; related signals are combined once.\n  rawScore = clamp(rawScore * 0.82 + priceActionBias * 0.18);
+  // Add bounded price-action confirmation; related signals are combined once.
+  rawScore = clamp(rawScore * 0.82 + priceActionBias * 0.18);
   const score = clamp(rawScore);
   let signal = "WAIT", reason = "ট্রেন্ড, MACD, ADX, ভলিউম ও অন্যান্য সূচক এখনো একমত নয়";
   // RSI extremes are risk warnings, not automatic bans on a valid trend signal.
@@ -1000,10 +1001,13 @@ async function runOne(env, symbol, tf, options = {}) {
       expectedEvaluationAt: new Date(Date.parse(result.candleCloseTime) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
       outcome: "PENDING"
     };
-    await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {
-      expirationTtl: 60 * 60 * 24 * 11,
-      metadata: decisionRecord
-    });
+    const existingDecision = await env.ANALYSIS_KV.get("decision:" + decisionId, "json");
+    if (!existingDecision) {
+      await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {
+        expirationTtl: 60 * 60 * 24 * 11,
+        metadata: decisionRecord
+      });
+    }
   }
   // Separate V2 paper-trade ledger. It never sends alerts or affects legacy decisions.
   if ((v2Testing.decision === "LONG" || v2Testing.decision === "SHORT") && Number.isFinite(Number(v2Testing.entryPrice)) && Number(v2Testing.entryPrice) > 0) {
@@ -1019,7 +1023,8 @@ async function runOne(env, symbol, tf, options = {}) {
       expectedEvaluationAt:new Date(Date.parse(result.candleCloseTime)+({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15)*60000).toISOString(),
       outcome:"PENDING"
     };
-    await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:v2Record});
+    const existingV2Record = await env.ANALYSIS_KV.get("v2paper:"+v2Id,"json");
+    if (!existingV2Record) await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:v2Record});
   }
   // Existing notification behavior remains tied only to the legacy signal.
   await sendSignalPush(env, result);
@@ -1154,7 +1159,7 @@ async function evaluateMaturedDecisions(env) {
         } else if (stopHit || targetHit) {
           const rawExit = stopHit ? stop : target1;
           const gross = (rawExit / r.entryPrice - 1) * direction * 100;
-          r.pnlPct = gross - 0.09; // 6 bps fee + 3 bps slippage per side.
+          r.pnlPct = gross - 0.18; // 6 bps fee + 3 bps slippage per side, round trip.
           r.exitPrice = rawExit;
           r.exitPriceSource = stopHit ? "stop-loss touched (conservative)" : "take-profit-1 touched";
           r.outcome = r.pnlPct > 0.01 ? "CORRECT" : r.pnlPct < -0.01 ? "WRONG" : "NEUTRAL";
