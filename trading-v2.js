@@ -21,6 +21,17 @@ function ema(values,n){
   for(let i=n;i<values.length;i++)v=values[i]*k+v*(1-k);
   return v;
 }
+function wilderRsi(values,period=14){
+  if(values.length<=period)return 50;
+  let gain=0,loss=0;
+  for(let i=1;i<=period;i++){const d=values[i]-values[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}
+  let avgGain=gain/period,avgLoss=loss/period;
+  for(let i=period+1;i<values.length;i++){const d=values[i]-values[i-1];avgGain=(avgGain*(period-1)+Math.max(0,d))/period;avgLoss=(avgLoss*(period-1)+Math.max(0,-d))/period;}
+  if(avgGain===0&&avgLoss===0)return 50;
+  if(avgLoss===0)return 100;
+  if(avgGain===0)return 0;
+  return 100-100/(1+avgGain/avgLoss);
+}
 function stats(bars){
   const c=bars.map(x=>Number(x.close)),h=bars.map(x=>Number(x.high)),l=bars.map(x=>Number(x.low)),v=bars.map(x=>Math.max(0,Number(x.volume)||0));
   if(c.length<210)return {valid:false,count:c.length,reason:"EMA200-এর জন্য কমপক্ষে ২১০টি নিশ্চিত ক্যান্ডেল দরকার"};
@@ -35,7 +46,8 @@ function stats(bars){
   let smTR=trAll.slice(0,14).reduce((a,b)=>a+b,0),smPlus=dmPlus.slice(0,14).reduce((a,b)=>a+b,0),smMinus=dmMinus.slice(0,14).reduce((a,b)=>a+b,0);
   const dx=[];
   for(let i=14;i<trAll.length;i++){smTR=smTR-smTR/14+trAll[i];smPlus=smPlus-smPlus/14+dmPlus[i];smMinus=smMinus-smMinus/14+dmMinus[i];const pdi=smTR?smPlus/smTR*100:0,mdi=smTR?smMinus/smTR*100:0;dx.push(100*Math.abs(pdi-mdi)/Math.max(1e-12,pdi+mdi));}
-  const adx=dx.length>=14?dx.slice(-14).reduce((a,b)=>a+b,0)/14:dx.length?dx.reduce((a,b)=>a+b,0)/dx.length:0;
+  let adx=dx.length>=14?dx.slice(0,14).reduce((a,b)=>a+b,0)/14:dx.length?dx.reduce((a,b)=>a+b,0)/dx.length:0;
+  for(let i=14;i<dx.length;i++)adx=(adx*13+dx[i])/14;
   const plusDI=smTR?smPlus/smTR*100:0,minusDI=smTR?smMinus/smTR*100:0;
   const atrPct=atr/c[c.length-1]*100;
   const atrHist=[];
@@ -48,9 +60,7 @@ function stats(bars){
     }
   }
   const atrRank=atrHist.length?atrHist.filter(x=>x<=atrPct).length/atrHist.length*100:50;
-  const rsiChanges=c.slice(-15).slice(1).map((x,i)=>x-c.slice(-15)[i]);
-  const gains=rsiChanges.reduce((a,x)=>a+Math.max(0,x),0),loss=rsiChanges.reduce((a,x)=>a+Math.max(0,-x),0);
-  const rsi=loss===0?100:100-100/(1+gains/loss);
+  const rsi=wilderRsi(c,14);
   const avgVol=v.slice(-21,-1).reduce((a,b)=>a+b,0)/20,relVol=avgVol>0?v[v.length-1]/avgVol:null;
   const last=bars[bars.length-1],prior=bars.slice(-21,-1);
   const dcHigh=Math.max(...prior.map(x=>x.high)),dcLow=Math.min(...prior.map(x=>x.low));
@@ -112,7 +122,7 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   const entry=confirmed(frames[entryTf],entryTf,now);
   const s4=stats(four),s1=stats(one),s15=stats(fifteen),se=stats(entry);
   const regimes=[regimeOf(s4),regimeOf(s1),regimeOf(s15)];
-  const regime=regimes[0]==="HIGH_VOLATILITY"||regimes[1]==="HIGH_VOLATILITY"?"HIGH_VOLATILITY":regimes[0];
+  const regime=[...regimes,regimeOf(se)].includes("HIGH_VOLATILITY")?"HIGH_VOLATILITY":regimes[0];
   const strategies=strategyScores(se,regime);
   const eligible=Object.entries(strategies).filter(([k,v])=>v.direction!==0&&v.score>0);
   eligible.sort((a,b)=>b[1].score-a[1].score);
@@ -138,7 +148,7 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
       ? regimes[2]==="SIDEWAYS"&&s15Entry?.direction===direction
       : selected?.[0]==="breakout"
         ? s15Entry?.direction===direction
-        : direction>0?s15.bull||s15.price>s15.ema20:s15.bear||s15.price<s15.ema20
+        : direction>0?s15.bull: s15.bear
   );
   if(direction!==0&&!entryAligned)reasons.push("15M entry confirmation অনুপস্থিত");
   if(!finite(price)||price<=0)reasons.push("Live ticker price অনুপস্থিত বা অবৈধ");
@@ -206,6 +216,6 @@ function backtestV2({candles,timeframe="15m",feeBps=6,slippageBps=3,holdBars=1,m
   const split=Math.floor(signals.length*.7),oos=signals.slice(split),oosWins=oos.filter(x=>x.netPct>0).length,oosLoss=oos.filter(x=>x.netPct<0).length;
   let equity=1,peak=1,maxDd=0;for(const x of signals){equity*=1+x.netPct/100;peak=Math.max(peak,equity);maxDd=Math.max(maxDd,(peak-equity)/peak*100);}
   const count=signals.length;
-  return {status:count>=minimumTrades?"PRELIMINARY_SAMPLE_READY":"INSUFFICIENT_TRADES",timeframe,bars:bars.length,trades:count,minimumTrades,winRate:count?wins.length/count*100:null,profitFactor:grossLoss?grossWin/grossLoss:null,expectancyPct:avg,netReturnPct:(equity-1)*100,maxDrawdownPct:maxDd,outOfSample:{trades:oos.length,winRate:oos.length?oosWins/oos.length*100:null,netPct:oos.reduce((a,x)=>a+x.netPct,0)},costModel:{feeBps,slippageBps},long:{trades:signals.filter(x=>x.direction==="LONG").length},short:{trades:signals.filter(x=>x.direction==="SHORT").length},note:"Single-timeframe preliminary simulation; does not replace walk-forward, multi-timeframe, paper trading, or independent validation.",sample:signals.slice(-100)};
+  return {status:"NOT_VALIDATED",sampleSizeReached:count>=minimumTrades,timeframe,bars:bars.length,trades:count,minimumTrades,winRate:count?wins.length/count*100:null,profitFactor:grossLoss?grossWin/grossLoss:null,expectancyPct:avg,netReturnPct:(equity-1)*100,maxDrawdownPct:maxDd,outOfSample:{trades:oos.length,winRate:oos.length?oosWins/oos.length*100:null,netPct:oos.reduce((a,x)=>a+x.netPct,0),expectancyPct:oos.length?oos.reduce((a,x)=>a+x.netPct,0)/oos.length:null,positiveNet:oos.reduce((a,x)=>a+x.netPct,0)>0},costModel:{feeBps,slippageBps},long:{trades:signals.filter(x=>x.direction==="LONG").length},short:{trades:signals.filter(x=>x.direction==="SHORT").length},validation:"NOT_VALIDATED: single-timeframe simulation only; live-equivalent multi-timeframe walk-forward and independent paper-trade validation are required.",note:"Single-timeframe preliminary simulation; does not replace walk-forward, multi-timeframe, paper trading, or independent validation.",sample:signals.slice(-100)};
 }
 export { evaluateV2, backtestV2 };
