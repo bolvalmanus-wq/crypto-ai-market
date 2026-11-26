@@ -45,7 +45,7 @@ export async function onRequestGet({ request }) {
       if (!response.ok) throw new Error("Bybit HTTP " + response.status);
       const payload = await response.json();
       if (payload.retCode !== 0 || !payload.result) throw new Error("Bybit API: " + (payload.retMsg || "invalid response"));
-      return payload.result;
+      return { ...payload.result, _serverTime: Number(payload.time) };
     };
     const symbolCode = symbol + "USDT";
     const [tickerResult, k1, k5, k15, k30, k60, k240, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
@@ -64,7 +64,8 @@ export async function onRequestGet({ request }) {
       bybitGet("/v5/market/funding/history?category=linear&symbol=" + symbolCode + "&limit=2").catch(() => null)
     ]);
     const ticker = tickerResult.list?.[0];
-    const timestamp = Date.now();
+    const timestamp = Number(tickerResult._serverTime);
+    const ageSeconds = Math.floor(Date.now()/1000 - timestamp/1000);
     const mapBars = (rows, intervalMs) => {
       const unique=new Map();
       for(const row of Array.isArray(rows)?rows:[]){
@@ -76,11 +77,11 @@ export async function onRequestGet({ request }) {
       return [...unique.values()].sort((a,b)=>a.time-b.time);
     };
     const candles={"1m":mapBars(k1.list,60000),"5m":mapBars(k5.list,300000),"15m":mapBars(k15.list,900000),"30m":mapBars(k30.list,1800000),"1h":mapBars(k60.list,3600000),"4h":mapBars(k240.list,14400000)};
-    if(!ticker||!Number.isFinite(Number(ticker.lastPrice))||Number(ticker.lastPrice)<=0||!Number.isFinite(Number(ticker.prevPrice24h))||Number(ticker.prevPrice24h)<=0||!Number.isFinite(Number(ticker.bid1Price))||!Number.isFinite(Number(ticker.ask1Price))||Number(ticker.bid1Price)<=0||Number(ticker.ask1Price)<=0||Number(ticker.ask1Price)<Number(ticker.bid1Price)||Object.values(candles).some(rows=>rows.length<30))throw new Error("Bybit returned invalid or incomplete market data");
+    if(!Number.isFinite(timestamp)||timestamp<=0||timestamp>Date.now()+10000||ageSeconds>180||!ticker||!Number.isFinite(Number(ticker.lastPrice))||Number(ticker.lastPrice)<=0||!Number.isFinite(Number(ticker.prevPrice24h))||Number(ticker.prevPrice24h)<=0||!Number.isFinite(Number(ticker.bid1Price))||!Number.isFinite(Number(ticker.ask1Price))||Number(ticker.bid1Price)<=0||Number(ticker.ask1Price)<=0||Number(ticker.ask1Price)<Number(ticker.bid1Price)||Object.values(candles).some(rows=>rows.length<30))throw new Error("Bybit returned invalid or incomplete market data");
     const prev = Number(ticker.prevPrice24h);
     return Response.json({
       symbol, instrument:symbolCode, source:"Bybit USDT perpetual",
-      fetchedAt:new Date().toISOString(), marketTimestamp:new Date(timestamp).toISOString(), ageSeconds:0,
+      fetchedAt:new Date().toISOString(), marketTimestamp:new Date(timestamp).toISOString(), ageSeconds:Math.max(0,ageSeconds),
       ticker:{last:Number(ticker.lastPrice),mark:Number(ticker.markPrice),index:Number(ticker.indexPrice),open24h:prev,bid:Number(ticker.bid1Price),ask:Number(ticker.ask1Price),volume24h:Number(ticker.turnover24h),openInterest:Number(ticker.openInterestValue),fundingRate:Number(ticker.fundingRate),nextFundingTime:Number(ticker.nextFundingTime)},
       derivatives:{
         openInterest30m:oi30?.list?.map(x=>({value:Number(x.openInterest),time:Number(x.timestamp)}))||[],
