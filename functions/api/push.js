@@ -16,7 +16,7 @@ export async function onRequest({ request, env }) {
   }
   try {
     const target = new URL("/push/" + action, schedulerUrl);
-    const init = { method: request.method, headers: { Accept: "application/json" } };
+    const init = { method: request.method, headers: { Accept: "application/json", Origin: "https://crypto-ai-market.pages.dev" } };
     if (request.method === "POST") {
       init.headers["Content-Type"] = "application/json";
       init.body = await request.text();
