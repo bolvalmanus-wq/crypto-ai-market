@@ -67,6 +67,9 @@ async function encryptPush(subscription,payload) {
 }
 async function sendOnePush(env,subscription,payload) {
   const endpoint=new URL(subscription.endpoint);
+  const host=endpoint.hostname.toLowerCase();
+  const allowedHost=host==="fcm.googleapis.com"||host==="web.push.apple.com"||host==="push.apple.com"||host.endsWith(".push.services.mozilla.com")||host.endsWith(".notify.windows.com");
+  if(endpoint.protocol!=="https:"||!allowedHost)throw new Error("Unsupported Web Push endpoint host");
   const token=await vapidToken(endpoint.origin,env);
   const body=await encryptPush(subscription,payload);
   return fetch(subscription.endpoint,{
@@ -1220,8 +1223,12 @@ export default {
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
       let subscription;
       try { subscription = await request.json(); } catch { return Response.json({ error: "Invalid subscription" }, { status: 400 }); }
-      if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth || !subscription.endpoint.startsWith("https://")) {
-        return Response.json({ error: "Invalid push subscription" }, { status: 400 });
+      let endpoint;
+      try { endpoint = new URL(subscription?.endpoint); } catch (_) { return Response.json({ error: "Invalid push endpoint" }, { status: 400 }); }
+      const host=endpoint.hostname.toLowerCase();
+      const allowedHost=host==="fcm.googleapis.com"||host==="web.push.apple.com"||host==="push.apple.com"||host.endsWith(".push.services.mozilla.com")||host.endsWith(".notify.windows.com");
+      if(endpoint.protocol!=="https:"||!allowedHost||subscription.endpoint.length>2048||!subscription?.keys?.p256dh||!subscription?.keys?.auth||String(subscription.keys.p256dh).length>256||String(subscription.keys.auth).length>256){
+        return Response.json({ error: "Invalid or unsupported push subscription" }, { status: 400 });
       }
       const digest = await crypto.subtle.digest("SHA-256", utf8(subscription.endpoint));
       const id = b64u(new Uint8Array(digest)).slice(0, 32);
@@ -1232,18 +1239,20 @@ export default {
       if (!env.ANALYSIS_KV || !env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) {
         return Response.json({ error: "Push keys are not configured" }, { status: 503 });
       }
-      const listed = await env.ANALYSIS_KV.list({ prefix: "push:sub:", limit: 100 });
-      if (!listed.keys.length) return Response.json({ error: "No push subscription found" }, { status: 404 });
-      const payload = { title: "নোটিফিকেশন পরীক্ষা", body: "সাউন্ড ও নোটিফিকেশন পরীক্ষা সফল", url: "/", tag: "crypto-ai-market-test-" + Date.now() };
-      const results = await Promise.allSettled(listed.keys.map(async item => {
-        const subscription = await env.ANALYSIS_KV.get(item.name, "json");
-        if (!subscription) return;
-        const response = await sendOnePush(env, subscription, payload);
-        if (response.status === 404 || response.status === 410) await env.ANALYSIS_KV.delete(item.name);
-        if (!response.ok) throw new Error("Push provider HTTP " + response.status);
-      }));
-      const failed = results.filter(x => x.status === "rejected").length;
-      return Response.json({ ok: failed === 0, failed }, { headers: { "Cache-Control": "no-store" } });
+      let body;
+      try { body = await request.json(); } catch (_) { return Response.json({ error: "Subscription endpoint required" }, { status: 400 }); }
+      if(typeof body?.endpoint!=="string"||body.endpoint.length>2048)return Response.json({error:"Invalid subscription endpoint"},{status:400});
+      const digest=await crypto.subtle.digest("SHA-256",utf8(body.endpoint));
+      const id=b64u(new Uint8Array(digest)).slice(0,32);
+      const key="push:sub:"+id;
+      const subscription=await env.ANALYSIS_KV.get(key,"json");
+      if(!subscription||subscription.endpoint!==body.endpoint)return Response.json({error:"This device is not subscribed"},{status:404});
+      try{
+        const response=await sendOnePush(env,subscription,{title:"নোটিফিকেশন পরীক্ষা",body:"সাউন্ড ও নোটিফিকেশন পরীক্ষা সফল",url:"/",tag:"crypto-ai-market-test-"+Date.now()});
+        if(response.status===404||response.status===410){await env.ANALYSIS_KV.delete(key);return Response.json({error:"Subscription expired"},{status:410});}
+        if(!response.ok)return Response.json({error:"Push provider HTTP "+response.status},{status:502});
+        return Response.json({ok:true},{headers:{"Cache-Control":"no-store"}});
+      }catch(error){console.error("Push test failed",String(error));return Response.json({error:"Push test delivery failed"},{status:502});}
     }
     if (url.pathname === "/push/unsubscribe" && request.method === "POST") {
       let body;
