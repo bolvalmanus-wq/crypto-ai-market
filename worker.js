@@ -432,6 +432,11 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
 }
 
 function buildThirtyMinuteCandles(data) {
+  // Prefer the provider's native 30m history; 5m aggregation is a fallback only.
+  const native = (data.candles?.["30m"] || [])
+    .filter(c => c && c.confirmed === true && [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) && c.close > 0)
+    .sort((a,b) => a.time - b.time);
+  if (native.length >= 30) return native;
   // Build confirmed 30m bars only from six contiguous confirmed 5m candles.
   const source = (data.candles?.["5m"] || [])
     .filter(c => c && c.confirmed === true && [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) && c.close > 0)
