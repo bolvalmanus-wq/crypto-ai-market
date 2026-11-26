@@ -1,5 +1,5 @@
 export async function onRequest({ request, env }) {
-  const schedulerUrl = env.SCHEDULER_URL || env.SCHEDULER_URL1;
+  const schedulerUrl = env.MARKET_WORKER_URL || "https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev";
   if (!schedulerUrl) {
     return Response.json({ error: "Push scheduler is not configured; set SCHEDULER_URL in Pages runtime variables" }, { status: 503 });
   }
