@@ -1,10 +1,8 @@
 export async function onRequest({ request, env }) {
-  if (!env.SCHEDULER_URL) {
-    return Response.json({ error: "Cloud scheduler এখনো সংযুক্ত হয়নি। Pages secret SCHEDULER_URL সেট করতে হবে।" }, { status: 503, headers: { "Cache-Control": "no-store" } });
-  }
+  const workerUrl = env.MARKET_WORKER_URL || "https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev";
   const incoming = new URL(request.url);
   if (request.method === "POST") {
-    const target = new URL("/analyze", env.SCHEDULER_URL);
+    const target = new URL("/analyze", workerUrl);
     try {
       const body = await request.json();
       const response = await fetch(target.toString(), {
@@ -20,7 +18,7 @@ export async function onRequest({ request, env }) {
     }
   }
   if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
-  const target = new URL("/latest", env.SCHEDULER_URL);
+  const target = new URL("/latest", workerUrl);
   for (const key of ["symbol", "timeframe"]) {
     const value = incoming.searchParams.get(key);
     if (value) target.searchParams.set(key, value);
