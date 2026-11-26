@@ -1435,6 +1435,7 @@ export default {
       tasks.push(() => runScheduledOne(env, symbol, "1m"));
       if (minute % 5 === 0) tasks.push(() => runScheduledOne(env, symbol, "5m"));
       if (minute % 15 === 0) tasks.push(() => runScheduledOne(env, symbol, "15m"));
+      if (minute % 30 === 0) tasks.push(() => runScheduledOne(env, symbol, "30m"));
       if (minute === 0) tasks.push(() => runScheduledOne(env, symbol, "1h"));
       if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push(() => runScheduledOne(env, symbol, "4h"));
     }
