@@ -13,7 +13,12 @@ function confirmed(bars, tf, now=Date.now()){
     if(!Number.isFinite(time)||time<=0||time+step>now||low<=0||high<low||open<low||open>high||close<low||close>high||volume<0)continue;
     unique.set(time,{...x,time,open,high,low,close,volume,confirmed:true});
   }
-  return [...unique.values()].sort((a,b)=>a.time-b.time);
+  const sorted=[...unique.values()].sort((a,b)=>a.time-b.time);
+  // A missing interval invalidates rolling indicators across the gap. Keep only
+  // the newest uninterrupted segment; if it is too short, the engine returns NO TRADE.
+  let segmentStart=0;
+  for(let i=1;i<sorted.length;i++)if(sorted[i].time-sorted[i-1].time!==step)segmentStart=i;
+  return sorted.slice(segmentStart);
 }
 function ema(values,n){
   if(values.length<n)return NaN;
