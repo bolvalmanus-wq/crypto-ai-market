@@ -1,10 +1,9 @@
-import { fetchMarketWorker, readWorkerJson, proxyJson } from "../_shared/worker-proxy.js";
+import { fetchMarketWorker, readWorkerJson, proxyJson, findWorkerServiceBinding } from "../_shared/worker-proxy.js";
 
 export async function onRequest({ request, env }) {
   if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
-  const transport = env.MARKET_WORKER && typeof env.MARKET_WORKER.fetch === "function"
-    ? "service-binding"
-    : "public-url-fallback";
+  const serviceBinding = findWorkerServiceBinding(env);
+  const transport = serviceBinding ? "service-binding" : "public-url-fallback";
   try {
     const response = await fetchMarketWorker(env, "/health", {
       method: "GET",
@@ -16,6 +15,7 @@ export async function onRequest({ request, env }) {
     return proxyJson({
       ok,
       transport,
+      bindingName: serviceBinding?.name || null,
       workerStatus: response.status,
       worker,
       checkedAt: new Date().toISOString()
@@ -25,6 +25,7 @@ export async function onRequest({ request, env }) {
     return proxyJson({
       ok: false,
       transport,
+      bindingName: serviceBinding?.name || null,
       error: error instanceof Error ? error.message : String(error),
       checkedAt: new Date().toISOString()
     }, 502);
