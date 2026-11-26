@@ -102,10 +102,16 @@ async function sendSignalPush(env,result) {
   // Deduplicate only the exact same candle's decision. A fresh candle must
   // notify again even when its direction matches the previous LONG/SHORT.
   if(previous?.candleCloseTime===result.candleCloseTime&&previous?.decision===decision&&previous?.notifiedAt) return;
-  let listed;
-  try{listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});}
-  catch(error){console.error("Push subscription lookup failed",String(error));return;}
-  if(!listed.keys.length) return;
+  const subscriptionKeys=[];
+  try {
+    let cursor;
+    do {
+      const page=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:1000,...(cursor?{cursor}:{})});
+      subscriptionKeys.push(...(page.keys||[]));
+      cursor=page.list_complete?undefined:page.cursor;
+    } while(cursor);
+  } catch(error) { console.error("Push subscription lookup failed",String(error)); return; }
+  if(!subscriptionKeys.length)return;
   const payload={
     title:decision,
     body:result.symbol+" · "+({"1m":"১ মিনিট","5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"}[result.timeframe]||result.timeframe),
@@ -113,26 +119,23 @@ async function sendSignalPush(env,result) {
     tag:result.symbol+"-"+result.timeframe+"-"+decision+"-"+String(result.candleCloseTime||result.generatedAt||Date.now()),
     decision,symbol:result.symbol,timeframe:result.timeframe
   };
-  const deliveries=await Promise.allSettled(listed.keys.map(async item=>{
-    const subscription=await env.ANALYSIS_KV.get(item.name,"json");
-    if(!subscription) return false;
-    try {
-      const response=await sendOnePush(env,subscription,payload);
-      if(response.status===404||response.status===410) {
-        await env.ANALYSIS_KV.delete(item.name);
-        return false;
-      }
-      if(!response.ok) {
-        console.error("Push delivery failed",response.status);
-        return false;
-      }
-      return true;
-    } catch(error) {
-      console.error("Push send error",String(error));
-      return false;
-    }
-  }));
-  const delivered=deliveries.some(item=>item.status==="fulfilled"&&item.value===true);
+  // Bound concurrent cryptographic work and provider requests; paginate so no
+  // subscriber is silently omitted after the first KV page.
+  let delivered=false;
+  for(let offset=0;offset<subscriptionKeys.length;offset+=10){
+    const batch=subscriptionKeys.slice(offset,offset+10);
+    const outcomes=await Promise.allSettled(batch.map(async item=>{
+      const subscription=await env.ANALYSIS_KV.get(item.name,"json");
+      if(!subscription)return false;
+      try{
+        const response=await sendOnePush(env,subscription,payload);
+        if(response.status===404||response.status===410){await env.ANALYSIS_KV.delete(item.name);return false;}
+        if(!response.ok){console.error("Push delivery failed",response.status);return false;}
+        return true;
+      }catch(error){console.error("Push send error",String(error));return false;}
+    }));
+    if(outcomes.some(item=>item.status==="fulfilled"&&item.value===true))delivered=true;
+  }
   // Only remember a signal after a push provider accepted it. Otherwise a
   // temporary delivery failure would suppress every retry of this signal.
   if(delivered){
