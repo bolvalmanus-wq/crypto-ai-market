@@ -1,10 +1,8 @@
 export async function onRequest({ request, env }) {
   if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
-  if (!env.SCHEDULER_URL) {
-    return Response.json({ error: "Cloud scheduler এখনো সংযুক্ত হয়নি।" }, { status: 503, headers: { "Cache-Control": "no-store" } });
-  }
+  const workerUrl = env.MARKET_WORKER_URL || "https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev";
   try {
-    const target = new URL("/performance", env.SCHEDULER_URL);
+    const target = new URL("/performance", workerUrl);
     const response = await fetch(target.toString(), {
       headers: { Accept: "application/json", "Cache-Control": "no-cache" },
       signal: AbortSignal.timeout(12000)
