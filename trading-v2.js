@@ -5,7 +5,15 @@ const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x));
 const finite=x=>x!==null&&x!==undefined&&x!==""&&Number.isFinite(Number(x));
 function confirmed(bars, tf, now=Date.now()){
   const step=FRAMES[tf];
-  return (Array.isArray(bars)?bars:[]).filter(x=>x&&x.confirmed===true&&[x.time,x.open,x.high,x.low,x.close,x.volume].every(finite)&&Number(x.close)>0&&Number(x.high)>=Number(x.low)&&Number(x.time)+step<=now).sort((a,b)=>a.time-b.time);
+  if(!step||!Array.isArray(bars))return [];
+  const unique=new Map();
+  for(const x of bars){
+    if(!x||x.confirmed!==true||![x.time,x.open,x.high,x.low,x.close,x.volume].every(finite))continue;
+    const time=Number(x.time),open=Number(x.open),high=Number(x.high),low=Number(x.low),close=Number(x.close),volume=Number(x.volume);
+    if(!Number.isFinite(time)||time<=0||time+step>now||low<=0||high<low||open<low||open>high||close<low||close>high||volume<0)continue;
+    unique.set(time,{...x,time,open,high,low,close,volume,confirmed:true});
+  }
+  return [...unique.values()].sort((a,b)=>a.time-b.time);
 }
 function ema(values,n){
   if(values.length<n)return NaN;
@@ -179,7 +187,7 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   };
 }
 function backtestV2({candles,timeframe="15m",feeBps=6,slippageBps=3,holdBars=1,minimumTrades=500}={}){
-  const bars=confirmed(candles,timeframe,Number.MAX_SAFE_INTEGER);
+  const bars=confirmed(candles,timeframe,Date.now());
   if(bars.length<220)return {status:"INSUFFICIENT_DATA",timeframe,bars:bars.length,requiredBars:220,trades:0,note:"কমপক্ষে ২২০টি নিশ্চিত candle দরকার; ৫০০ independent trade না হলে লক্ষ্য যাচাই হবে না"};
   const warmup=210,signals=[];
   for(let i=warmup;i<bars.length-1;i++){
