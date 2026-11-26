@@ -2,7 +2,7 @@
 // This module never places orders and never changes the legacy decision.
 const FRAMES = { "1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000 };
 const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x));
-const finite=x=>Number.isFinite(Number(x));
+const finite=x=>x!==null&&x!==undefined&&x!==""&&Number.isFinite(Number(x));
 function confirmed(bars, tf, now=Date.now()){
   const step=FRAMES[tf];
   return (Array.isArray(bars)?bars:[]).filter(x=>x&&x.confirmed===true&&[x.time,x.open,x.high,x.low,x.close,x.volume].every(finite)&&Number(x.close)>0&&Number(x.high)>=Number(x.low)&&Number(x.time)+step<=now).sort((a,b)=>a.time-b.time);
@@ -31,7 +31,14 @@ function stats(bars){
   const plusDI=smTR?smPlus/smTR*100:0,minusDI=smTR?smMinus/smTR*100:0;
   const atrPct=atr/c[c.length-1]*100;
   const atrHist=[];
-  for(let i=Math.max(15,trs.length-100);i<=trs.length;i++){const x=trs.slice(i-14,i);if(x.length===14)atrHist.push(x.reduce((a,b)=>a+b,0)/14/c[c.length-1]*100);}
+  // Compare each historical ATR with that bar's own close, not today's close.
+  for(let end=Math.max(14,trs.length-100);end<=trs.length;end++){
+    const window=trs.slice(end-14,end);
+    const closeAtEnd=c[end];
+    if(window.length===14&&Number.isFinite(closeAtEnd)&&closeAtEnd>0){
+      atrHist.push(window.reduce((a,b)=>a+b,0)/14/closeAtEnd*100);
+    }
+  }
   const atrRank=atrHist.length?atrHist.filter(x=>x<=atrPct).length/atrHist.length*100:50;
   const rsiChanges=c.slice(-15).slice(1).map((x,i)=>x-c.slice(-15)[i]);
   const gains=rsiChanges.reduce((a,x)=>a+Math.max(0,x),0),loss=rsiChanges.reduce((a,x)=>a+Math.max(0,-x),0);
@@ -78,18 +85,9 @@ function strategyScores(x, regime){
   const breakout=c.close>x.donchianHigh&&x.relativeVolume>=1.3?1:c.close<x.donchianLow&&x.relativeVolume>=1.3?-1:0;
   const nearLow=c.close<=x.low20+x.atr*.35,nearHigh=c.close>=x.high20-x.atr*.35;
   const rangeScore=regime==="SIDEWAYS"?(nearLow&&x.rsi<38&&x.cci<-80&&c.close>x.keltnerLower&&closePos>0.25?1:nearHigh&&x.rsi>62&&x.cci>80&&c.close<x.keltnerUpper&&closePos<-.25?-1:0):0;
-  const prior10=x._prior10||[],older10=x._older10||[];
-  const priorHigh=prior10.length?Math.max(...prior10.map(z=>z.high)):NaN;
-  const priorLow=prior10.length?Math.min(...prior10.map(z=>z.low)):NaN;
-  const olderHigh=older10.length?Math.max(...older10.map(z=>z.high)):NaN;
-  const olderLow=older10.length?Math.min(...older10.map(z=>z.low)):NaN;
-  const priorBear=priorHigh<olderHigh&&priorLow<olderLow;
-  const priorBull=priorHigh>olderHigh&&priorLow>olderLow;
-  const sweptLow=finite(priorLow)&&c.low<priorLow&&c.close>priorLow&&closePos>0.2;
-  const sweptHigh=finite(priorHigh)&&c.high>priorHigh&&c.close<priorHigh&&closePos<-.2;
-  const bosUp=finite(priorHigh)&&c.close>priorHigh;
-  const bosDown=finite(priorLow)&&c.close<priorLow;
-  const reversal=priorBear&&sweptLow&&bosUp&&x.relativeVolume>=1.1?1:priorBull&&sweptHigh&&bosDown&&x.relativeVolume>=1.1?-1:0;
+  // BOS/CHoCH and liquidity-sweep logic is deliberately disabled until
+  // swing points and post-sweep confirmation are independently validated.
+  const reversal=0;
   return {
     trend:{direction:trendScore,score:trendScore?78:0,evidence:["EMA20/50/200 alignment","EMA slope","RSI and VWAP confirmation"]},
     breakout:{direction:breakout,score:breakout?82:0,evidence:["Close beyond previous 20-candle Donchian level","Relative volume >= 1.3"]},
