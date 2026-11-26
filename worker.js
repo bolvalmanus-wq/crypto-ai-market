@@ -89,11 +89,15 @@ async function sendSignalPush(env,result) {
   const decision=result.analysis.decision;
   if(!["LONG","SHORT"].includes(decision)) return;
   const stateKey="lastsignal:"+result.symbol+":"+result.timeframe;
-  const previous=await env.ANALYSIS_KV.get(stateKey,"json");
+  let previous;
+  try{previous=await env.ANALYSIS_KV.get(stateKey,"json");}
+  catch(error){console.error("Push deduplication read failed; notification skipped",String(error));return;}
   // Deduplicate only the exact same candle's decision. A fresh candle must
   // notify again even when its direction matches the previous LONG/SHORT.
   if(previous?.candleCloseTime===result.candleCloseTime&&previous?.decision===decision&&previous?.notifiedAt) return;
-  const listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});
+  let listed;
+  try{listed=await env.ANALYSIS_KV.list({prefix:"push:sub:",limit:100});}
+  catch(error){console.error("Push subscription lookup failed",String(error));return;}
   if(!listed.keys.length) return;
   const payload={
     title:decision,
@@ -124,7 +128,10 @@ async function sendSignalPush(env,result) {
   const delivered=deliveries.some(item=>item.status==="fulfilled"&&item.value===true);
   // Only remember a signal after a push provider accepted it. Otherwise a
   // temporary delivery failure would suppress every retry of this signal.
-  if(delivered) await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime,notifiedAt:new Date().toISOString()}),{expirationTtl:60*60*24*14});
+  if(delivered){
+    try{await env.ANALYSIS_KV.put(stateKey,JSON.stringify({decision,candleCloseTime:result.candleCloseTime,notifiedAt:new Date().toISOString()}),{expirationTtl:60*60*24*14});}
+    catch(error){console.error("Push deduplication state write failed",String(error));}
+  }
 }
 const INTERVALS = { "1m": 60 * 1000, "5m": 5 * 60 * 1000, "15m": 15 * 60 * 1000, "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
 
@@ -1011,12 +1018,12 @@ async function runOne(env, symbol, tf, options = {}) {
       expectedEvaluationAt: new Date(Date.parse(result.candleCloseTime) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
       outcome: "PENDING"
     };
-    const existingDecision = await env.ANALYSIS_KV.get("decision:" + decisionId, "json");
-    if (!existingDecision) {
-      await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {
-        expirationTtl: 60 * 60 * 24 * 11,
-        metadata: decisionRecord
-      });
+    try{
+      const existingDecision = await env.ANALYSIS_KV.get("decision:" + decisionId, "json");
+      if (!existingDecision) await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {expirationTtl:60*60*24*11,metadata:decisionRecord});
+    }catch(error){
+      result.storageWarnings=[...(result.storageWarnings||[]),"Legacy decision ledger unavailable"];
+      console.error("Legacy decision ledger write failed",{decisionId,error:String(error)});
     }
   }
   // Separate V2 paper-trade ledger. It never sends alerts or affects legacy decisions.
@@ -1033,8 +1040,13 @@ async function runOne(env, symbol, tf, options = {}) {
       expectedEvaluationAt:new Date(Date.parse(result.candleCloseTime)+({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15)*60000).toISOString(),
       outcome:"PENDING"
     };
-    const existingV2Record = await env.ANALYSIS_KV.get("v2paper:"+v2Id,"json");
-    if (!existingV2Record) await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:v2Record});
+    try{
+      const existingV2Record = await env.ANALYSIS_KV.get("v2paper:"+v2Id,"json");
+      if (!existingV2Record) await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:v2Record});
+    }catch(error){
+      result.storageWarnings=[...(result.storageWarnings||[]),"V2 paper ledger unavailable"];
+      console.error("V2 paper ledger write failed",{v2Id,error:String(error)});
+    }
   }
   // Existing notification behavior remains tied only to the legacy signal.
   await sendSignalPush(env, result);
@@ -1189,9 +1201,11 @@ async function evaluateMaturedDecisions(env) {
           : "নির্ধারিত সময়ের সবচেয়ে কাছের নিশ্চিত ঐতিহাসিক ক্যান্ডেলের ক্লোজ দিয়ে যাচাই";
       }
     }
-    await env.ANALYSIS_KV.put(item.key, JSON.stringify(r), {
-      expirationTtl: 60 * 60 * 24 * 11, metadata: r
-    });
+    try{
+      await env.ANALYSIS_KV.put(item.key,JSON.stringify(r),{expirationTtl:60*60*24*11,metadata:r});
+    }catch(error){
+      console.error("Matured decision ledger update failed",{key:item.key,error:String(error)});
+    }
   }
 }
 
@@ -1457,9 +1471,11 @@ export default {
       return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
     }
     if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
-    const snapshot = await env.ANALYSIS_KV.get("latest:" + symbol, "json");
+    let snapshot,legacyLatest;
+    try{snapshot=await env.ANALYSIS_KV.get("latest:" + symbol,"json");}catch(error){console.error("Latest snapshot read failed",String(error));}
     // Backward compatibility: read older per-timeframe keys during migration.
-    const latest = snapshot?.[timeframe] || await env.ANALYSIS_KV.get("latest:" + symbol + ":" + timeframe, "json");
+    try{legacyLatest=snapshot?.[timeframe]||await env.ANALYSIS_KV.get("latest:" + symbol + ":" + timeframe,"json");}catch(error){console.error("Legacy latest snapshot read failed",String(error));}
+    const latest=legacyLatest;
     return Response.json({ items: latest ? [latest] : [] }, {
       headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }
     });
@@ -1468,7 +1484,8 @@ export default {
     const scheduledDate = new Date(controller.scheduledTime);
     const minute = scheduledDate.getUTCMinutes();
     // Evaluate matured decisions on every minute tick so short timeframes are checked promptly.
-    await evaluateMaturedDecisions(env);
+    try{await evaluateMaturedDecisions(env);}
+    catch(error){console.error("Matured-decision evaluation failed; scheduled analysis will continue",String(error));}
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
       tasks.push(() => runScheduledOne(env, symbol, "1m"));
@@ -1504,7 +1521,8 @@ export default {
           for (const result of symbolResults) snapshot[result.timeframe] = result;
           snapshot.updatedAt = new Date().toISOString();
           snapshot.storagePolicy = "batched-5m";
-          await env.ANALYSIS_KV.put("latest:" + symbol, JSON.stringify(snapshot), { expirationTtl: 60 * 60 * 24 * 90 });
+          try{await env.ANALYSIS_KV.put("latest:" + symbol,JSON.stringify(snapshot),{expirationTtl:60*60*24*90});}
+          catch(error){console.error("Latest snapshot persistence failed",{symbol,error:String(error)});}
         }
       }
     }
