@@ -1012,10 +1012,15 @@ async function evaluateMaturedDecisions(env) {
     const r = item.metadata;
     if (r && (r.decision === "LONG" || r.decision === "SHORT")) {
       // Repair older records whose target was anchored to scheduler runtime.
-      const retryable = r.outcome === "PENDING" ||
+      const duration = intervalsForRecords[r.timeframe] || 60000;
+      const tolerance = Math.max(90000, duration * 0.25);
+      // Retry scheduler-late results that the report excludes as UNVERIFIED.
+      // KV metadata still retains the original CORRECT/WRONG result, so detect it by delay.
+      const delayedResult = ["CORRECT","WRONG"].includes(r.outcome) &&
+        Number.isFinite(Number(r.evaluationDelayMs)) && Number(r.evaluationDelayMs) > tolerance;
+      const retryable = r.outcome === "PENDING" || delayedResult ||
         (r.outcome === "UNVERIFIED" && /নির্ধারিত সময়ের কাছাকাছি নিশ্চিত ক্যান্ডেল পাওয়া যায়নি/.test(r.evaluationNote || ""));
       if (!retryable) continue;
-      const duration = intervalsForRecords[r.timeframe] || 60000;
       const keyEpoch = Number(String(item.name).split(":").pop());
       const candleClose = Date.parse(r.candleCloseTime || "") || (Number.isFinite(keyEpoch) && keyEpoch > 0 ? keyEpoch : NaN);
       if (Number.isFinite(candleClose)) {
