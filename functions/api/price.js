@@ -34,7 +34,7 @@ export async function onRequestGet({ request }) {
       const t = j.data?.[0];
       const ticker = t && { last:t.last, open24h:t.open24h, bid:t.bidPx, ask:t.askPx };
       const timestamp = Number(t?.ts);
-      if (j.code === "0" && validTicker(ticker) && Number.isFinite(timestamp) && timestamp > 0 && Date.now()-timestamp <= 60000) {
+      if (j.code === "0" && validTicker(ticker) && Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now()+10000 && Date.now()-timestamp <= 60000) {
         return Response.json({ symbol, source:"OKX", last:Number(ticker.last), open24h:Number(ticker.open24h), bid:Number(ticker.bid), ask:Number(ticker.ask), timestamp }, {
           headers: { "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" }
         });
