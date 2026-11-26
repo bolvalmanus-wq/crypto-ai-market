@@ -101,8 +101,8 @@ async function loadV2Paper(){
   const res=await fetch("/api/v2/performance",{cache:"no-store"}),d=await res.json();
   if(!res.ok)throw new Error(d.error||"V2 রিপোর্ট পাওয়া যায়নি");
   target.innerHTML='<div class="grid">'+[
-   ["মোট V2 paper signal",d.total],["যাচাই সম্পন্ন",d.evaluated],["সঠিক",d.correct],["ভুল",d.wrong],["অপেক্ষমাণ",d.pending],["অনির্ভরযোগ্য",d.unverified],["সঠিকতার হার",d.accuracy===null?"—":Number(d.accuracy).toFixed(1)+"%"],["নেট PnL",Number(d.netPnlPct||0).toFixed(3)+"%"]
-  ].map(([k,v])=>'<div class="stat"><span>'+safe(k)+'</span><b>'+safe(v??0)+'</b></div>').join("")+'</div><div class="muted" style="margin-top:8px">V2 আলাদা ledger-এ চলে। এই ফল পুরোনো সিস্টেমের পরিসংখ্যানের সঙ্গে মেশানো হয় না।</div>';
+   ["মোট V2 paper signal",d.total],["যাচাই সম্পন্ন",d.evaluated],["সঠিক",d.correct],["ভুল",d.wrong],["অপেক্ষমাণ",d.pending],["অনির্ভরযোগ্য",d.unverified],["সঠিকতার হার",d.accuracy===null?"—":Number(d.accuracy).toFixed(1)+"%"],["নেট PnL","—"],["ট্রেড রিটার্ন যোগফল",Number(d.sumTradeReturnPct||0).toFixed(3)+"%"]
+  ].map(([k,v])=>'<div class="stat"><span>'+safe(k)+'</span><b>'+safe(v??0)+'</b></div>').join("")+'</div><div class="muted" style="margin-top:8px">V2 আলাদা ledger-এ চলে। ১০০টি directional paper trade না হওয়া পর্যন্ত accuracy দেখানো হয় না; account equity ও position sizing ছাড়া portfolio net PnL গণনা করা হয় না।</div>';
  }catch(e){target.textContent="V2 paper report: "+e.message;}
 }
 async function runV2Backtest(){
