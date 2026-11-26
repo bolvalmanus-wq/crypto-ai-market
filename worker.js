@@ -1290,7 +1290,7 @@ export default {
     if (url.pathname === "/push/unsubscribe" && request.method === "POST") {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
-      if(typeof body?.endpoint!=="string"||body.endpoint.length>2048)return Response.json({error:"Subscription endpoint required"},{status:400});
+      if(typeof body?.endpoint!=="string"||!body.endpoint||body.endpoint.length>2048)return Response.json({error:"Subscription endpoint required"},{status:400});
       if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
       const digest = await crypto.subtle.digest("SHA-256", utf8(body.endpoint));
       const id = b64u(new Uint8Array(digest)).slice(0, 32);
