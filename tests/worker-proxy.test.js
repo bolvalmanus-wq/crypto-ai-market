@@ -17,6 +17,21 @@ test("uses the Pages Service Binding without public DNS", async () => {
   assert.equal(new URL(received.url).searchParams.get("check"), "1");
 });
 
+
+test("detects a Service Binding configured under a custom variable name", async () => {
+  let called = false;
+  const response = await fetchMarketWorker({
+    WORKER: { fetch: async request => {
+      called = true;
+      assert.equal(new URL(request.url).pathname, "/health");
+      return Response.json({ ok: true });
+    }},
+    ASSETS: { fetch: async () => { throw new Error("must not use ASSETS"); } }
+  }, "/health");
+  assert.equal(response.status, 200);
+  assert.equal(called, true);
+});
+
 test("uses configured public URL only when no Service Binding exists", async () => {
   const originalFetch = globalThis.fetch;
   let target;
