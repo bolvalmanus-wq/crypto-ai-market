@@ -9,8 +9,5 @@ crons = ["* * * * *"]
 binding = "ANALYSIS_KV"
 id = "845c373b33004fa797cb14c92c0568d7"
 
-[ai]
-binding = "AI"
-
 [vars]
 VAPID_PUBLIC_KEY = "BM8brhE-oZQIHfaB8xPF95RD72XKPTQyjLjsYvDr3isgXSKFmDzbPpA2yBBac5PXvHeWXnTUnq7-c2JoUcbU75I"
