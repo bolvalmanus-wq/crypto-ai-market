@@ -1,8 +1,5 @@
 export async function onRequest({ request, env }) {
-  const schedulerUrl = env.MARKET_WORKER_URL || "https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev";
-  if (!schedulerUrl) {
-    return Response.json({ error: "Push scheduler is not configured; set SCHEDULER_URL in Pages runtime variables" }, { status: 503 });
-  }
+  const workerUrl = env.MARKET_WORKER_URL || "https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev";
   const incoming = new URL(request.url);
   const action = incoming.searchParams.get("action");
   if (!["health", "public-key", "subscribe", "unsubscribe", "test"].includes(action)) {
@@ -15,7 +12,7 @@ export async function onRequest({ request, env }) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
   try {
-    const target = new URL("/push/" + action, schedulerUrl);
+    const target = new URL("/push/" + action, workerUrl);
     const init = { method: request.method, headers: { Accept: "application/json", Origin: "https://crypto-ai-market.pages.dev" } };
     if (request.method === "POST") {
       init.headers["Content-Type"] = "application/json";
