@@ -513,8 +513,11 @@ function buildFourHourCandles(data) {
 }
 
 function buildFourHourContext(data) {
-  const native = (data.candles?.["4h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
-  const source = native.length >= 50 ? [] : (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
+  const native = (data.candles?.["4h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) && c.close > 0 && c.volume >= 0).sort((a,b) => a.time - b.time);
+  // Higher-timeframe structure must also use one uninterrupted candle segment.
+  const nativeSegmentStart = native.reduce((start,c,i) => i>0 && c.time-native[i-1].time!==INTERVALS["4h"] ? i : start,0);
+  const continuousNative = native.slice(nativeSegmentStart);
+  const source = continuousNative.length >= 50 ? [] : (data.candles?.["1h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) && c.close > 0 && c.volume >= 0).sort((a,b) => a.time - b.time);
   const buckets = new Map();
   for (const candle of source) {
     const bucket = Math.floor(candle.time / 14400000) * 14400000;
@@ -526,7 +529,9 @@ function buildFourHourContext(data) {
     if (rows.length !== 4 || rows.some((c,i) => i > 0 && c.time - rows[i-1].time !== 3600000)) return [];
     return [{ time, open: rows[0].open, high: Math.max(...rows.map(c=>c.high)), low: Math.min(...rows.map(c=>c.low)), close: rows[3].close, volume: rows.reduce((sum,c)=>sum + (Number(c.volume)||0),0) }];
   });
-  const bars = native.length >= 50 ? native : aggregatedBars;
+  const aggregateSegmentStart=aggregatedBars.reduce((start,c,i)=>i>0&&c.time-aggregatedBars[i-1].time!==INTERVALS["4h"]?i:start,0);
+  const continuousAggregated=aggregatedBars.slice(aggregateSegmentStart);
+  const bars = continuousNative.length >= 50 ? continuousNative : continuousAggregated;
   if (bars.length < 50) return { timeframe: "4h", signal: "WAIT", available: false, warning: "৪ ঘণ্টার পর্যাপ্ত সম্পূর্ণ ক্যান্ডেল নেই" };
   const closes = bars.map(c=>c.close), last = bars[bars.length-1];
   const ema20 = ema(closes.slice(-80),20), ema50 = ema(closes.slice(-100),50), strength = rsi(closes,14);
