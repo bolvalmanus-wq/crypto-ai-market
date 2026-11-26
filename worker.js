@@ -1269,13 +1269,18 @@ export default {
       try {
         if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
         const now = Date.now(), cutoff = now - 10 * 24 * 60 * 60 * 1000;
-        const listed = await env.ANALYSIS_KV.list({ prefix: "decision:", limit: 1000 });
+        // Paginate the complete 10-day ledger; KV list() returns at most 1,000 keys per page.
         const records = [];
-        for (const item of (listed?.keys || [])) {
-          const record = item.metadata;
-          if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
-              Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
-        }
+        let cursor;
+        do {
+          const listed = await env.ANALYSIS_KV.list({prefix:"decision:",limit:1000,...(cursor?{cursor}:{})});
+          for (const item of (listed?.keys || [])) {
+            const record = item.metadata;
+            if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
+                Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
+          }
+          cursor = listed?.list_complete ? undefined : listed?.cursor;
+        } while (cursor);
         const intervalMs = ({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000});
         for (const record of records) {
           const delay = Number(record.evaluationDelayMs);
