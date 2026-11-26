@@ -987,7 +987,10 @@ async function runOne(env, symbol, tf, options = {}) {
     generatedAt:new Date().toISOString(),candleCloseTime:market.candleCloseTime,signalPriceBasis:"confirmed-candle-close",entryPriceBasis:"live-ticker-at-decision",marketSource:data.source,
     marketFetchedAt:data.fetchedAt||null,marketTimestamp:data.marketTimestamp||null,inputTimeframe:tf,
     inputCandleCount:market.candles.length,intradayMovement:market.intradayMovement};
-  if (options.persist !== false) await persistLatestSnapshot(env, symbol, result);
+  if(options.persist!==false){
+    try{await persistLatestSnapshot(env,symbol,result);}
+    catch(error){result.storageWarnings=[...(result.storageWarnings||[]),"Latest snapshot could not be persisted"];console.error("Latest snapshot persistence failed",{symbol,timeframe:tf,error:String(error)});}
+  }
   // One record per symbol/timeframe/closed candle. The scheduler may rerun several
   // times while the same candle remains latest; do not count those as new decisions.
   const decisionId = symbol + ":" + tf + ":" + Date.parse(result.candleCloseTime);
@@ -1456,9 +1459,10 @@ export default {
       }
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
       try {
-        const result = await runOne(env, symbol, timeframe, { persist: false });
-        await persistLatestSnapshot(env, symbol, result);
-        return Response.json({ items: [result], triggered: true }, { headers: { "Cache-Control": "no-store" } });
+        const result = await runOne(env,symbol,timeframe,{persist:false});
+        try{await persistLatestSnapshot(env,symbol,result);}
+        catch(error){result.storageWarnings=[...(result.storageWarnings||[]),"Latest snapshot could not be persisted"];console.error("Manual latest snapshot persistence failed",{symbol,timeframe,error:String(error)});}
+        return Response.json({items:[result],triggered:true},{headers:{"Cache-Control":"no-store"}});
       } catch (error) {
         console.error("Manual analysis failed", { symbol, timeframe, error: String(error) });
         return Response.json({ error: error instanceof Error ? error.message : "বিশ্লেষণ ব্যর্থ হয়েছে" }, { status: 502 });
