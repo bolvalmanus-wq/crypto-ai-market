@@ -1052,7 +1052,33 @@ async function evaluateMaturedDecisions(env) {
       const delta = Math.abs(Number(candle.time) + duration - target);
       if (delta < bestDelta) { best = candle; bestDelta = delta; }
     }
+    // The live market endpoint only retains its latest candle window. Recover older missed
+    // outcomes directly from Bybit's historical kline endpoint around the exact target.
     const tolerance = Math.max(30000, Math.min(60000, duration * 0.2));
+    if (!best || bestDelta > tolerance) {
+      const bybitIntervals = {"1m":"1","5m":"5","15m":"15","30m":"30","1h":"60","4h":"240"};
+      const start = target - duration;
+      const end = target + 1000;
+      try {
+        const url = "https://api.bybit.com/v5/market/kline?category=linear&symbol=" +
+          encodeURIComponent(r.symbol + "USDT") + "&interval=" + bybitIntervals[r.timeframe] +
+          "&start=" + start + "&end=" + end + "&limit=10";
+        const response = await fetch(url, {headers:{Accept:"application/json"},signal:AbortSignal.timeout(4000)});
+        if (response.ok) {
+          const payload = await response.json();
+          if (payload.retCode === 0 && Array.isArray(payload.result?.list)) {
+            for (const row of payload.result.list) {
+              const candle = {time:Number(row[0]),open:Number(row[1]),high:Number(row[2]),low:Number(row[3]),close:Number(row[4]),volume:Number(row[5]),confirmed:Number(row[0])+duration<=now};
+              if (!candle.confirmed || !Number.isFinite(candle.close) || candle.close <= 0) continue;
+              const delta = Math.abs(candle.time + duration - target);
+              if (delta < bestDelta) {best=candle;bestDelta=delta;}
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Historical outcome candle recovery failed", r.symbol, r.timeframe, String(error));
+      }
+    }
     r.evaluatedAt = new Date(now).toISOString();
     r.evaluationDelayMs = Math.max(0, now - target);
     if (!best || bestDelta > tolerance) {
