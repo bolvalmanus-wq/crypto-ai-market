@@ -76,7 +76,7 @@ export async function onRequestGet({ request }) {
       return [...unique.values()].sort((a,b)=>a.time-b.time);
     };
     const candles={"1m":mapBars(k1.list,60000),"5m":mapBars(k5.list,300000),"15m":mapBars(k15.list,900000),"30m":mapBars(k30.list,1800000),"1h":mapBars(k60.list,3600000),"4h":mapBars(k240.list,14400000)};
-    if(!ticker||!Number.isFinite(Number(ticker.lastPrice))||Number(ticker.lastPrice)<=0||!Number.isFinite(Number(ticker.bid1Price))||!Number.isFinite(Number(ticker.ask1Price))||Number(ticker.bid1Price)<=0||Number(ticker.ask1Price)<Number(ticker.bid1Price)||Object.values(candles).some(rows=>rows.length<30))throw new Error("Bybit returned invalid or incomplete market data");
+    if(!ticker||!Number.isFinite(Number(ticker.lastPrice))||Number(ticker.lastPrice)<=0||!Number.isFinite(Number(ticker.bid1Price))||!Number.isFinite(Number(ticker.ask1Price))||Number(ticker.bid1Price)<=0||Number(ticker.ask1Price)<=0||Number(ticker.ask1Price)<Number(ticker.bid1Price)||Object.values(candles).some(rows=>rows.length<30))throw new Error("Bybit returned invalid or incomplete market data");
     const prev = Number(ticker.prevPrice24h);
     return Response.json({
       symbol, instrument:symbolCode, source:"Bybit USDT perpetual",
@@ -129,7 +129,7 @@ export async function onRequestGet({ request }) {
         "15m":mapOkxBars(candles15m,900000),"30m":mapOkxBars(candles30m,1800000),
         "1h":mapOkxBars(candles1h,3600000),"4h":mapOkxBars(candles4h,14400000)
       };
-      if(!Number.isFinite(timestamp)||ageSeconds>180||!Number.isFinite(Number(ticker.last))||Number(ticker.last)<=0||Object.values(okxCandles).some(rows=>rows.length<30)){
+      if(!Number.isFinite(timestamp)||timestamp<=0||ageSeconds>180||!Number.isFinite(Number(ticker.last))||Number(ticker.last)<=0||!Number.isFinite(Number(ticker.bidPx))||!Number.isFinite(Number(ticker.askPx))||Number(ticker.bidPx)<=0||Number(ticker.askPx)<=0||Number(ticker.askPx)<Number(ticker.bidPx)||Object.values(okxCandles).some(rows=>rows.length<30)){
         lastError="OKX returned stale or invalid ticker/candle data";continue;
       }
       return Response.json({
