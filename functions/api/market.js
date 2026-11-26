@@ -114,6 +114,24 @@ export async function onRequestGet({ request }) {
 
       const timestamp = Number(ticker.ts);
       const ageSeconds = Math.max(0, Math.floor(Date.now() / 1000 - timestamp / 1000));
+      const mapOkxBars=(rows,intervalMs)=>{
+        const unique=new Map();
+        for(const row of rows){
+          if(!Array.isArray(row)||row.length<9)continue;
+          const [time,open,high,low,close,volume]=row.slice(0,6).map(Number);
+          if(![time,open,high,low,close,volume].every(Number.isFinite)||time<=0||low<=0||high<low||open<low||open>high||close<low||close>high||volume<0)continue;
+          unique.set(time,{time,open,high,low,close,volume,confirmed:row[8]==="1"&&time+intervalMs<=Date.now()});
+        }
+        return [...unique.values()].sort((a,b)=>a.time-b.time);
+      };
+      const okxCandles={
+        "1m":mapOkxBars(candles1m,60000),"5m":mapOkxBars(candles5m,300000),
+        "15m":mapOkxBars(candles15m,900000),"30m":mapOkxBars(candles30m,1800000),
+        "1h":mapOkxBars(candles1h,3600000),"4h":mapOkxBars(candles4h,14400000)
+      };
+      if(!Number.isFinite(timestamp)||ageSeconds>180||!Number.isFinite(Number(ticker.last))||Number(ticker.last)<=0||Object.values(okxCandles).some(rows=>rows.length<30)){
+        lastError="OKX returned stale or invalid ticker/candle data";continue;
+      }
       return Response.json({
         symbol,
         instrument: instId,
@@ -128,22 +146,7 @@ export async function onRequestGet({ request }) {
           ask: Number(ticker.askPx),
           volume24h: Number(ticker.volCcy24h),
         },
-        candles: {
-          "1m": candles1m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})).reverse(),
-          "5m": candles5m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})).reverse(),
-          "15m": candles15m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})).reverse(),
-          "30m": candles30m.map(c => ({time:Number(c[0]),open:Number(c[1]),high:Number(c[2]),low:Number(c[3]),close:Number(c[4]),volume:Number(c[5]),confirmed:c[8]==="1"})).reverse(),
-          "1h": candles1h.map(c => ({
-            time: Number(c[0]), open: Number(c[1]), high: Number(c[2]),
-            low: Number(c[3]), close: Number(c[4]), volume: Number(c[5]),
-            confirmed: c[8] === "1",
-          })).reverse(),
-          "4h": candles4h.map(c => ({
-            time: Number(c[0]), open: Number(c[1]), high: Number(c[2]),
-            low: Number(c[3]), close: Number(c[4]), volume: Number(c[5]),
-            confirmed: c[8] === "1",
-          })).reverse(),
-        },
+        candles:okxCandles,
       }, { headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Unknown provider error";
