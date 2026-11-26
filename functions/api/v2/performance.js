@@ -1,9 +1,20 @@
-export async function onRequest({request,env}){
-  if(request.method!=="GET")return new Response("Method Not Allowed",{status:405});
-  const workerUrl=env.MARKET_WORKER_URL||"https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev";
-  try{
-    const response=await fetch(new URL("/v2/performance",workerUrl),{headers:{Accept:"application/json","Cache-Control":"no-cache"},signal:AbortSignal.timeout(12000)});
-    const body=await response.text();let data;try{data=JSON.parse(body)}catch(_){return Response.json({error:"V2 scheduler returned non-JSON",details:body.slice(0,250)},{status:502,headers:{"Cache-Control":"no-store"}})}
-    return Response.json(data,{status:response.status,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
-  }catch(error){return Response.json({error:"V2 paper report unavailable",details:error instanceof Error?error.message:String(error)},{status:502,headers:{"Cache-Control":"no-store"}})}
+import { fetchMarketWorker, readWorkerJson, proxyJson } from "../../_shared/worker-proxy.js";
+
+export async function onRequest({ request, env }) {
+  if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405 });
+  try {
+    const response = await fetchMarketWorker(env, "/v2/performance", {
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await readWorkerJson(response, "V2 paper performance endpoint");
+    return proxyJson(data, response.status);
+  } catch (error) {
+    console.error("V2 performance proxy failed", error instanceof Error ? error.stack : String(error));
+    return proxyJson({
+      error: "V2 paper report unavailable",
+      details: error instanceof Error ? error.message : String(error),
+      code: error?.cause?.code || error?.code || null
+    }, error?.status || 502);
+  }
 }
