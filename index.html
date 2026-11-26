@@ -954,7 +954,7 @@ async function enableNotifications(){
   const result=await response.json().catch(()=>({}));
   if(!response.ok||!result.ok)throw new Error(result.error||"Subscription সংরক্ষণ হয়নি");
   if(button){button.textContent="🔔 চালু";button.classList.add("enabled");}
-  const testResponse=await fetch("/api/push?action=test",{method:"POST"});
+  const testResponse=await fetch("/api/push?action=test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:subscription.endpoint})});
   const testResult=await testResponse.json().catch(()=>({}));
   if(!testResponse.ok||!testResult.ok)throw new Error(testResult.error||"নোটিফিকেশন পরীক্ষা পাঠানো যায়নি");
   alert("নোটিফিকেশন চালু হয়েছে। একটি পরীক্ষামূলক অ্যালার্ট পাঠানো হয়েছে। নতুন LONG বা SHORT সিদ্ধান্ত হলেই আবার অ্যালার্ট আসবে।");
