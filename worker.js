@@ -1239,6 +1239,15 @@ async function evaluateMaturedDecisions(env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") {
+      return Response.json({
+        ok: true,
+        service: "crypto-ai-market-worker",
+        timestamp: new Date().toISOString(),
+        analysisKv: !!env.ANALYSIS_KV,
+        routes: ["/latest", "/performance", "/v2/performance", "/v2/backtest"]
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
     const protectedPostPaths = new Set(["/analyze","/v2/backtest","/push/subscribe","/push/unsubscribe","/push/test"]);
     if(request.method==="POST"&&protectedPostPaths.has(url.pathname)&&request.headers.get("Origin")!==PAGE_URL){
       return Response.json({error:"এই কাজটি শুধু অফিসিয়াল অ্যাপ থেকে করা যাবে"},{status:403,headers:{"Cache-Control":"no-store"}});
