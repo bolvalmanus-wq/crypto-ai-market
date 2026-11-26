@@ -949,7 +949,9 @@ async function runOne(env, symbol, tf, options = {}) {
     durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||5),reason:decisionReason,
     risk:"শুধু গাণিতিক ইন্ডিকেটর-সম্মিলন; confidence হলো স্কোরের মাত্রা, লাভের সম্ভাবনা নয়। প্রবেশের আগে stop-loss ও position sizing যাচাই করুন।",dataQuality:"GOOD"};
   // Isolated V2 research path: consumes only confirmed candles and never changes legacy signals.
-  const v2Data = data; // Use the provider's native confirmed 4H candles; do not shorten history by re-aggregating.
+  // Share the same confirmed, timeframe-complete candle set with V2.
+  // In particular, 30m is aggregated from six contiguous confirmed 5m bars above.
+  const v2Data = analysisData;
   const v2Testing = evaluateV2({ symbol, timeframe: tf, data: v2Data, market, now: Date.now(), accountEquity: null, config: { riskPct: 0.5, maxSpreadPct: 0.10, atrStopMultiple: 1.5 } });
   const result={symbol,timeframe:tf,provider:"Indicator Engine Only · AI Disabled",
     model:"EMA/RSI/MACD/ADX + Ichimoku/SAR/Supertrend/Donchian/OBV/MFI/ROC",analysis,
