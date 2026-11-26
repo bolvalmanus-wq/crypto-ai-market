@@ -65,11 +65,18 @@ async function encryptPush(subscription,payload) {
   new DataView(header.buffer).setUint32(16,4096,false); header[20]=serverPublic.length;
   return concatBytes(header,serverPublic,cipher);
 }
+function isAllowedPushEndpoint(value) {
+  try {
+    const endpoint=new URL(value),host=endpoint.hostname.toLowerCase();
+    const allowedHost=host==="fcm.googleapis.com"||host==="web.push.apple.com"||host==="push.apple.com"||
+      host==="push.services.mozilla.com"||host.endsWith(".push.services.mozilla.com")||
+      host==="notify.windows.com"||host.endsWith(".notify.windows.com");
+    return endpoint.protocol==="https:"&&allowedHost&&!endpoint.port&&!endpoint.username&&!endpoint.password;
+  } catch (_) { return false; }
+}
 async function sendOnePush(env,subscription,payload) {
+  if(!isAllowedPushEndpoint(subscription?.endpoint))throw new Error("Unsupported Web Push endpoint host");
   const endpoint=new URL(subscription.endpoint);
-  const host=endpoint.hostname.toLowerCase();
-  const allowedHost=host==="fcm.googleapis.com"||host==="web.push.apple.com"||host==="push.apple.com"||host.endsWith(".push.services.mozilla.com")||host.endsWith(".notify.windows.com");
-  if(endpoint.protocol!=="https:"||!allowedHost)throw new Error("Unsupported Web Push endpoint host");
   const token=await vapidToken(endpoint.origin,env);
   const body=await encryptPush(subscription,payload);
   return fetch(subscription.endpoint,{
@@ -1244,18 +1251,20 @@ export default {
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
       let subscription;
       try { subscription = await request.json(); } catch { return Response.json({ error: "Invalid subscription" }, { status: 400 }); }
-      let endpoint;
-      try { endpoint = new URL(subscription?.endpoint); } catch (_) { return Response.json({ error: "Invalid push endpoint" }, { status: 400 }); }
-      const host=endpoint.hostname.toLowerCase();
-      const allowedHost=host==="fcm.googleapis.com"||host==="web.push.apple.com"||host==="push.apple.com"||host.endsWith(".push.services.mozilla.com")||host.endsWith(".notify.windows.com");
+      if(typeof subscription?.endpoint!=="string"||subscription.endpoint.length>2048||!isAllowedPushEndpoint(subscription.endpoint)){
+        return Response.json({error:"Invalid or unsupported push endpoint"},{status:400});
+      }
       let publicKeyBytes,authBytes;
       try{publicKeyBytes=unb64u(subscription?.keys?.p256dh);authBytes=unb64u(subscription?.keys?.auth);}catch(_){return Response.json({error:"Invalid push encryption keys"},{status:400});}
-      if(endpoint.protocol!=="https:"||!allowedHost||subscription.endpoint.length>2048||publicKeyBytes.length!==65||authBytes.length!==16){
-        return Response.json({ error: "Invalid or unsupported push subscription" }, { status: 400 });
-      }
+      if(publicKeyBytes.length!==65||authBytes.length!==16)return Response.json({error:"Invalid push encryption keys"},{status:400});
       const digest = await crypto.subtle.digest("SHA-256", utf8(subscription.endpoint));
       const id = b64u(new Uint8Array(digest)).slice(0, 32);
-      await env.ANALYSIS_KV.put("push:sub:" + id, JSON.stringify(subscription), { expirationTtl: 60 * 60 * 24 * 180 });
+      try {
+        await env.ANALYSIS_KV.put("push:sub:" + id, JSON.stringify(subscription), { expirationTtl: 60 * 60 * 24 * 180 });
+      } catch(error) {
+        console.error("Push subscription persistence failed",String(error));
+        return Response.json({error:"Push subscription storage unavailable"},{status:503});
+      }
       return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
     }
     if (url.pathname === "/push/test" && request.method === "POST") {
@@ -1280,12 +1289,13 @@ export default {
     if (url.pathname === "/push/unsubscribe" && request.method === "POST") {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
-      if (body?.endpoint && env.ANALYSIS_KV) {
-        const digest = await crypto.subtle.digest("SHA-256", utf8(body.endpoint));
-        const id = b64u(new Uint8Array(digest)).slice(0, 32);
-        await env.ANALYSIS_KV.delete("push:sub:" + id);
-      }
-      return Response.json({ ok: true });
+      if(typeof body?.endpoint!=="string"||body.endpoint.length>2048)return Response.json({error:"Subscription endpoint required"},{status:400});
+      if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
+      const digest = await crypto.subtle.digest("SHA-256", utf8(body.endpoint));
+      const id = b64u(new Uint8Array(digest)).slice(0, 32);
+      try { await env.ANALYSIS_KV.delete("push:sub:" + id); }
+      catch(error) { console.error("Push unsubscribe failed",String(error)); return Response.json({error:"Push subscription storage unavailable"},{status:503}); }
+      return Response.json({ ok: true },{headers:{"Cache-Control":"no-store"}});
     }
     if (url.pathname === "/v2/status" && request.method === "GET") {
       return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check","preliminary-backtest"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented","Backtest endpoint is preliminary single-timeframe simulation, not full walk-forward validation"] }, {headers:{"Cache-Control":"no-store"}});
