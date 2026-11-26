@@ -37,3 +37,12 @@ test("backtest never labels a preliminary sample as validated",()=>{
 test("backtest reports insufficient history without fabricating trades",()=>{
  const report=backtestV2({candles:makeBars("15m",100),timeframe:"15m"});assert.equal(report.status,"INSUFFICIENT_DATA");assert.equal(report.trades,0);assert.equal(report.winRate,undefined);
 });
+
+test("V2 discards history before a candle gap instead of calculating across missing intervals",()=>{
+ const now=Date.now(),data=makeData(now),bars=data.candles["15m"];
+ bars.splice(80,1);
+ const result=evaluateV2({symbol:"BTC",timeframe:"15m",data,market:makeMarket(data),now});
+ assert.equal(result.dataQuality["15m"].valid,false);
+ assert.ok(result.dataQuality["15m"].count<210);
+ assert.equal(result.decision,"NO TRADE");
+});
