@@ -17,7 +17,7 @@ export function findWorkerServiceBinding(env) {
   // Pages Service Binding variable names are user-defined. Detect the binding
   // even when it was configured as WORKER, CRYPTO_WORKER, or another name.
   for (const [name, value] of Object.entries(env || {})) {
-    if (name !== "MARKET_WORKER" && value && typeof value.fetch === "function") {
+    if (name !== "MARKET_WORKER" && name !== "ASSETS" && value && typeof value.fetch === "function") {
       return { name, binding: value };
     }
   }
