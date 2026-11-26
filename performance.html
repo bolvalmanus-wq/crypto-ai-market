@@ -115,7 +115,10 @@ async function runV2Backtest(){
    const d=await res.json();if(!res.ok)throw new Error(d.details||d.error||"Backtest failed");
    results.push({symbol,report:d.report});
   }
-  target.innerHTML=results.map(({symbol,report:r})=>'<div class="result"><b>'+symbol+'</b> · '+safe(r.status)+'<br>Bars: '+safe(r.bars)+' · Trades: '+safe(r.trades)+' / '+safe(r.minimumTrades)+'<br>Win rate: '+safe(r.winRate===null?"—":Number(r.winRate).toFixed(1)+"%")+' · Profit factor: '+safe(r.profitFactor===null?"—":Number(r.profitFactor).toFixed(2))+'<br>Expectancy: '+safe(r.expectancyPct===null?"—":Number(r.expectancyPct).toFixed(4)+"%")+' · Max drawdown: '+safe(r.maxDrawdownPct===null?"—":Number(r.maxDrawdownPct).toFixed(2)+"%")+'<br><span class="muted">'+safe(r.note)+'</span></div>').join("");
+  target.innerHTML=results.map(({symbol,report:r})=>{
+   const metric=(value,digits,suffix="")=>{const n=numberValue(value);return n===null?"—":n.toFixed(digits)+suffix;};
+   return '<div class="result"><b>'+safe(symbol)+'</b> · '+safe(r.status)+'<br>Bars: '+safe(r.bars??"—")+' · Trades: '+safe(r.trades??0)+' / '+safe(r.minimumTrades??500)+'<br>Win rate: '+safe(metric(r.winRate,1,"%"))+' · Profit factor: '+safe(metric(r.profitFactor,2))+'<br>Expectancy: '+safe(metric(r.expectancyPct,4,"%"))+' · Max drawdown: '+safe(metric(r.maxDrawdownPct,2,"%"))+'<br><span class="muted">'+safe(r.note||"রিপোর্টে পর্যাপ্ত তথ্য নেই")+'</span></div>';
+  }).join("");
  }catch(e){target.textContent="Backtest চালানো যায়নি: "+e.message;}
  finally{button.disabled=false;}
 }
