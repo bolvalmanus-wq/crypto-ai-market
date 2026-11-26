@@ -431,6 +431,33 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
    components:{ichimoku:ich,vwap:vwapScore,volumeProfile:pocScore,fibonacci:fibScore,parabolicSar:sar,cci,williamsR:will,aroon,donchian:don,keltner:kel,supertrend,obv,mfi,chaikin,roc,ultimateOscillator:ultimate,trix,dpo,choppiness:Number.isFinite(chop)?chop:null,atrPercentile:Number.isFinite(atrPct)?atrPct:null,adx:Number.isFinite(adx)?adx:null}};
 }
 
+function buildThirtyMinuteCandles(data) {
+  // Build confirmed 30m bars only from six contiguous confirmed 5m candles.
+  const source = (data.candles?.["5m"] || [])
+    .filter(c => c && c.confirmed === true && [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) && c.close > 0)
+    .sort((a,b) => a.time - b.time);
+  const buckets = new Map();
+  for (const candle of source) {
+    const bucket = Math.floor(candle.time / (30 * 60 * 1000)) * (30 * 60 * 1000);
+    if (!buckets.has(bucket)) buckets.set(bucket, []);
+    buckets.get(bucket).push(candle);
+  }
+  const result = [];
+  for (const [time, rows] of buckets) {
+    rows.sort((a,b) => a.time - b.time);
+    if (rows.length !== 6 || rows.some((row,i) => row.time !== time + i * 5 * 60 * 1000)) continue;
+    result.push({
+      time, open: rows[0].open,
+      high: Math.max(...rows.map(x => x.high)),
+      low: Math.min(...rows.map(x => x.low)),
+      close: rows[5].close,
+      volume: rows.reduce((sum,x) => sum + x.volume, 0),
+      confirmed: true
+    });
+  }
+  return result;
+}
+
 function buildFourHourCandles(data) {
   const native = (data.candles?.["4h"] || []).filter(c => c.confirmed && [c.time,c.open,c.high,c.low,c.close].every(Number.isFinite) && c.close > 0).sort((a,b) => a.time - b.time);
   if (native.length >= 30) return native;
@@ -841,7 +868,11 @@ async function runOne(env, symbol, tf, options = {}) {
   if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
   const data = await marketResponse.json();
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
-  const analysisData = tf === "4h" ? { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } } : data;
+  const analysisData = tf === "4h"
+    ? { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } }
+    : tf === "30m"
+      ? { ...data, candles: { ...data.candles, "30m": buildThirtyMinuteCandles(data) } }
+      : data;
   const market = analyze(analysisData, tf);
   market.intradayMovement = buildIntradayMovement(data);
   market.timeframe = tf;
