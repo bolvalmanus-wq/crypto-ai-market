@@ -894,7 +894,7 @@ function shouldRunAiCouncil(market) {
 }
 
 async function runOne(env, symbol, tf, options = {}) {
-  const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" } });
+  const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" }, signal: AbortSignal.timeout(18000) });
   if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
   const data = await marketResponse.json();
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
@@ -1115,7 +1115,8 @@ async function evaluateMaturedDecisions(env) {
   await Promise.all(symbols.map(async symbol => {
     try {
       const response = await fetch(PAGE_URL + "/api/market?symbol=" + encodeURIComponent(symbol), {
-        headers: { "Cache-Control": "no-cache" }
+        headers: { "Cache-Control": "no-cache" },
+        signal: AbortSignal.timeout(8000)
       });
       if (response.ok) {
         const data = await response.json();
