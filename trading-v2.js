@@ -73,9 +73,17 @@ function stats(bars){
   const typical=bars.slice(-20).map(x=>(x.high+x.low+x.close)/3),typicalMean=typical.reduce((a,b)=>a+b,0)/typical.length,typicalDev=typical.reduce((a,b)=>a+Math.abs(b-typicalMean),0)/typical.length;
   const cci=typicalDev?(typical[typical.length-1]-typicalMean)/(.015*typicalDev):0;
   const keltnerUpper=e20+2*atr,keltnerLower=e20-2*atr;
-  let supertrend=price>=e20?"UP":"DOWN",stUpper=0,stLower=0;
   const start=Math.max(1,bars.length-40);
-  for(let i=start;i<bars.length;i++){const mp=(h[i]+l[i])/2,pc=c[i-1],a=Math.max(atr,1e-12),bu=mp+1.5*a,bl=mp-1.5*a;stUpper=i===start||bu<stUpper||pc>stUpper?bu:stUpper;stLower=i===start||bl>stLower||pc<stLower?bl:stLower;if(supertrend==="DOWN"&&c[i]>stUpper)supertrend="UP";else if(supertrend==="UP"&&c[i]<stLower)supertrend="DOWN";}
+  let supertrend=c[start-1]>=ema(c.slice(Math.max(0,start-200),start),20)?"UP":"DOWN",stUpper=Infinity,stLower=-Infinity;
+  for(let i=start;i<bars.length;i++){
+    const mp=(h[i]+l[i])/2,previousUpper=stUpper,previousLower=stLower;
+    const trWindow=trs.slice(Math.max(0,i-14),i),localAtr=trWindow.length?trWindow.reduce((a,b)=>a+b,0)/trWindow.length:atr;
+    const basicUpper=mp+1.5*Math.max(localAtr,1e-12),basicLower=mp-1.5*Math.max(localAtr,1e-12);
+    stUpper=i===start?basicUpper:(basicUpper<previousUpper||c[i-1]>previousUpper?basicUpper:previousUpper);
+    stLower=i===start?basicLower:(basicLower>previousLower||c[i-1]<previousLower?basicLower:previousLower);
+    if(supertrend==="DOWN"&&c[i]>previousUpper)supertrend="UP";
+    else if(supertrend==="UP"&&c[i]<previousLower)supertrend="DOWN";
+  }
   const bull=price>e20&&e20>e50&&e50>e200&&slope>0&&ichimokuBull&&supertrend==="UP";
   const bear=price<e20&&e20<e50&&e50<e200&&slope<0&&ichimokuBear&&supertrend==="DOWN";
   return {valid:true,count:c.length,price,ema20:e20,ema50:e50,ema200:e200,emaSlope:slope,adx,plusDI,minusDI,choppiness:chop,atr,atrPct,atrPercentile:atrRank,rsi,cci,relativeVolume:relVol,vwap,keltnerUpper,keltnerLower,ichimokuBull,ichimokuBear,supertrend,donchianHigh:dcHigh,donchianLow:dcLow,bull,bear,last,high20:Math.max(...h.slice(-20)),low20:Math.min(...l.slice(-20)),_prior10:bars.slice(-11,-1),_older10:bars.slice(-21,-11)};
@@ -201,7 +209,7 @@ function backtestV2({candles,timeframe="15m",feeBps=6,slippageBps=3,holdBars=1,m
   if(bars.length<220)return {status:"INSUFFICIENT_DATA",timeframe,bars:bars.length,requiredBars:220,trades:0,note:"কমপক্ষে ২২০টি নিশ্চিত candle দরকার; ৫০০ independent trade না হলে লক্ষ্য যাচাই হবে না"};
   const warmup=210,signals=[];
   for(let i=warmup;i<bars.length-1;i++){
-    const sample=bars.slice(0,i+1),x=stats(sample),regime=regimeOf(x),st=strategyScores(x,regime);
+    const sample=bars.slice(Math.max(0,i-999),i+1),x=stats(sample),regime=regimeOf(x),st=strategyScores(x,regime);
     const candidate=Object.entries(st).filter(([k,v])=>v.direction&&v.score>=76).sort((a,b)=>b[1].score-a[1].score)[0];
     if(!candidate)continue;
     const entry=bars[i+1].open,exitIndex=Math.min(bars.length-1,i+Math.max(1,holdBars));
