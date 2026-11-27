@@ -7,7 +7,7 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify Cloudflare token
+      - name: Verify Cloudflare token and account APIs
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -21,16 +21,25 @@ jobs:
             echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"
             exit 1
           fi
-          verify=$(curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)
+          auth=(-H "Authorization: Bearer $CF_API_TOKEN")
+          verify=$(curl -fsS "${auth[@]}" https://api.cloudflare.com/client/v4/user/tokens/verify)
           echo "$verify" | jq -e '.success == true' >/dev/null
           echo "Cloudflare token: valid"
-          workers=$(curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts")
+          workers=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts")
           echo "$workers" | jq -e '.success == true' >/dev/null
           echo "Workers Scripts API: accessible"
           echo "Worker scripts found:"
           echo "$workers" | jq -r '.result[]?.id' | sed 's/^/- /'
-          pages=$(curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects")
+          pages=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects")
           echo "$pages" | jq -e '.success == true' >/dev/null
           echo "Pages Projects API: accessible"
           echo "Pages projects found:"
           echo "$pages" | jq -r '.result[]?.name' | sed 's/^/- /'
+          project=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/crypto-ai-market")
+          echo "$project" | jq -e '.success == true' >/dev/null
+          echo "Pages production/preview deployment binding configuration (names only):"
+          echo "$project" | jq -r '
+            .result.deployment_configs // {} | to_entries[] |
+            "Environment: \(.key)",
+            "Service bindings: \(((.value.services // .value.env.services // {}) | if type == "object" then keys else map(.binding // .name // "unnamed") end) | join(", ") )"
+          '
