@@ -5,7 +5,7 @@ const ORIGIN="https://crypto-ai-market.pages.dev";
 const env={ANALYSIS_KV:{put:async()=>{},delete:async()=>{}}};
 
 test("Worker rejects mutation requests without the exact app Origin",async()=>{
- const request=new Request("https://worker.test/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol:"BTC",timeframe:"1m"})});
+ const request=new Request("https://worker.test/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({symbol:"BTC",timeframe:"30m"})});
  const response=await worker.fetch(request,env);
  assert.equal(response.status,403);
 });
