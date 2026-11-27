@@ -21,10 +21,11 @@ button.refresh{display:block;margin:10px auto 0;border:0;border-radius:10px;padd
 <header><a href="/">← BTC / SOL মার্কেটে ফিরে যান</a><h1>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">সমস্ত তারিখ ও ঘড়ির সময় আন্তর্জাতিক UTC সময় অনুযায়ী। প্রতিটি LONG/SHORT সিদ্ধান্তের নিজস্ব নির্ধারিত মিনিট পূর্ণ হলে পরবর্তী Worker scheduler run-এ বাজারদর নিয়ে ফল যাচাই হবে। ১০টি দৈনিক শিট এবং সময় শেষে ফলাফলের জন্য আলাদা শিট রয়েছে।</div></header>
 <section class="panel"><h2>সার্বিক ফলাফল · UTC অনুযায়ী সর্বশেষ ১০ দিন</h2><div class="grid" id="stats"><div class="stat"><span>লোড হচ্ছে</span><b>—</b></div></div><div class="muted" id="accuracy" style="margin-top:9px">সঠিকতার হিসাব লোড হচ্ছে…</div></section>
 <section class="panel"><h2>ইন্ডিকেটরভিত্তিক ফলাফল</h2><div class="muted" id="indicatorStats">নতুন সিদ্ধান্তের যাচাইকৃত ফল জমা হলে এখানে ইন্ডিকেটরভিত্তিক হিসাব দেখা যাবে।</div></section>
-<section class="panel"><h2>Trading System V2 · Testing / Paper Trading</h2><div class="muted" id="v2Stats">V2 পরীক্ষার ফল লোড হচ্ছে…</div><button class="refresh" id="v2Backtest" type="button">BTC ও SOL · ১৫ মিনিটের প্রাথমিক Backtest</button><div class="muted" id="v2BacktestResult" style="margin-top:9px">V2 এখন শুধু পরীক্ষামূলক; কোনো লাইভ ট্রেড বা V2 নোটিফিকেশন চালু নেই।</div></section><section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
+<section class="panel"><h2>Trading System V2 · Testing / Paper Trading</h2><div class="muted" id="v2Stats">V2 পরীক্ষার ফল লোড হচ্ছে…</div><button class="refresh" id="v2Backtest" type="button">BTC ও SOL · ১৫ মিনিটের প্রাথমিক Backtest</button><div class="muted" id="v2BacktestResult" style="margin-top:9px">V2 এখন শুধু পরীক্ষামূলক; কোনো লাইভ ট্রেড বা V2 নোটিফিকেশন চালু নেই।</div></section><section class="panel" id="strategyPanel"><h2>সিম্বল ও সময়সীমাভিত্তিক LONG / SHORT বিশ্লেষণ</h2><div class="tabs" id="symbolTabs"><button type="button" class="tab active" data-symbol="BTC">BTCUSDT</button><button type="button" class="tab" data-symbol="SOL">SOLUSDT</button></div><div class="tabs" id="timeframeTabs"><button type="button" class="tab active" data-timeframe="1m">1m</button><button type="button" class="tab" data-timeframe="5m">5m</button><button type="button" class="tab" data-timeframe="15m">15m</button><button type="button" class="tab" data-timeframe="30m">30m</button><button type="button" class="tab" data-timeframe="1h">1h</button><button type="button" class="tab" data-timeframe="4h">4h</button></div><div class="grid" id="directionCards"><div class="stat"><span>LONG</span><b>লোড হচ্ছে</b></div><div class="stat"><span>SHORT</span><b>লোড হচ্ছে</b></div></div><div class="muted" id="directionNote" style="margin-top:9px">প্রতিটি দিকের ফল আলাদাভাবে গণনা করা হবে। নমুনা না থাকলে অনুমান দেখানো হবে না।</div></section>
+<section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
 <script>
 "use strict";
-let reportData=null,activeSheet="results";
+let reportData=null,activeSheet="results",activeSymbol="BTC",activeTimeframe="1m";
 const numberValue=n=>{if(n===null||n===undefined||n==="")return null;const v=Number(n);return Number.isFinite(v)?v:null;};
 const fmt=n=>{const v=numberValue(n);return v===null?"—":v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});};
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -57,6 +58,33 @@ function recordCard(r,showOutcome){
  const result='<div class="result">'+state+exit+pnl+evaluated+'</div>';
  return '<article class="decision"><div class="decision-head"><span>'+utcTime(r.decidedAt)+'</span><span class="pill">'+safe(r.symbol)+'</span><span class="pill">'+safe(r.timeframe)+'</span><b class="'+dir+'">'+safe(decision)+'</b></div>'+details+(showOutcome?result:'<div class="detail">'+expected+'</div>'+result)+'</article>';
 }
+function renderDirectionCards(){
+ const records=allRecords(),target=document.getElementById("directionCards");
+ const selected=records.filter(r=>r.symbol===activeSymbol&&r.timeframe===activeTimeframe);
+ const directions=["LONG","SHORT"];
+ target.innerHTML=directions.map(direction=>{
+  const rows=selected.filter(r=>r.decision===direction).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
+  const settled=rows.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
+  const wins=settled.filter(r=>r.outcome==="CORRECT").length;
+  const rate=settled.length?(wins/settled.length*100).toFixed(1)+"%":"নমুনা অপর্যাপ্ত";
+  const latest=rows[0];
+  const field=(label,value)=>'<div>'+label+': <b>'+ (value===null||value===undefined||value===""?"ডেটা নেই":safe(value))+'</b></div>';
+  const details=latest?[
+   field("সর্বশেষ এন্ট্রি",latest.entryPrice!==undefined?"$"+fmt(latest.entryPrice):null),
+   field("Stop Loss",latest.stopLoss!==undefined?"$"+fmt(latest.stopLoss):null),
+   field("Take Profit",latest.takeProfit??latest.takeProfit1!==undefined?"$"+fmt(latest.takeProfit??latest.takeProfit1):null),
+   field("Confidence / Score",latest.confidenceScore!==undefined?latest.confidenceScore+"%":null),
+   field("সর্বশেষ ফল",latest.outcome||"অপেক্ষমাণ"),
+   field("সর্বশেষ লাভ/ক্ষতি",latest.pnlPct!==undefined?Number(latest.pnlPct).toFixed(3)+"%":null)
+  ].join(""):'<div>এই সময়সীমায় '+direction+' সিদ্ধান্তের কোনো রেকর্ড নেই।</div>';
+  return '<div class="stat" style="grid-column:span 1"><span class="'+(direction==="LONG"?"long":"short")+'">'+direction+' সিদ্ধান্ত</span><b>'+rows.length+'</b><div class="detail">নমুনা: '+settled.length+' · Win Rate: '+rate+'</div><div class="result">'+details+'</div><div class="muted" style="margin-top:6px">যাচাইকৃত ফল: সঠিক '+wins+' · ভুল '+(settled.length-wins)+' · মোট রেকর্ড '+rows.length+'</div></div>';
+ }).join("");
+ document.getElementById("directionNote").textContent=activeSymbol+"USDT · "+activeTimeframe+" · LONG ও SHORT আলাদা হিসাব। এন্ট্রি/SL/TP/স্কোর কেবল সংরক্ষিত রেকর্ডে থাকলেই দেখানো হয়; অনুপস্থিত তথ্য বানানো হয় না।";
+ document.querySelectorAll("[data-symbol]").forEach(b=>b.classList.toggle("active",b.dataset.symbol===activeSymbol));
+ document.querySelectorAll("[data-timeframe]").forEach(b=>b.classList.toggle("active",b.dataset.timeframe===activeTimeframe));
+}
+document.getElementById("symbolTabs").addEventListener("click",e=>{const b=e.target.closest("[data-symbol]");if(b){activeSymbol=b.dataset.symbol;renderDirectionCards();}});
+document.getElementById("timeframeTabs").addEventListener("click",e=>{const b=e.target.closest("[data-timeframe]");if(b){activeTimeframe=b.dataset.timeframe;renderDirectionCards();}});
 function renderSheet(){
  const target=document.getElementById("records"),rows=allRecords().slice().sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
  if(activeSheet==="results"){
@@ -89,10 +117,11 @@ async function loadReport(){
   const indicatorRows=Object.entries(labels).map(([key,label])=>({label,...(indicatorStats[key]||{})})).filter(x=>Number(x.sample)>0);
   indicatorTarget.innerHTML=indicatorRows.length?'<div class="grid">'+indicatorRows.map(x=>'<div class="stat"><span>'+safe(x.label)+' · নমুনা '+safe(x.sample)+'</span><b>'+safe(x.accuracy===null||x.accuracy===undefined?"—":Number(x.accuracy).toFixed(1)+"%")+'</b><span>সঠিক '+safe(x.correct||0)+' · ভুল '+safe(x.wrong||0)+'</span></div>').join("")+'</div><div class="muted" style="margin-top:9px">শুধু নতুন সিদ্ধান্তের সংরক্ষিত ইন্ডিকেটর মান ও যাচাইকৃত ফল দিয়ে হিসাব। নমুনা কম হলে হার নির্ভরযোগ্য নয়।</div>':'এখনো পর্যাপ্ত নতুন যাচাইকৃত নমুনা নেই। পুরোনো সিদ্ধান্তের ইন্ডিকেটর মান সংরক্ষিত ছিল না, তাই সেগুলোর হার অনুমান করে দেখানো হচ্ছে না।';
   if(activeSheet!=="results"&&!utcDays().includes(activeSheet))activeSheet="results";
-  renderTabs();renderSheet();
+  renderTabs();renderDirectionCards();renderSheet();
  }catch(err){
   stats.innerHTML='<div class="muted">রিপোর্ট লোড হয়নি: '+safe(err.message)+'</div>';
   records.textContent="সার্ভার/API সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।";
+  document.getElementById("directionCards").innerHTML='<div class="muted">ডেটা সার্ভার থেকে পাওয়া যায়নি; LONG/SHORT ফল দেখানো যাচ্ছে না।</div>';
  }finally{btn.disabled=false;}
 }
 async function loadV2Paper(){
