@@ -1328,6 +1328,10 @@ export default {
       const closed=records.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
       const summary=list=>{const done=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));return{
         total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
+        btcLong:list.filter(r=>r.symbol==="BTC"&&r.decision==="LONG").length,
+        btcShort:list.filter(r=>r.symbol==="BTC"&&r.decision==="SHORT").length,
+        solLong:list.filter(r=>r.symbol==="SOL"&&r.decision==="LONG").length,
+        solShort:list.filter(r=>r.symbol==="SOL"&&r.decision==="SHORT").length,
         correct:done.filter(r=>r.outcome==="CORRECT").length,wrong:done.filter(r=>r.outcome==="WRONG").length,
         neutral:list.filter(r=>r.outcome==="NEUTRAL").length,
         unverified:list.filter(r=>r.outcome==="UNVERIFIED").length,
@@ -1336,7 +1340,7 @@ export default {
       };};
       return Response.json({days,generatedAt:new Date().toISOString(),timezone:"Europe/Moscow",
         summary:summary(records),summary24h:summary(last24h),
-        daily,records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore}))},
+        daily,records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes}))},
         {headers:{"Cache-Control":"no-store"}});
 
     }
