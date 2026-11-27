@@ -57,7 +57,7 @@ jobs:
           cat /tmp/health_body || true
           DEPLOY_URL=$(echo "$deployments" | jq -r '.result[0].url')
           echo "Observations page smoke test on deployment: $DEPLOY_URL"
-          curl -sS -L -w "HTTP %{http_code} bytes %{size_download}\\n" "$DEPLOY_URL/observations.html?smoke=$(date +%s)" -o /tmp/observations_page
+          curl -sS -L -A "Mozilla/5.0 (compatible; CryptoAIDashboardCheck/1.0)" -w "HTTP %{http_code} bytes %{size_download}\\n" "$DEPLOY_URL/observations.html?smoke=$(date +%s)" -o /tmp/observations_page
           wc -c /tmp/observations_page
           head -c 500 /tmp/observations_page
           grep -q "২৪ ঘণ্টার সিদ্ধান্ত" /tmp/observations_page
@@ -65,7 +65,7 @@ jobs:
           grep -q "SOL · SHORT" /tmp/observations_page
           echo "Observations page: PASS"
           echo "Observations API smoke test:"
-          observations=$(curl -fsS "https://crypto-ai-market.pages.dev/api/observations?days=5&smoke=$(date +%s)")
+          observations=$(curl -fsS -A "Mozilla/5.0 (compatible; CryptoAIDashboardCheck/1.0)" "https://crypto-ai-market.pages.dev/api/observations?days=5&smoke=$(date +%s)")
           echo "$observations" | jq -e '.summary24h.total != null and .summary24h.btcLong != null and .summary24h.btcShort != null and .summary24h.solLong != null and .summary24h.solShort != null and (.records24h | type == "array")' >/dev/null
           echo "$observations" | jq '{summary24h,records24h_count:(.records24h|length),generatedAt,timezone}'
           echo "Observations page and API: PASS"
