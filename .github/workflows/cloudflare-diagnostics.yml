@@ -34,7 +34,22 @@ jobs:
           echo "$project" | jq -e '.success == true' >/dev/null
           echo "Configured service-binding names:"
           echo "$project" | jq '.result.deployment_configs // {} | to_entries | map({environment:.key,service_bindings:((.value.services // .value.env.services // {}) | if type == "object" then keys else map(.binding // .name // "unnamed") end)})'
-          echo "Latest deployment health endpoint:"
+          echo "Configured Worker URL override and binding names:"
+          echo "$project" | jq '.result.deployment_configs // {} | to_entries | map({environment:.key,service_bindings:((.value.services // .value.env.services // {}) | if type == "object" then keys else map(.binding // .name // "unnamed") end),variable_names:((.value.vars // []) | if type == "object" then keys else map(.name // "unnamed") end),worker_url_override:((.value.vars // []) | if type == "object" then .MARKET_WORKER_URL else (map(select(.name == "MARKET_WORKER_URL") | .value) | first) end)})'
+          echo "Waiting for latest Pages deployment to finish:"
+          for attempt in $(seq 1 36); do
+            deployments=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/crypto-ai-market/deployments?per_page=1")
+            stage_status=$(echo "$deployments" | jq -r '.result[0].latest_stage.status // ""')
+            stage_name=$(echo "$deployments" | jq -r '.result[0].latest_stage.name // ""')
+            echo "Pages stage: $stage_name / $stage_status (attempt $attempt)"
+            if [ "$stage_status" = "success" ] || [ "$stage_status" = "failure" ]; then break; fi
+            sleep 5
+          done
+          echo "Direct Worker health endpoint:"
+          curl -sS -D /tmp/worker_headers "https://crypto-ai-market-worker.bolvalmanus.workers.dev/health" -o /tmp/worker_body || true
+          head -n 1 /tmp/worker_headers || true
+          cat /tmp/worker_body || true
+          echo "Pages Worker health endpoint:"
           curl -sS -D /tmp/health_headers "https://crypto-ai-market.pages.dev/api/worker-health" -o /tmp/health_body || true
           head -n 1 /tmp/health_headers || true
           cat /tmp/health_body || true
