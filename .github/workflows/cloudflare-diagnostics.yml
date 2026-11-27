@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/cloudflare-diagnostics.yml"
       - "index.html"
+      - "observations.html"
+      - "sw.js"
       - "functions/**"
       - "worker.js"
   workflow_dispatch:
@@ -29,7 +31,7 @@ jobs:
           DEPLOYMENT_ID=$(echo "$deployments" | jq -r '.result[0].id // empty')
           if [ -z "$DEPLOYMENT_ID" ]; then echo "::error::No Pages deployment found"; exit 1; fi
           echo "Latest Pages deployment:"
-          echo "$deployments" | jq '.result[0] | {id,short_id,environment,url,created_on,latest_stage,deployment_trigger}'
+          echo "$deployments" | jq '.result[0] | {id,short_id,environment,url,created_on,latest_stage,deployment_trigger,build_config}'
           project=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/crypto-ai-market")
           echo "$project" | jq -e '.success == true' >/dev/null
           echo "Configured service-binding names:"
