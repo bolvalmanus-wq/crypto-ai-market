@@ -64,8 +64,18 @@ jobs:
           grep -q "BTC · LONG" /tmp/observations_page
           grep -q "SOL · SHORT" /tmp/observations_page
           echo "Observations page: PASS"
-          echo "Observations API smoke test:"
-          observations=$(curl -fsS -A "Mozilla/5.0 (compatible; CryptoAIDashboardCheck/1.0)" "https://crypto-ai-market.pages.dev/api/observations?days=5&smoke=$(date +%s)")
-          echo "$observations" | jq -e '.summary24h.total != null and .summary24h.btcLong != null and .summary24h.btcShort != null and .summary24h.solLong != null and .summary24h.solShort != null and (.records24h | type == "array")' >/dev/null
-          echo "$observations" | jq '{summary24h,records24h_count:(.records24h|length),generatedAt,timezone}'
+          echo "Direct Worker observations endpoint (diagnostic body included on failure):"
+          direct_code=$(curl -sS -A "Mozilla/5.0 (compatible; CryptoAIDashboardCheck/1.0)" -w "%{http_code}" "https://crypto-ai-market-worker.bolvalmanus.workers.dev/observations?days=5&smoke=$(date +%s)" -o /tmp/direct_observations || true)
+          echo "Direct Worker HTTP: $direct_code"
+          cat /tmp/direct_observations || true
+          echo
+          echo "Pages observations API (diagnostic body included on failure):"
+          pages_code=$(curl -sS -A "Mozilla/5.0 (compatible; CryptoAIDashboardCheck/1.0)" -w "%{http_code}" "https://crypto-ai-market.pages.dev/api/observations?days=5&smoke=$(date +%s)" -o /tmp/pages_observations || true)
+          echo "Pages API HTTP: $pages_code"
+          cat /tmp/pages_observations || true
+          echo
+          if [ "$direct_code" != "200" ]; then echo "::error::Direct Worker observations endpoint failed"; exit 1; fi
+          if [ "$pages_code" != "200" ]; then echo "::error::Pages observations API failed"; exit 1; fi
+          jq -e '.summary24h.total != null and .summary24h.btcLong != null and .summary24h.btcShort != null and .summary24h.solLong != null and .summary24h.solShort != null and (.records24h | type == "array")' /tmp/pages_observations >/dev/null
+          jq '{summary24h,records24h_count:(.records24h|length),generatedAt,timezone}' /tmp/pages_observations
           echo "Observations page and API: PASS"
