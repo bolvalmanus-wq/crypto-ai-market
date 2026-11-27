@@ -8,7 +8,7 @@ BTC/SOL perpetual-market analysis application.
 - The single canonical Cloudflare Worker is configured by the repository-root `wrangler.toml` and runs `worker.js`.
 - `worker.js` owns scheduled 30m/1h/4h market analysis, decision evaluation, and Web Push delivery.
 - Pages API proxies use `MARKET_WORKER_URL` when explicitly configured; otherwise they use the canonical Worker URL:
-  `https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev`.
+  `https://crypto-ai-market-worker.bolvalmanus.workers.dev`.
 - The obsolete duplicate scheduler Worker and unused public Gemini API route have been removed to prevent split-brain routing and unintended API-key exposure.
 
 ## Required Cloudflare configuration
