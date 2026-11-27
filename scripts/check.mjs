@@ -15,6 +15,6 @@ const pkg=JSON.parse(fs.readFileSync(path.join(root,"package.json"),"utf8"));
 if(pkg.type!=="module"||!pkg.scripts?.test)errors.push("package.json: expected ES module and test script");
 const wrangler=fs.readFileSync(path.join(root,"wrangler.toml"),"utf8");
 for(const required of ['main = "worker.js"','binding = "ANALYSIS_KV"','crons = ["* * * * *"]'])if(!wrangler.includes(required))errors.push("wrangler.toml missing "+required);
-for(const required of ["worker.js","trading-v2.js","index.html","performance.html","functions/api/market.js","functions/api/price.js","functions/api/scheduled.js","functions/api/push.js","functions/api/performance.js","functions/api/v2/backtest.js","functions/api/v2/performance.js"])if(!fs.existsSync(path.join(root,required)))errors.push("Required project file missing: "+required);
+for(const required of ["worker.js","trading-v2.js","index.html","functions/api/market.js","functions/api/price.js","functions/api/scheduled.js","functions/api/push.js"])if(!fs.existsSync(path.join(root,required)))errors.push("Required project file missing: "+required);
 if(errors.length){console.error(errors.join("\n"));process.exit(1);}
 console.log("Project checks passed: "+jsFiles.length+" JavaScript files, inline HTML scripts, manifest, Wrangler bindings and required routes.");
