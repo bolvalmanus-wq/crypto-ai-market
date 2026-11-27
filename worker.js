@@ -1311,7 +1311,17 @@ export default {
       for(const item of keys){let r;try{r=await env.ANALYSIS_KV.get(item.name,"json");}catch(_){continue;} if(!r)continue;const at=Date.parse(r.decidedAt||"");if(Number.isFinite(at)&&at>=since&&at<=Date.now()&&["LONG","SHORT"].includes(r.decision))records.push(r);}
       records.sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
       const indicators={};
-      for(const r of records){const c=r.indicatorSnapshot?.components||{};for(const [name,value] of Object.entries(c)){const n=Number(value);if(!Number.isFinite(n)||n===0)continue;const x=indicators[name]||(indicators[name]={signals:0,correct:0,wrong:0,neutral:0});x.signals++;if(["CORRECT","WRONG","NEUTRAL"].includes(r.outcome)){if(r.outcome==="CORRECT"&&Math.sign(n)===(r.decision==="LONG"?1:-1))x.correct++;else if(r.outcome==="WRONG"&&Math.sign(n)===(r.decision==="LONG"?1:-1))x.wrong++;else if(r.outcome==="NEUTRAL")x.neutral++;}}
+      for(const r of records){
+        const c=r.indicatorSnapshot?.components||{};
+        for(const [name,value] of Object.entries(c)){
+          const n=Number(value);
+          if(!Number.isFinite(n)||n===0||!["CORRECT","WRONG","NEUTRAL"].includes(r.outcome))continue;
+          const x=indicators[name]||(indicators[name]={signals:0,correct:0,wrong:0,neutral:0});
+          x.signals++;
+          if(r.outcome==="NEUTRAL"){x.neutral++;continue;}
+          const actualDirection=(r.decision==="LONG"?1:-1)*(r.outcome==="CORRECT"?1:-1);
+          if(Math.sign(n)===actualDirection)x.correct++;else x.wrong++;
+        }
       }
       const daysOut=Array.from({length:days},(_,i)=>{const d=new Date(Date.now()-(days-1-i)*86400000);const key=d.toISOString().slice(0,10);const list=records.filter(r=>(r.decidedAt||"").slice(0,10)===key);return{date:key,total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,correct:list.filter(r=>r.outcome==="CORRECT").length,wrong:list.filter(r=>r.outcome==="WRONG").length,pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length};});
       const closed=records.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
