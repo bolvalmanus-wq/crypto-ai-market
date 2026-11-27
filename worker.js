@@ -1025,7 +1025,10 @@ async function runOne(env, symbol, tf, options = {}) {
     };
     try{
       const existingDecision = await env.ANALYSIS_KV.get("decision:" + decisionId, "json");
-      if (!existingDecision) await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {expirationTtl:60*60*24*11,metadata:{id:decisionRecord.id,symbol:decisionRecord.symbol,timeframe:decisionRecord.timeframe,decision:decisionRecord.decision,decidedAt:decisionRecord.decidedAt,outcome:decisionRecord.outcome}});
+      if (!existingDecision) {
+        await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {expirationTtl:60*60*24*11,metadata:{id:decisionRecord.id,symbol:decisionRecord.symbol,timeframe:decisionRecord.timeframe,decision:decisionRecord.decision,decidedAt:decisionRecord.decidedAt,outcome:decisionRecord.outcome}});
+        try{await env.ANALYSIS_KV.delete("observations:cache:v1");}catch(cacheError){console.error("Observation cache invalidation failed",String(cacheError));}
+      }
     }catch(error){
       result.storageWarnings=[...(result.storageWarnings||[]),"Legacy decision ledger unavailable"];
       console.error("Legacy decision ledger write failed",{decisionId,error:String(error)});
@@ -1209,6 +1212,7 @@ async function evaluateMaturedDecisions(env) {
     }
     try{
       await env.ANALYSIS_KV.put(item.key,JSON.stringify(r),{expirationTtl:60*60*24*11,metadata:{id:r.id,symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,outcome:r.outcome}});
+      try{await env.ANALYSIS_KV.delete("observations:cache:v1");}catch(cacheError){console.error("Observation cache invalidation failed",String(cacheError));}
     }catch(error){
       console.error("Matured decision ledger update failed",{key:item.key,error:String(error)});
     }
@@ -1306,6 +1310,12 @@ export default {
       try {
         if (!env.ANALYSIS_KV) return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
         const days=Math.max(1,Math.min(5,Number(url.searchParams.get("days"))||5));
+        // Reuse a short-lived KV cache so the dashboard does not consume KV list quota
+        // on every one-minute browser refresh.
+        const cached=await env.ANALYSIS_KV.get("observations:cache:v1","json");
+        if(cached&&cached.days===days&&Number.isFinite(Date.parse(cached.generatedAt))&&Date.now()-Date.parse(cached.generatedAt)<300000) {
+          return Response.json(cached,{headers:{"Cache-Control":"no-store","X-Observations-Cache":"HIT"}});
+        }
         const now=Date.now(), mskNow=new Date(now+3*3600000);
         const mskMidnightUtc=Date.UTC(mskNow.getUTCFullYear(),mskNow.getUTCMonth(),mskNow.getUTCDate())-3*3600000;
         const since=mskMidnightUtc-(days-1)*86400000;
@@ -1368,11 +1378,14 @@ export default {
           };
         });
         const project=r=>({id:r.id,symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,exitPrice:r.exitPrice??null,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes});
-        return Response.json({
+        const payload={
           days,generatedAt:new Date().toISOString(),timezone:"Europe/Moscow",
           summary:summary(records),summary24h:summary(last24h),daily,
           records24h:last24h.map(project),records:records.map(project)
-        },{headers:{"Cache-Control":"no-store"}});
+        };
+        try{await env.ANALYSIS_KV.put("observations:cache:v1",JSON.stringify(payload),{expirationTtl:360});}
+        catch(cacheError){console.error("Observations cache write failed",String(cacheError));}
+        return Response.json(payload,{headers:{"Cache-Control":"no-store","X-Observations-Cache":"MISS"}});
       } catch(error) {
         console.error("Observations endpoint failed",String(error),error?.stack||"");
         return Response.json({error:"পর্যবেক্ষণের হিসাব তৈরি করা যায়নি",details:error instanceof Error?error.message:String(error)},{status:500,headers:{"Cache-Control":"no-store"}});
@@ -1418,9 +1431,12 @@ export default {
   async scheduled(controller, env, ctx) {
     const scheduledDate = new Date(controller.scheduledTime);
     const minute = scheduledDate.getUTCMinutes();
-    // Evaluate matured decisions on every minute tick so short timeframes are checked promptly.
-    try{await evaluateMaturedDecisions(env);}
-    catch(error){console.error("Matured-decision evaluation failed; scheduled analysis will continue",String(error));}
+    // Evaluate matured decisions every ten minutes. The dashboard cache is invalidated
+    // whenever a result changes; this keeps the KV list quota within its daily budget.
+    if(minute%10===0) {
+      try{await evaluateMaturedDecisions(env);}
+      catch(error){console.error("Matured-decision evaluation failed; scheduled analysis will continue",String(error));}
+    }
     // Fetch each symbol's validated market snapshot once per cron tick. Reusing
     // it avoids 6 duplicate exchange fan-outs on 5-minute boundaries and keeps
     // every timeframe decision anchored to the same market-data observation.
