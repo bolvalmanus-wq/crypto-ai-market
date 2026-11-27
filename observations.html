@@ -1,68 +1,61 @@
 <!doctype html>
-<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080e1b"><title>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ</title>
+<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080e1b"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><title>সিদ্ধান্ত পর্যবেক্ষণ</title>
 <style>
 :root{color-scheme:dark;--bg:#080e1b;--panel:#111e32;--tile:#152943;--line:#304966;--muted:#a6b5ca;--text:#f4f7ff;--green:#35d6a0;--red:#ff7185;--amber:#f5c768;--blue:#6caeff}
 *{box-sizing:border-box}body{margin:0 auto;padding:14px;max-width:900px;background:radial-gradient(ellipse at 50% 0,#142b4c 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.55 system-ui}
 .card{background:linear-gradient(145deg,#142238,#101b2d);border:1px solid var(--line);border-radius:23px;padding:18px;margin:12px 0;box-shadow:0 10px 28px #0002}
-a{color:#9bcaff;text-decoration:none}.back{display:inline-block;margin-bottom:12px;font-size:15px}
-h1{font-size:clamp(22px,5vw,30px);line-height:1.3;margin:4px 0 12px}h2{font-size:clamp(18px,4vw,23px);line-height:1.35;margin:0 0 16px}.muted,small{color:var(--muted)}
+a{color:#9bcaff;text-decoration:none}.back{display:inline-block;margin-bottom:12px}
+h1{font-size:clamp(22px,5vw,30px);line-height:1.3;margin:4px 0 12px}h2{font-size:clamp(18px,4vw,23px);line-height:1.35;margin:0 0 15px}.muted,.note{color:var(--muted)}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px}.tag{border:1px solid #3b587a;background:#1a304c;border-radius:20px;padding:5px 10px;color:#c5d8f1;font-size:12px;white-space:nowrap}
-button{border:1px solid #3b587a;border-radius:12px;background:#172b45;color:#d9e8ff;padding:10px 13px;font:inherit;font-weight:700;white-space:nowrap}
+button{border:1px solid #3b587a;border-radius:13px;background:#172b45;color:#d9e8ff;padding:11px 13px;font:inherit;font-weight:700;white-space:nowrap;cursor:pointer}
 button.primary,.tab.active{background:linear-gradient(110deg,#1766a9,#3156a8);border-color:#75b5ff;color:white}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
-.stat{background:var(--tile);border:1px solid #365372;border-radius:17px;padding:13px 14px;min-width:0}
-.stat span{display:block;color:var(--muted);font-size:13px}.stat b{display:block;font-size:clamp(25px,6vw,34px);line-height:1.3;margin-top:3px;font-weight:800}
-.tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:thin}
-.tab{flex:0 0 auto;min-width:110px}.note{font-size:13px;color:var(--muted);margin:12px 0 0}
-.day-summary{margin:12px 0}.signal{background:#0e1a2a;border:1px solid #2d4562;border-radius:15px;padding:13px;margin:10px 0}
-.signal-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:800}.time{color:#b4c5dc;font-variant-numeric:tabular-nums}.coin,.tf{border:1px solid #405a79;background:#182b43;border-radius:20px;padding:3px 9px;font-size:12px;color:#d2e0f2}
-.direction{font-size:17px}.long{color:var(--green)}.short{color:var(--red)}.correct{color:var(--green)}.wrong{color:var(--red)}.pending{color:var(--amber)}
+.stat{display:block;width:100%;text-align:left;background:var(--tile);border:1px solid #365372;border-radius:17px;padding:13px 14px;min-width:0;white-space:normal}
+.stat:active,.stat.selected{border-color:#8bc2ff;background:#1d3d60;box-shadow:0 0 0 2px #4e9cf044}
+.stat span{display:block;color:var(--muted);font-size:13px}.stat b{display:block;font-size:clamp(25px,6vw,34px);line-height:1.3;margin-top:3px}
+.stat.good b{color:var(--green)}.stat.bad b{color:var(--red)}.stat.wait b{color:var(--amber)}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin}.tab{flex:0 0 auto;min-width:125px}
+.note{font-size:13px;margin:12px 0 0}.signal{background:#0e1a2a;border:1px solid #2d4562;border-radius:15px;padding:13px;margin:10px 0}
+.signal-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:800}.time{color:#b4c5dc;font-variant-numeric:tabular-nums}
+.coin,.tf{border:1px solid #405a79;background:#182b43;border-radius:20px;padding:3px 9px;font-size:12px;color:#d2e0f2}
+.long,.correct{color:var(--green)}.short,.wrong{color:var(--red)}.pending{color:var(--amber)}
 .signal-meta{margin-top:8px;color:#c3d1e4;font-size:14px}.result-box{margin-top:10px;border:1px solid #2e4560;background:#101b2b;border-radius:12px;padding:10px 12px}
-.indicator{padding:14px 0;border-bottom:1px solid #2d415a}.indicator:last-child{border:0}.indicator-title{font-weight:750}
-.bar{height:10px;background:#2a3b51;border-radius:20px;overflow:hidden;margin-top:9px}.bar i{display:block;height:100%;border-radius:20px;width:0;transition:width 1.1s ease;animation:pulse 2s infinite alternate}
-@keyframes pulse{from{filter:brightness(.85)}to{filter:brightness(1.25)}}
-.candles{display:flex;align-items:center;gap:5px;height:42px;margin-top:8px}.candle{width:9px;height:var(--h);min-height:8px;position:relative;background:var(--c);border-radius:2px;animation:grow .7s ease both;transform-origin:bottom}
-.candle:after{content:"";position:absolute;left:3px;top:-6px;bottom:-6px;width:2px;background:var(--c);opacity:.75}
-@keyframes grow{from{transform:scaleY(.2);opacity:.3}to{transform:scaleY(1);opacity:1}}
-.empty{color:var(--muted);padding:16px 0}.foot{font-size:13px;color:var(--muted);padding:4px 3px 22px}
+.empty{color:var(--muted);padding:16px 0}.filterline{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
 @media(min-width:650px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.card{padding:22px}.signal{padding:15px}}
 @media(max-width:390px){body{padding:9px}.card{padding:14px;border-radius:18px}.stat{padding:10px}.stat span{font-size:12px}}
 </style></head><body>
 <header class="card">
 <a class="back" href="/">← BTC / SOL মার্কেটে ফিরে যান</a>
 <div class="row"><div><h1>নির্ধারিত সময়ের সিদ্ধান্ত পর্যবেক্ষণ</h1><div class="muted">BTC ও SOL · LONG / SHORT · ৩০মি, ১ঘণ্টা, ৪ঘণ্টা</div></div><button class="primary" onclick="load()">রিফ্রেশ</button></div>
-<p class="muted">প্রতিটি সিদ্ধান্তের নির্ধারিত সময় পূর্ণ হলে Worker scheduler-এর মাধ্যমে বাজারদর দিয়ে ফল যাচাই করা হয়। সময়ের হিসাব UTC অনুযায়ী। নিচে গত ২৪ ঘণ্টা এবং প্রতিদিনের আলাদা ফলাফল দেখুন।</p>
+<p class="muted">প্রথমে গত ২৪ ঘণ্টার হিসাব, এরপর প্রতিদিনের আলাদা শিট। প্রতিটি হিসাবের বাটনে চাপ দিলে শুধু সেই ধরনের সিদ্ধান্তের বিস্তারিত দেখা যাবে। সময় মস্কো সময় (UTC+3)।</p>
 <div class="tag" id="stamp">তথ্য লোড হচ্ছে…</div>
 </header>
+<section class="card"><h2>সার্বিক ফলাফল · গত ২৪ ঘণ্টা</h2><div class="grid" id="summary"></div><p class="note" id="accuracy"></p></section>
 <section class="card">
-<h2>সার্বিক ফলাফল · গত ২৪ ঘণ্টা</h2><div class="grid" id="summary"></div>
-<p class="note" id="accuracy"></p>
+<h2>২৪ ঘণ্টা ও প্রতিদিনের আলাদা শিট</h2><div class="tabs" id="dayTabs"></div>
+<div class="filterline"><b id="sheetTitle">গত ২৪ ঘণ্টার সিদ্ধান্ত</b><button onclick="setFilter('ALL')">সব সিদ্ধান্ত দেখুন</button></div>
+<div class="grid" id="sheetStats"></div>
+<p class="note" id="sheetAccuracy"></p>
+<div class="filterline"><b>সিদ্ধান্তের বিস্তারিত</b><span class="tag" id="recordCount">০টি</span></div><div id="records"></div>
 </section>
-<section class="card">
-<div class="row"><h2>২৪ ঘণ্টা / প্রতিদিনের আলাদা শিট</h2><span class="tag">শেষ ৫ দিন</span></div>
-<div class="tabs" id="dayTabs"><button class="tab active">গত ২৪ ঘণ্টা</button></div>
-<div id="sheet"></div>
-</section>
-<section class="card">
-<h2>ইন্ডিকেটরভিত্তিক ফলাফল · গত ২৪ ঘণ্টা</h2>
-<p class="muted">প্রতিটি দিকনির্দেশক ইন্ডিকেটরের সংকেতের দিক যাচাইকৃত ফলের সঙ্গে মিলিয়ে শতাংশ হিসাব করা হয়। নমুনা কম হলে ফলকে চূড়ান্ত দক্ষতা হিসেবে ধরবেন না। ADX, ATR-এর মতো অবস্থা-মাপক সূচকে শতাংশ নয়, তাদের প্রাপ্ত মান দেখানো হয়।</p>
-<div id="indicators" class="empty">ইন্ডিকেটরের তথ্য লোড হচ্ছে…</div>
-</section>
-<div class="foot">দ্রষ্টব্য: এন্ট্রি মূল্য হলো সিদ্ধান্তের সময়ের বাজারদর, পজিশনের মোট ডলার মূল্য নয়। সঠিক/ভুল কেবল নির্ধারিত সময় পূর্ণ হয়ে যাচাই হওয়া সিদ্ধান্তে গণনা করা হয়। নিরপেক্ষ, অপেক্ষমাণ ও যাচাই-অযোগ্য ফল আলাদা রাখা হয়।</div>
+<div class="note" style="padding:4px 4px 24px">দ্রষ্টব্য: এন্ট্রি মূল্য হলো সিদ্ধান্তের সময়ের বাজারদর, পজিশনের মোট ডলার মূল্য নয়। সঠিক/ভুল কেবল নির্ধারিত সময় পূর্ণ হয়ে যাচাই হওয়া সিদ্ধান্তে গণনা করা হয়।</div>
 <script>
-let data=null,selected="24";
+let data=null,selected="24",filter="ALL";
 const $=id=>document.getElementById(id);
 const fmt=n=>n===null||n===undefined||!Number.isFinite(Number(n))?"—":Number(n).toLocaleString("en-US",{maximumFractionDigits:2});
-const outcome={CORRECT:"সঠিক",WRONG:"ভুল",PENDING:"অপেক্ষমাণ",UNVERIFIED:"যাচাই অনির্ভরযোগ্য",NEUTRAL:"নিরপেক্ষ"};
-function cards(s){return [["মোট সিদ্ধান্ত",s.total],["যাচাই সম্পন্ন",s.correct+s.wrong],["সঠিক সিদ্ধান্ত",s.correct],["ভুল সিদ্ধান্ত",s.wrong],["নিরপেক্ষ ফল",s.neutral],["যাচাই অনির্ভরযোগ্য",s.unverified??0],["অপেক্ষমাণ",s.pending],["LONG / SHORT",s.long+" / "+s.short]]}
-function timeText(v){return new Date(v).toLocaleString("bn-BD",{timeZone:"Europe/Moscow",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+" UTC"}
-function resultCard(r){const cls=r.outcome==="CORRECT"?"correct":r.outcome==="WRONG"?"wrong":"pending";return '<article class="signal"><div class="signal-head"><span class="time">'+timeText(r.decidedAt)+'</span><span class="coin">'+r.symbol+'</span><span class="tf">'+r.timeframe+'</span><b class="direction '+(r.decision==="LONG"?"long":"short")+'">'+r.decision+'</b></div><div class="signal-meta">এন্ট্রি মূল্য: <b>$'+fmt(r.entryPrice)+'</b> · সিদ্ধান্ত স্কোর: <b>'+fmt(r.confidenceScore)+'%</b> · সময়: '+(r.durationMinutes||({"30m":30,"1h":60,"4h":240}[r.timeframe]||"—"))+' মিনিট</div><div class="result-box"><b class="'+cls+'">'+(outcome[r.outcome]||r.outcome||"অপেক্ষমাণ")+'</b>'+(r.exitPrice!==undefined&&r.exitPrice!==null?' · নির্ধারিত সময় শেষে মূল্য: <b>$'+fmt(r.exitPrice)+'</b>':'')+(r.pnlPct!==undefined&&r.pnlPct!==null?' · ফলের পরিবর্তন: <b>'+fmt(r.pnlPct)+'%</b>':'')+'</div></article>'}
-function renderSheet(){const daily=data.daily||[];const root=$("dayTabs");root.innerHTML='<button class="tab '+(selected==="24"?'active':'')+'" onclick="selectSheet(\'24\')">গত ২৪ ঘণ্টা</button>'+daily.slice().reverse().map(d=>'<button class="tab '+(selected===d.date?'active':'')+'" onclick="selectSheet(\''+d.date+'\')">'+new Date(d.date+"T12:00:00+03:00").toLocaleDateString("bn-BD",{timeZone:"Europe/Moscow",weekday:"short",day:"numeric",month:"short",year:"numeric"})+'</button>').join("");
-let list,summary,title;if(selected==="24"){list=(data.records||[]).filter(r=>Date.parse(r.decidedAt)>=Date.now()-86400000);summary=data.summary24h;title="গত ২৪ ঘণ্টার সিদ্ধান্ত";}else{const d=daily.find(x=>x.date===selected);list=d?.records||[];summary=d||{};title="এই দিনের সিদ্ধান্ত";}
-const done=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));$("sheet").innerHTML='<div class="day-summary"><h2>'+title+'</h2><div class="grid">'+cards(summary).map(([k,v])=>'<div class="stat"><span>'+k+'</span><b>'+fmt(v)+'</b></div>').join("")+'</div><p class="note">যাচাইকৃত সিদ্ধান্তের সঠিকতার হার: '+(summary.accuracy===null||summary.accuracy===undefined?'এখনো যাচাই করা ফল নেই':fmt(summary.accuracy)+'%')+' · মোট '+list.length+'টি রেকর্ড</p></div><h2>সিদ্ধান্তের বিস্তারিত</h2>'+(list.length?list.slice().sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt)).map(resultCard).join(""):'<div class="empty">এই সময়সীমায় কোনো সিদ্ধান্ত রেকর্ড নেই।</div>');}
-function selectSheet(id){selected=id;renderSheet();}
-function renderIndicators(){const list=data.indicators24h||[];$("indicators").innerHTML=list.length?list.map((x,i)=>{const a=x.accuracy===null?0:x.accuracy,metric=!!x.metric,color=metric?"var(--amber)":a>=60?"var(--green)":a>=45?"var(--amber)":"var(--red)";const candles=Array.from({length:14},(_,j)=>'<i class="candle" style="--h:'+Math.max(8,Math.round((a/100)*(14+((j*9+i*5)%24))))+'px;--c:'+color+';animation-delay:'+(j*30)+'ms"></i>').join("");return '<div class="indicator"><div class="row"><b class="indicator-title">'+(x.nameBn||x.name)+'</b><b style="color:'+color+'">'+(metric?(x.value===null?'মান নেই':fmt(x.value)+' · মেট্রিক'):x.accuracy===null?'যাচাই হয়নি':fmt(a)+'%')+'</b></div><div class="muted">'+(metric?'অবস্থা-মাপক মান · নমুনা '+x.signals:'যাচাইকৃত '+x.evaluated+' · সঠিক '+x.correct+' · ভুল '+x.wrong+' · মোট সংকেত '+x.signals)+'</div>'+(metric?'':'<div class="bar"><i style="width:'+a+'%;background:'+color+'"></i></div><div class="candles">'+candles+'</div>')+'</div>'}).join(""):'<div class="empty">গত ২৪ ঘণ্টায় ইন্ডিকেটরের যাচাইকৃত ফল পাওয়া যায়নি।</div>';}
-function render(){const s=data.summary24h;$("summary").innerHTML=cards(s).map(([k,v])=>'<div class="stat"><span>'+k+'</span><b>'+fmt(v)+'</b></div>').join("");$("accuracy").textContent="সঠিকতার হার (নিরপেক্ষ বাদ): "+(s.accuracy===null?"যাচাইকৃত ফল নেই":fmt(s.accuracy)+"%")+" · গত ২৪ ঘণ্টার সিদ্ধান্তের হিসাব";renderSheet();renderIndicators();}
-async function load(){ $("stamp").textContent="সার্ভার থেকে তথ্য আনা হচ্ছে…";try{const r=await fetch("/api/observations?days=5",{cache:"no-store"}),d=await r.json();if(!r.ok)throw Error(d.error||"তথ্য পাওয়া যায়নি");data=d;if(selected!=="24"&&!d.daily.some(x=>x.date===selected))selected="24";render();$("stamp").textContent="সর্বশেষ আপডেট: "+new Date(d.generatedAt).toLocaleString("bn-BD",{timeZone:"Europe/Moscow"})+" · প্রতি ১ মিনিটে আপডেট"}catch(e){$("stamp").textContent="সার্ভার থেকে তথ্য পাওয়া যায়নি: "+e.message;$("sheet").innerHTML='<div class="empty">তথ্য লোড করা যায়নি। রিফ্রেশ করুন।</div>'}}
+const names={ALL:"সব সিদ্ধান্ত",CORRECT:"সঠিক সিদ্ধান্ত",WRONG:"ভুল সিদ্ধান্ত",PENDING:"অপেক্ষমাণ",NEUTRAL:"নিরপেক্ষ",UNVERIFIED:"যাচাই অনির্ভরযোগ্য",LONG:"LONG",SHORT:"SHORT"};
+const outcomes={CORRECT:"সঠিক",WRONG:"ভুল",PENDING:"অপেক্ষমাণ",UNVERIFIED:"যাচাই অনির্ভরযোগ্য",NEUTRAL:"নিরপেক্ষ"};
+function statButtons(s){const items=[["মোট সিদ্ধান্ত",s.total,"ALL",""],["যাচাই সম্পন্ন",Number(s.correct||0)+Number(s.wrong||0),"DONE",""],["সঠিক সিদ্ধান্ত",s.correct,"CORRECT","good"],["ভুল সিদ্ধান্ত",s.wrong,"WRONG","bad"],["নিরপেক্ষ ফল",s.neutral,"NEUTRAL",""],["যাচাই অনির্ভরযোগ্য",s.unverified,"UNVERIFIED",""],["অপেক্ষমাণ",s.pending,"PENDING","wait"],["LONG / SHORT",(s.long??0)+" / "+(s.short??0),"DIRECTION",""]];return items.map(([label,value,key,cls])=>'<button class="stat '+cls+(filter===key?' selected':'')+'" onclick="setFilter(\''+key+'\')"><span>'+label+'</span><b>'+fmt(value)+'</b></button>').join("")}
+function dateLabel(date){return new Date(date+"T12:00:00+03:00").toLocaleDateString("bn-BD",{timeZone:"Europe/Moscow",weekday:"short",day:"numeric",month:"short",year:"numeric"})}
+function timeText(v){return new Date(v).toLocaleString("bn-BD",{timeZone:"Europe/Moscow",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})+" MSK"}
+function resultCard(r){const cls=r.outcome==="CORRECT"?"correct":r.outcome==="WRONG"?"wrong":"pending";return '<article class="signal"><div class="signal-head"><span class="time">'+timeText(r.decidedAt)+'</span><span class="coin">'+r.symbol+'</span><span class="tf">'+r.timeframe+'</span><b class="'+(r.decision==="LONG"?"long":"short")+'">'+r.decision+'</b></div><div class="signal-meta">এন্ট্রি মূল্য: <b>$'+fmt(r.entryPrice)+'</b> · সিদ্ধান্ত স্কোর: <b>'+fmt(r.confidenceScore)+'%</b> · সময়: '+fmt(r.durationMinutes)+' মিনিট</div><div class="result-box"><b class="'+cls+'">'+(outcomes[r.outcome]||r.outcome||"অপেক্ষমাণ")+'</b>'+(r.pnlPct!==null&&r.pnlPct!==undefined?' · ফলের পরিবর্তন: <b>'+fmt(r.pnlPct)+'%</b>':'')+'</div></article>'}
+function setFilter(key){filter=key;renderSheet()}
+function selectSheet(id){selected=id;filter="ALL";renderSheet()}
+function renderTabs(){const daily=(data.daily||[]).slice().reverse();$("dayTabs").innerHTML='<button class="tab '+(selected==="24"?'active':'')+'" onclick="selectSheet(\'24\')">গত ২৪ ঘণ্টা</button>'+daily.map(d=>'<button class="tab '+(selected===d.date?'active':'')+'" onclick="selectSheet(\''+d.date+'\')">'+dateLabel(d.date)+'</button>').join("")}
+function renderSheet(){renderTabs();let list,summary;if(selected==="24"){list=(data.records||[]).filter(r=>Date.parse(r.decidedAt)>=Date.now()-86400000);summary=data.summary24h;$("sheetTitle").textContent="গত ২৪ ঘণ্টার সিদ্ধান্ত";}else{const d=(data.daily||[]).find(x=>x.date===selected);list=d?.records||[];summary=d||{};$("sheetTitle").textContent=dateLabel(selected)+" · দৈনিক সিদ্ধান্ত";}
+$("sheetStats").innerHTML=statButtons(summary);$("sheetAccuracy").textContent="সঠিকতার হার (নিরপেক্ষ বাদ): "+(summary.accuracy===null||summary.accuracy===undefined?"যাচাইকৃত ফল নেই":fmt(summary.accuracy)+"%")+" · মোট "+list.length+"টি সিদ্ধান্ত";
+let shown=list;if(filter==="DONE")shown=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));else if(filter==="DIRECTION")shown=list.filter(r=>["LONG","SHORT"].includes(r.decision));else if(filter!=="ALL")shown=list.filter(r=>r.outcome===filter);$("recordCount").textContent=shown.length+"টি";$("records").innerHTML=shown.length?shown.slice().sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt)).map(resultCard).join(""):'<div class="empty">'+(list.length?'এই বিভাগে কোনো সিদ্ধান্ত নেই।':'এই সময়সীমায় কোনো সিদ্ধান্ত রেকর্ড নেই।')+'</div>'}
+function render(){const s=data.summary24h;$("summary").innerHTML=statButtons(s);$("accuracy").textContent="সঠিকতার হার (নিরপেক্ষ বাদ): "+(s.accuracy===null?"যাচাইকৃত ফল নেই":fmt(s.accuracy)+"%")+" · গত ২৪ ঘণ্টার ফলাফল";renderSheet()}
+async function load(){ $("stamp").textContent="সার্ভার থেকে তথ্য আনা হচ্ছে…";try{const r=await fetch("/api/observations?days=5&v=2",{cache:"no-store"}),d=await r.json();if(!r.ok)throw Error(d.error||"তথ্য পাওয়া যায়নি");data=d;if(selected!=="24"&&!d.daily.some(x=>x.date===selected))selected="24";render();$("stamp").textContent="সর্বশেষ আপডেট: "+new Date(d.generatedAt).toLocaleString("bn-BD",{timeZone:"Europe/Moscow"})+" · প্রতি ১ মিনিটে আপডেট"}catch(e){$("stamp").textContent="সার্ভার থেকে তথ্য পাওয়া যায়নি: "+e.message;$("records").innerHTML='<div class="empty">তথ্য লোড করা যায়নি। রিফ্রেশ করুন।</div>'}}
 load();setInterval(load,60000);
 </script></body></html>
