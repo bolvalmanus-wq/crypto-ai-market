@@ -346,7 +346,7 @@ function buildIntradayMovement(data){
     h.close=c.close;h.high=Math.max(h.high,c.high);h.low=Math.min(h.low,c.low);h.candles++;
   }
   const hourly=[...hours.values()].sort((a,b)=>a.time-b.time).map(h=>({time:new Date(h.time).toISOString(),endTime:new Date(h.time+3600000).toISOString(),open:Number(h.open.toFixed(8)),close:Number(h.close.toFixed(8)),high:Number(h.high.toFixed(8)),low:Number(h.low.toFixed(8)),changePct:Number(((h.close/h.open-1)*100).toFixed(3)),direction:h.close>h.open?"UP":h.close<h.open?"DOWN":"FLAT",candles:h.candles}));
-  const ranked=hourly.filter(h=>h.candles===12);
+  const ranked=hourly.filter(h=>h.candles===2);
   const segments=[];
   let segment=null,previousClose=null,previousTime=null;
   for(const c of bars){
