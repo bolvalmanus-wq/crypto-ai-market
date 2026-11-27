@@ -1,6 +1,6 @@
 // Trading Analysis Software V2 — isolated research engine.
 // This module never places orders and never changes the legacy decision.
-const FRAMES = { "1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000 };
+const FRAMES = { "30m":1800000,"1h":3600000,"4h":14400000 };
 const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x));
 const finite=x=>x!==null&&x!==undefined&&x!==""&&Number.isFinite(Number(x));
 function confirmed(bars, tf, now=Date.now()){
@@ -130,11 +130,11 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   const frames=data?.candles||{};
   const four=confirmed(frames["4h"],"4h",now);
   const one=confirmed(frames["1h"],"1h",now);
-  const fifteen=confirmed(frames["15m"],"15m",now);
-  const entryTf=["1m","5m","15m","30m","1h","4h"].includes(timeframe)?timeframe:"15m";
+  const thirty=confirmed(frames["30m"],"30m",now);
+  const entryTf=["30m","1h","4h"].includes(timeframe)?timeframe:"30m";
   const entry=confirmed(frames[entryTf],entryTf,now);
-  const s4=stats(four),s1=stats(one),s15=stats(fifteen),se=stats(entry);
-  const regimes=[regimeOf(s4),regimeOf(s1),regimeOf(s15)];
+  const s4=stats(four),s1=stats(one),s30=stats(thirty),se=stats(entry);
+  const regimes=[regimeOf(s4),regimeOf(s1),regimeOf(s30)];
   const regime=[...regimes,regimeOf(se)].includes("HIGH_VOLATILITY")?"HIGH_VOLATILITY":regimes[0];
   const strategies=strategyScores(se,regime);
   const eligible=Object.entries(strategies).filter(([k,v])=>v.direction!==0&&v.score>0);
@@ -146,7 +146,7 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   const bid=Number(market?.ticker?.bid),ask=Number(market?.ticker?.ask);
   const spreadPct=bid>0&&ask>=bid?(ask-bid)/((ask+bid)/2)*100:null;
   const reasons=[];
-  if(!s4.valid||!s1.valid||!s15.valid||!se.valid)reasons.push("4H/1H/15M/entry timeframe-এ পর্যাপ্ত নিশ্চিত candle নেই");
+  if(!s4.valid||!s1.valid||!s30.valid||!se.valid)reasons.push("4H/1H/30M/entry timeframe-এ পর্যাপ্ত নিশ্চিত candle নেই");
   if(regime==="HIGH_VOLATILITY")reasons.push("High-volatility regime: নতুন trade বন্ধ");
   if(!selected)reasons.push("কোনো strategy-তে পূর্ণ entry setup নেই");
   const htfAligned=direction!==0&&(
@@ -155,15 +155,15 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
       : (direction>0&&s4.bull&&s1.bull)||(direction<0&&s4.bear&&s1.bear)
   );
   if(direction!==0&&!htfAligned)reasons.push("4H ও 1H trend একই দিকে নিশ্চিত নয়");
-  const s15Entry=strategyScores(s15,regimes[2])[selected?.[0]||"trend"];
+  const s30Entry=strategyScores(s30,regimes[2])[selected?.[0]||"trend"];
   const entryAligned=direction!==0&&(
     selected?.[0]==="range"
-      ? regimes[2]==="SIDEWAYS"&&s15Entry?.direction===direction
+      ? regimes[2]==="SIDEWAYS"&&s30Entry?.direction===direction
       : selected?.[0]==="breakout"
-        ? s15Entry?.direction===direction
-        : direction>0?s15.bull: s15.bear
+        ? s30Entry?.direction===direction
+        : direction>0?s30.bull: s30.bear
   );
-  if(direction!==0&&!entryAligned)reasons.push("15M entry confirmation অনুপস্থিত");
+  if(direction!==0&&!entryAligned)reasons.push("30M entry confirmation অনুপস্থিত");
   if(!finite(price)||price<=0)reasons.push("Live ticker price অনুপস্থিত বা অবৈধ");
   if(spreadPct===null)reasons.push("Bid/Ask spread data অনুপস্থিত");
   else if(spreadPct>Number(config.maxSpreadPct??0.10))reasons.push("Spread অনুমোদিত সীমার বেশি");
@@ -193,7 +193,7 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   const positionSize=riskAmount!==null&&stopDistance>0?riskAmount/stopDistance:null;
   return {
     version:"V2",mode:"TESTING_ONLY",liveTrading:false,symbol,timeframe,
-    marketRegime:regime,regimeByTimeframe:{ "4h":regimes[0],"1h":regimes[1],"15m":regimes[2]},
+    marketRegime:regime,regimeByTimeframe:{ "4h":regimes[0],"1h":regimes[1],"30m":regimes[2]},
     mainTrend:s4.bull?"BULLISH":s4.bear?"BEARISH":"SIDEWAYS",
     selectedStrategy:selected?selected[0].toUpperCase():"NONE",
     strategies:Object.fromEntries(Object.entries(strategies).map(([k,v])=>[k,{...v}])),
@@ -202,14 +202,14 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
     takeProfit1:decision==="NO TRADE"?null:tp1,takeProfit2:decision==="NO TRADE"?null:tp2,
     riskReward:decision==="NO TRADE"?null:rr,riskPct:Number(config.riskPct??0.5),
     riskAmount,positionSize,spreadPct,scoreBreakdown:scoreParts,
-    timeframeAgreement:{ "4h":s4.bull?"LONG":s4.bear?"SHORT":"NEUTRAL","1h":s1.bull?"LONG":s1.bear?"SHORT":"NEUTRAL","15m":s15.bull?"LONG":s15.bear?"SHORT":"NEUTRAL"},
+    timeframeAgreement:{ "4h":s4.bull?"LONG":s4.bear?"SHORT":"NEUTRAL","1h":s1.bull?"LONG":s1.bear?"SHORT":"NEUTRAL","30m":s30.bull?"LONG":s30.bear?"SHORT":"NEUTRAL"},
     evidence:selected?.[1].evidence||[],contradictingEvidence:reasons,
     invalidation:decision==="LONG"?"Entry timeframe close below stop-loss / confirmed structure break":decision==="SHORT"?"Entry timeframe close above stop-loss / confirmed structure break":"No valid entry; remain flat",
-    dataQuality:{ "4h":{valid:s4.valid,count:s4.count},"1h":{valid:s1.valid,count:s1.count},"15m":{valid:s15.valid,count:s15.count},entry:{valid:se.valid,count:se.count}},
+    dataQuality:{ "4h":{valid:s4.valid,count:s4.count},"1h":{valid:s1.valid,count:s1.count},"30m":{valid:s30.valid,count:s30.count},entry:{valid:se.valid,count:se.count}},
     createdAt:new Date(now).toISOString()
   };
 }
-function backtestV2({candles,timeframe="15m",feeBps=6,slippageBps=3,holdBars=1,minimumTrades=500}={}){
+function backtestV2({candles,timeframe="30m",feeBps=6,slippageBps=3,holdBars=1,minimumTrades=500}={}){
   const bars=confirmed(candles,timeframe,Date.now());
   if(bars.length<220)return {status:"INSUFFICIENT_DATA",timeframe,bars:bars.length,requiredBars:220,trades:0,note:"কমপক্ষে ২২০টি নিশ্চিত candle দরকার; ৫০০ independent trade না হলে লক্ষ্য যাচাই হবে না"};
   const warmup=210,signals=[];
