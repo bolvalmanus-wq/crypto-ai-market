@@ -209,26 +209,4 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
     createdAt:new Date(now).toISOString()
   };
 }
-function backtestV2({candles,timeframe="30m",feeBps=6,slippageBps=3,holdBars=1,minimumTrades=500}={}){
-  const bars=confirmed(candles,timeframe,Date.now());
-  if(bars.length<220)return {status:"INSUFFICIENT_DATA",timeframe,bars:bars.length,requiredBars:220,trades:0,note:"কমপক্ষে ২২০টি নিশ্চিত candle দরকার; ৫০০ independent trade না হলে লক্ষ্য যাচাই হবে না"};
-  const warmup=210,signals=[];
-  for(let i=warmup;i<bars.length-1;i++){
-    const sample=bars.slice(Math.max(0,i-999),i+1),x=stats(sample),regime=regimeOf(x),st=strategyScores(x,regime);
-    const candidate=Object.entries(st).filter(([k,v])=>v.direction&&v.score>=76).sort((a,b)=>b[1].score-a[1].score)[0];
-    if(!candidate)continue;
-    const entry=bars[i+1].open,exitIndex=Math.min(bars.length-1,i+Math.max(1,holdBars));
-    const exit=bars[exitIndex].close,dir=candidate[1].direction;
-    const gross=(exit/entry-1)*dir*100,friction=2*(feeBps+slippageBps)/100;
-    const net=gross-friction;
-    signals.push({entryTime:bars[i+1].time,exitTime:bars[exitIndex].time,direction:dir>0?"LONG":"SHORT",strategy:candidate[0],grossPct:gross,netPct:net,outcome:net>0?"WIN":net<0?"LOSS":"FLAT"});
-    i=exitIndex-1;
-  }
-  const wins=signals.filter(x=>x.netPct>0),losses=signals.filter(x=>x.netPct<0),grossWin=wins.reduce((a,x)=>a+x.netPct,0),grossLoss=Math.abs(losses.reduce((a,x)=>a+x.netPct,0));
-  const net=signals.reduce((a,x)=>a+x.netPct,0),avg=signals.length?net/signals.length:0;
-  const split=Math.floor(signals.length*.7),oos=signals.slice(split),oosWins=oos.filter(x=>x.netPct>0).length,oosLoss=oos.filter(x=>x.netPct<0).length;
-  let equity=1,peak=1,maxDd=0;for(const x of signals){equity*=1+x.netPct/100;peak=Math.max(peak,equity);maxDd=Math.max(maxDd,(peak-equity)/peak*100);}
-  const count=signals.length;
-  return {status:"NOT_VALIDATED",sampleSizeReached:count>=minimumTrades,timeframe,bars:bars.length,trades:count,minimumTrades,winRate:count?wins.length/count*100:null,profitFactor:grossLoss?grossWin/grossLoss:null,expectancyPct:avg,netReturnPct:(equity-1)*100,maxDrawdownPct:maxDd,outOfSample:{trades:oos.length,winRate:oos.length?oosWins/oos.length*100:null,netPct:oos.reduce((a,x)=>a+x.netPct,0),expectancyPct:oos.length?oos.reduce((a,x)=>a+x.netPct,0)/oos.length:null,positiveNet:oos.reduce((a,x)=>a+x.netPct,0)>0},costModel:{feeBps,slippageBps},long:{trades:signals.filter(x=>x.direction==="LONG").length},short:{trades:signals.filter(x=>x.direction==="SHORT").length},validation:"NOT_VALIDATED: single-timeframe simulation only; live-equivalent multi-timeframe walk-forward and independent paper-trade validation are required.",note:"Single-timeframe preliminary simulation; does not replace walk-forward, multi-timeframe, paper trading, or independent validation.",sample:signals.slice(-100)};
-}
-export { evaluateV2, backtestV2 };
+export { evaluateV2 };
