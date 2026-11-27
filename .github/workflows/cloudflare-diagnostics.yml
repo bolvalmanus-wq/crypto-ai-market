@@ -57,7 +57,13 @@ jobs:
           cat /tmp/health_body || true
           echo "Observations page smoke test:"
           page=$(curl -fsS "https://crypto-ai-market.pages.dev/observations.html?smoke=$(date +%s)")
-          echo "$page" | grep -q "২৪ ঘণ্টার হিসাব · ১০টি বাটন"
+          if ! echo "$page" | grep -q "২৪ ঘণ্টার সিদ্ধান্ত"; then
+            echo "::error::Observations page did not return the expected page content"
+            echo "$page" | head -c 1000
+            exit 1
+          fi
+          echo "$page" | grep -q "BTC · LONG"
+          echo "$page" | grep -q "SOL · SHORT"
           echo "Observations page: HTTP 200 and ten-button layout present"
           echo "Observations API smoke test:"
           observations=$(curl -fsS "https://crypto-ai-market.pages.dev/api/observations?days=5&smoke=$(date +%s)")
