@@ -1314,18 +1314,21 @@ export default {
         ichimoku:"ইচিমোকু",vwap:"VWAP",volumeProfile:"ভলিউম প্রোফাইল",fibonacci:"ফিবোনাচ্চি",
         parabolicSar:"প্যারাবলিক SAR",cci:"CCI",williamsR:"উইলিয়ামস %R",aroon:"অরুন",
         donchian:"ডনচিয়ান",keltner:"কেল্টনার",supertrend:"সুপারট্রেন্ড",obv:"OBV",
-        mfi:"MFI",chaikin:"চাইকিন",roc:"ROC",ultimateOscillator:"আল্টিমেট অসিলেটর",trix:"TRIX",dpo:"DPO"
+        mfi:"MFI",chaikin:"চাইকিন",roc:"ROC",ultimateOscillator:"আল্টিমেট অসিলেটর",trix:"TRIX",dpo:"DPO",adx:"ADX",choppiness:"চপিনেস ইনডেক্স",atrPercentile:"ATR পার্সেন্টাইল"
       };
-      const directionalNames=new Set(Object.keys(indicatorNames));
+      const directionalNames=new Set(Object.keys(indicatorNames).filter(name=>!["adx","choppiness","atrPercentile"].includes(name)));
       const indicatorStats=list=>{
         const out={};
-        for(const r of list){
-          const components=r.indicatorSnapshot?.components||{};
-          for(const [name,value] of Object.entries(components)){
-            if(!directionalNames.has(name))continue;
-            const n=Number(value);
-            if(!Number.isFinite(n)||n===0)continue;
-            const x=out[name]||(out[name]={signals:0,evaluated:0,correct:0,wrong:0,neutral:0});
+        for(const [name,nameBn] of Object.entries(indicatorNames)){
+          const metric=["adx","choppiness","atrPercentile"].includes(name);
+          let metricSum=0,metricCount=0;
+          const x=out[name]={name,nameBn,signals:0,evaluated:0,correct:0,wrong:0,neutral:0,metric};
+          for(const r of list){
+            const components=r.indicatorSnapshot?.components||{};
+            const n=Number(components[name]);
+            if(!Number.isFinite(n))continue;
+            if(metric){x.signals++;metricSum+=n;metricCount++;continue;}
+            if(n===0)continue;
             x.signals++;
             if(r.outcome==="NEUTRAL"){x.neutral++;continue;}
             if(!["CORRECT","WRONG"].includes(r.outcome))continue;
@@ -1333,11 +1336,10 @@ export default {
             const actualDirection=(r.decision==="LONG"?1:-1)*(r.outcome==="CORRECT"?1:-1);
             if(Math.sign(n)===actualDirection)x.correct++;else x.wrong++;
           }
+          if(metric)x.value=metricCount?metricSum/metricCount:null;
+          x.accuracy=!metric&&x.evaluated?x.correct/x.evaluated*100:null;
         }
-        return Object.entries(out).map(([name,x])=>({
-          name,nameBn:indicatorNames[name],...x,
-          accuracy:x.evaluated?x.correct/x.evaluated*100:null
-        })).sort((a,b)=>(b.accuracy??-1)-(a.accuracy??-1));
+        return Object.values(out).sort((a,b)=>(b.accuracy??-1)-(a.accuracy??-1));
       };
       const now=Date.now(),since24h=now-86400000;
       const last24h=records.filter(r=>Date.parse(r.decidedAt)>=since24h);
