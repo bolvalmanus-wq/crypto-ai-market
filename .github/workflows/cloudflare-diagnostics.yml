@@ -1,38 +1,40 @@
 name: Cloudflare connection diagnostics
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cloudflare-diagnostics.yml"
+      - "index.html"
+      - "functions/**"
+      - "worker.js"
   workflow_dispatch:
-    inputs:
-      deployment_id:
-        description: "Cloudflare Pages deployment UUID to inspect"
-        required: true
-        type: string
 permissions:
   contents: read
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify Cloudflare token and inspect Pages deployment
+      - name: Verify Cloudflare and inspect latest Pages deployment
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DEPLOYMENT_ID: ${{ inputs.deployment_id }}
         run: |
           set -euo pipefail
           auth=(-H "Authorization: Bearer $CF_API_TOKEN")
           verify=$(curl -fsS "${auth[@]}" https://api.cloudflare.com/client/v4/user/tokens/verify)
           echo "$verify" | jq -e '.success == true' >/dev/null
           echo "Cloudflare token: valid"
+          deployments=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/crypto-ai-market/deployments?per_page=1")
+          echo "$deployments" | jq -e '.success == true' >/dev/null
+          DEPLOYMENT_ID=$(echo "$deployments" | jq -r '.result[0].id // empty')
+          if [ -z "$DEPLOYMENT_ID" ]; then echo "::error::No Pages deployment found"; exit 1; fi
+          echo "Latest Pages deployment:"
+          echo "$deployments" | jq '.result[0] | {id,short_id,environment,url,created_on,latest_stage,deployment_trigger}'
           project=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/crypto-ai-market")
           echo "$project" | jq -e '.success == true' >/dev/null
-          echo "Project deployment binding names:"
-          echo "$project" | jq -r '.result.deployment_configs // {} | to_entries[] | "Environment: (.key)", "Service bindings: (((.value.services // .value.env.services // {}) | if type == "object" then keys else map(.binding // .name // "unnamed") end) | join(", "))"'
-          deployment=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/crypto-ai-market/deployments/$DEPLOYMENT_ID")
-          echo "$deployment" | jq -e '.success == true' >/dev/null
-          echo "Deployment details:"
-          echo "$deployment" | jq '{id:.result.id, short_id:.result.short_id, project_name:.result.project_name, environment:.result.environment, url:.result.url, created_on:.result.created_on, latest_stage:.result.latest_stage, deployment_trigger:.result.deployment_trigger}'
-          echo "Deployment inspection: successful"
-          echo "Live Pages Worker health:"
+          echo "Configured service-binding names:"
+          echo "$project" | jq -r '.result.deployment_configs // {} | to_entries[] | "Environment: \\(.key)", "Service bindings: \\(((.value.services // .value.env.services // {}) | if type == "object" then keys else map(.binding // .name // "unnamed") end) | join(", "))"'
+          echo "Latest deployment health endpoint:"
           curl -sS -D /tmp/health_headers "https://crypto-ai-market.pages.dev/api/worker-health" -o /tmp/health_body || true
           head -n 1 /tmp/health_headers || true
           cat /tmp/health_body || true
