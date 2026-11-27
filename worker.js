@@ -1,4 +1,4 @@
-import { evaluateV2, backtestV2 } from "./trading-v2.js";
+import { evaluateV2 } from "./trading-v2.js";
 import { onRequestGet as fetchMarketResponse } from "./functions/api/market.js";
 const PAGE_URL = "https://crypto-ai-market.pages.dev";
 
@@ -365,7 +365,7 @@ function buildIntradayMovement(data){
   const rises=movementSegments.filter(s=>s.direction==="UP").sort((a,b)=>b.changePct-a.changePct);
   const falls=movementSegments.filter(s=>s.direction==="DOWN").sort((a,b)=>a.changePct-b.changePct);
   const expectedCandles=Math.max(0,Math.floor((now-cutoff)/1800000));
-  return {timeframe:"30m grouped by UTC hour and directional runs",windowStart:bars.length?new Date(bars[0].time).toISOString():null,windowEnd:bars.length?new Date(bars[bars.length-1].time+300000).toISOString():null,candleCount:bars.length,expectedCandles,coverageHours:Number((bars.length*30/60).toFixed(1)),completeWindow:expectedCandles>0&&bars.length>=expectedCandles*.9,hourly,segments:movementSegments,strongestRise:ranked.slice().sort((a,b)=>b.changePct-a.changePct)[0]||null,strongestFall:ranked.slice().sort((a,b)=>a.changePct-b.changePct)[0]||null,strongestRiseSegment:rises[0]||null,strongestFallSegment:falls[0]||null,topRiseSegments:rises.slice(0,3),topFallSegments:falls.slice(0,3)};
+  return {timeframe:"30m grouped by UTC hour and directional runs",windowStart:bars.length?new Date(bars[0].time).toISOString():null,windowEnd:bars.length?new Date(bars[bars.length-1].time+1800000).toISOString():null,candleCount:bars.length,expectedCandles,coverageHours:Number((bars.length*30/60).toFixed(1)),completeWindow:expectedCandles>0&&bars.length>=expectedCandles*.9,hourly,segments:movementSegments,strongestRise:ranked.slice().sort((a,b)=>b.changePct-a.changePct)[0]||null,strongestFall:ranked.slice().sort((a,b)=>a.changePct-b.changePct)[0]||null,strongestRiseSegment:rises[0]||null,strongestFallSegment:falls[0]||null,topRiseSegments:rises.slice(0,3),topFallSegments:falls.slice(0,3)};
 }
 
 function calculateAgentIndicatorSets(market){
@@ -1303,7 +1303,7 @@ export default {
       return Response.json({ ok: true },{headers:{"Cache-Control":"no-store"}});
     }
     if (url.pathname === "/v2/status" && request.method === "GET") {
-      return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check","preliminary-backtest"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented","Backtest endpoint is preliminary single-timeframe simulation, not full walk-forward validation"] }, {headers:{"Cache-Control":"no-store"}});
+      return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented"] }, {headers:{"Cache-Control":"no-store"}});
     }
     if (url.pathname === "/analyze" && request.method === "POST") {
       let body;
