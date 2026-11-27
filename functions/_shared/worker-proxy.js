@@ -1,4 +1,4 @@
-const DEFAULT_WORKER_URL = "https://crypto-ai-market-worker.bolvalmanus-wq.workers.dev";
+const DEFAULT_WORKER_URL = "https://crypto-ai-market-worker.bolvalmanus.workers.dev";
 
 function workerRequestUrl(path, workerUrl) {
   const base = new URL(workerUrl);
