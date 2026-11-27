@@ -73,7 +73,7 @@ test("market API rejects stale Bybit server time and falls back to fresh OKX dat
   }
   if(url.includes("okx.com")){
    if(url.includes("/ticker?"))return Response.json({code:"0",data:[{last:"100",open24h:"99",bidPx:"99.9",askPx:"100.1",ts:String(Date.now())}]});
-   const bar=url.includes("bar=1m")?60000:url.includes("bar=5m")?300000:url.includes("bar=15m")?900000:url.includes("bar=30m")?1800000:url.includes("bar=1H")?3600000:14400000;
+   const bar=url.includes("bar=30m")?1800000:url.includes("bar=1H")?3600000:14400000;
    const rows=Array.from({length:40},(_,i)=>[String(Math.floor((now-40*bar+i*bar)/bar)*bar),"100","101","99","100","10","10","0","1"]);
    return Response.json({code:"0",data:rows});
   }
