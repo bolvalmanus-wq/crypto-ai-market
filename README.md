@@ -30,7 +30,7 @@ BTC/SOL perpetual-market analysis application.
 ## Automated quality gates
 
 - Every push to `main` and pull request targeting `main` runs the repository-wide JavaScript/inline-script syntax and configuration checks.
-- Node's built-in test runner covers market-provider validation, V2 closed-candle/timeframe safety, backtest status, and Worker push/origin validation.
+- Node's built-in test runner covers market-provider validation, V2 closed-candle/timeframe safety and Worker push/origin validation.
 - V2 candle history is truncated to the latest uninterrupted segment; gaps cannot silently contaminate rolling indicators.
 - Live price polling is limited to one refresh every five seconds per open app session.
 - Run locally with Node.js 22+: `npm run check` and `npm test`.
