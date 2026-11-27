@@ -55,3 +55,12 @@ jobs:
           curl -sS -D /tmp/health_headers "https://crypto-ai-market.pages.dev/api/worker-health" -o /tmp/health_body || true
           head -n 1 /tmp/health_headers || true
           cat /tmp/health_body || true
+          echo "Observations page smoke test:"
+          page=$(curl -fsS "https://crypto-ai-market.pages.dev/observations.html?smoke=$(date +%s)")
+          echo "$page" | grep -q "২৪ ঘণ্টার হিসাব · ১০টি বাটন"
+          echo "Observations page: HTTP 200 and ten-button layout present"
+          echo "Observations API smoke test:"
+          observations=$(curl -fsS "https://crypto-ai-market.pages.dev/api/observations?days=5&smoke=$(date +%s)")
+          echo "$observations" | jq -e '.summary24h.total != null and .summary24h.btcLong != null and .summary24h.btcShort != null and .summary24h.solLong != null and .summary24h.solShort != null and (.records24h | type == "array")' >/dev/null
+          echo "$observations" | jq '{summary24h,records24h_count:(.records24h|length),generatedAt,timezone}'
+          echo "Observations page and API: PASS"
