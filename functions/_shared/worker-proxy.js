@@ -31,7 +31,15 @@ export async function fetchMarketWorker(env, path, init = {}) {
     headers: new Headers(init.headers || {})
   });
   const service = findWorkerServiceBinding(env);
-  if (service) return service.binding.fetch(request);
+  if (service) {
+    try {
+      return await service.binding.fetch(request.clone());
+    } catch (bindingError) {
+      // A stale or unavailable Pages Service Binding must not prevent the
+      // configured public Worker URL from serving the same API request.
+      console.error("MARKET_WORKER service binding failed; trying HTTPS fallback", String(bindingError));
+    }
+  }
   const target = workerRequestUrl(path, env.MARKET_WORKER_URL || DEFAULT_WORKER_URL);
   return fetch(target, { ...init, signal: init.signal || AbortSignal.timeout(15000) });
 }
