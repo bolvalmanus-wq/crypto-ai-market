@@ -1305,7 +1305,11 @@ export default {
     if (url.pathname === "/observations" && request.method === "GET") {
       if (!env.ANALYSIS_KV) return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
       const days=Math.max(1,Math.min(5,Number(url.searchParams.get("days"))||5));
-      const since=Date.now()-days*86400000, keys=[]; let cursor;
+      // Keep exactly the latest five Moscow-calendar day sheets (today + previous days).
+      // This makes each completed daily sheet roll forward cleanly at UTC+3 midnight.
+      const mskNow=new Date(Date.now()+3*3600000);
+      const mskMidnightUtc=Date.UTC(mskNow.getUTCFullYear(),mskNow.getUTCMonth(),mskNow.getUTCDate())-3*3600000;
+      const since=mskMidnightUtc-(days-1)*86400000, keys=[]; let cursor;
       do { const page=await env.ANALYSIS_KV.list({prefix:"decision:",limit:1000,...(cursor?{cursor}:{})}); keys.push(...(page.keys||[])); cursor=page.list_complete?undefined:page.cursor; } while(cursor);
       const records=[];
       for(const item of keys){let r;try{r=await env.ANALYSIS_KV.get(item.name,"json");}catch(_){continue;} if(!r)continue;const at=Date.parse(r.decidedAt||"");if(Number.isFinite(at)&&at>=since&&at<=Date.now()&&["LONG","SHORT"].includes(r.decision))records.push(r);}
@@ -1341,7 +1345,7 @@ export default {
       return Response.json({days,generatedAt:new Date().toISOString(),timezone:"Europe/Moscow",
         summary:summary(records),summary24h:summary(last24h),
         daily,
-        records24h:last24h.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes})),
+        records24h:last24h.map(r=>({id:r.id,symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,exitPrice:r.exitPrice??null,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes})),
         records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes}))},
         {headers:{"Cache-Control":"no-store"}});
 
