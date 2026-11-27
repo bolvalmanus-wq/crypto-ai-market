@@ -1324,16 +1324,19 @@ export default {
           for(const [name,value] of Object.entries(components)){
             if(!directionalNames.has(name))continue;
             const n=Number(value);
-            if(!Number.isFinite(n)||n===0||!["CORRECT","WRONG"].includes(r.outcome))continue;
-            const x=out[name]||(out[name]={signals:0,correct:0,wrong:0});
+            if(!Number.isFinite(n)||n===0)continue;
+            const x=out[name]||(out[name]={signals:0,evaluated:0,correct:0,wrong:0,neutral:0});
             x.signals++;
+            if(r.outcome==="NEUTRAL"){x.neutral++;continue;}
+            if(!["CORRECT","WRONG"].includes(r.outcome))continue;
+            x.evaluated++;
             const actualDirection=(r.decision==="LONG"?1:-1)*(r.outcome==="CORRECT"?1:-1);
             if(Math.sign(n)===actualDirection)x.correct++;else x.wrong++;
           }
         }
         return Object.entries(out).map(([name,x])=>({
           name,nameBn:indicatorNames[name],...x,
-          accuracy:x.correct+x.wrong?x.correct/(x.correct+x.wrong)*100:null
+          accuracy:x.evaluated?x.correct/x.evaluated*100:null
         })).sort((a,b)=>(b.accuracy??-1)-(a.accuracy??-1));
       };
       const now=Date.now(),since24h=now-86400000;
@@ -1345,7 +1348,7 @@ export default {
         const list=records.filter(r=>new Date(Date.parse(r.decidedAt)+3*3600000).toISOString().slice(0,10)===key);
         return {date:key,total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
           correct:list.filter(r=>r.outcome==="CORRECT").length,wrong:list.filter(r=>r.outcome==="WRONG").length,
-          neutral:list.filter(r=>r.outcome==="NEUTRAL").length,pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING"),
+          neutral:list.filter(r=>r.outcome==="NEUTRAL").length,pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length,
           accuracy:(()=>{const c=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));return c.length?c.filter(r=>r.outcome==="CORRECT").length/c.length*100:null;})(),
           records:list.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,confidenceScore:r.confidenceScore}))};
       });
