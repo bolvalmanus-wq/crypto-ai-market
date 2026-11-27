@@ -635,7 +635,7 @@ const TRADING_FRAMEWORK_BN = `
 ট্রেডিং জ্ঞান ও বাধ্যতামূলক বিশ্লেষণ-পদ্ধতি:
 ১) বাজারের অবস্থা আগে শ্রেণিবদ্ধ করো: uptrend, downtrend, range, breakout, pullback, নাকি high-volatility/choppy market। প্রতিটি অবস্থায় একই কৌশল প্রয়োগ করবে না।
 ২) Market structure: swing high/low, higher-high/higher-low, lower-high/lower-low, support/resistance এবং breakout-এর পর retest যাচাই করো। শুধু একটি candle বা wick-কে breakout ধরবে না; candle close ও volume confirmation দেখো।
-৩) Multi-timeframe: ৪ ঘণ্টা = প্রধান trend/context, ১ ঘণ্টা = intermediate structure, ১৫/৫/১ মিনিট = দ্রুত entry timing। ১ মিনিটে ১৫ মিনিট/১ ঘণ্টার বিপরীত সংকেত থাকলে সেটিকে ঝুঁকির সতর্কতা হিসেবে ধরো; শুধু ছোট timeframe ভিন্ন বলেই বিশ্লেষণ বন্ধ করবে না। ৪ ঘণ্টার প্রবল বিপরীত trend হলে confidence কমাও এবং risk স্পষ্ট করো।
+৩) Multi-timeframe: ৪ ঘণ্টা = প্রধান trend/context, ১ ঘণ্টা = intermediate structure, ৩০ মিনিট = entry timing। ১ ঘণ্টা ও ৪ ঘণ্টার বিপরীত সংকেত থাকলে ঝুঁকির সতর্কতা দাও; ৪ ঘণ্টার প্রবল বিপরীত trend হলে confidence কমাও এবং risk স্পষ্ট করো।
 ৪) Indicator-গুলোকে আলাদা ভোটের মতো গুনবে না। EMA trend, MACD momentum, RSI momentum/overbought-oversold context, ADX trend strength, Bollinger volatility/mean-reversion context, relative volume confirmation—এগুলো একই price action-এর সম্পর্কিত প্রমাণ। নতুন VWAP অবস্থান, ROC(3/9) momentum, Donchian breakout এবং candle pressure-ও দেখবে; এগুলোকে একক price-action confirmation family হিসেবে বিবেচনা করবে, একই তথ্যকে বারবার double-count করবে না। VWAP-এর ওপরে থাকা একা LONG নয়; Donchian breakout-এ candle close ও volume না মিললে false breakout ঝুঁকি উল্লেখ করবে।
 ৫) Derivatives: open interest বাড়া/কমা, long-short ratio, funding এবং orderbook imbalance-কে context হিসেবে দেখো; এগুলো একা price direction নিশ্চিত করে না। crowded positioning হলে squeeze/liq risk উল্লেখ করো।
 ৬) LONG-এর পক্ষে: structure ও higher timeframe bullish, price/EMA trend সহায়ক, momentum ও volume confirmation আছে, resistance-এর ঠিক নিচে late entry নয়, এবং invalidation level যুক্তিসঙ্গত।
@@ -874,7 +874,7 @@ async function persistLatestSnapshot(env, symbol, result) {
   catch (_) { snapshot = {}; }
   snapshot[result.timeframe] = result;
   snapshot.updatedAt = new Date().toISOString();
-  snapshot.storagePolicy = "batched-30m";
+  snapshot.storagePolicy = "batched-scheduler";
   await env.ANALYSIS_KV.put(key, JSON.stringify(snapshot), { expirationTtl: 60 * 60 * 24 * 90 });
 }
 
@@ -1385,7 +1385,7 @@ export default {
           try { snapshot = await env.ANALYSIS_KV.get("latest:" + symbol, "json") || {}; } catch (_) {}
           for (const result of symbolResults) snapshot[result.timeframe] = result;
           snapshot.updatedAt = new Date().toISOString();
-          snapshot.storagePolicy = "batched-30m";
+          snapshot.storagePolicy = "batched-scheduler";
           try{await env.ANALYSIS_KV.put("latest:" + symbol,JSON.stringify(snapshot),{expirationTtl:60*60*24*90});}
           catch(error){console.error("Latest snapshot persistence failed",{symbol,error:String(error)});}
         }
