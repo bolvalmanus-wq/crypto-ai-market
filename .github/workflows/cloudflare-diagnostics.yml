@@ -1,0 +1,36 @@
+name: Cloudflare connection diagnostics
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Cloudflare token
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_API_TOKEN:-}" ]; then
+            echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+          if [ -z "${CF_ACCOUNT_ID:-}" ]; then
+            echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+          verify=$(curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify)
+          echo "$verify" | jq -e '.success == true' >/dev/null
+          echo "Cloudflare token: valid"
+          workers=$(curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts")
+          echo "$workers" | jq -e '.success == true' >/dev/null
+          echo "Workers Scripts API: accessible"
+          echo "Worker scripts found:"
+          echo "$workers" | jq -r '.result[]?.id' | sed 's/^/- /'
+          pages=$(curl -fsS -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects")
+          echo "$pages" | jq -e '.success == true' >/dev/null
+          echo "Pages Projects API: accessible"
+          echo "Pages projects found:"
+          echo "$pages" | jq -r '.result[]?.name' | sed 's/^/- /'
