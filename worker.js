@@ -1303,52 +1303,80 @@ export default {
       return Response.json({ ok: true },{headers:{"Cache-Control":"no-store"}});
     }
     if (url.pathname === "/observations" && request.method === "GET") {
-      if (!env.ANALYSIS_KV) return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
-      const days=Math.max(1,Math.min(5,Number(url.searchParams.get("days"))||5));
-      // Keep exactly the latest five Moscow-calendar day sheets (today + previous days).
-      // This makes each completed daily sheet roll forward cleanly at UTC+3 midnight.
-      const mskNow=new Date(Date.now()+3*3600000);
-      const mskMidnightUtc=Date.UTC(mskNow.getUTCFullYear(),mskNow.getUTCMonth(),mskNow.getUTCDate())-3*3600000;
-      const since=mskMidnightUtc-(days-1)*86400000, keys=[]; let cursor;
-      do { const page=await env.ANALYSIS_KV.list({prefix:"decision:",limit:1000,...(cursor?{cursor}:{})}); keys.push(...(page.keys||[])); cursor=page.list_complete?undefined:page.cursor; } while(cursor);
-      const records=[];
-      for(const item of keys){let r;try{r=await env.ANALYSIS_KV.get(item.name,"json");}catch(_){continue;} if(!r)continue;const at=Date.parse(r.decidedAt||"");if(Number.isFinite(at)&&at>=since&&at<=Date.now()&&["LONG","SHORT"].includes(r.decision))records.push(r);}
-      records.sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
-      const now=Date.now(),since24h=now-86400000;
-      const last24h=records.filter(r=>Date.parse(r.decidedAt)>=since24h);
-      const closed24h=last24h.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
-      const daily=Array.from({length:days},(_,i)=>{
-        const date=new Date(now-(days-1-i)*86400000);
-        const key=new Date(date.getTime()+3*3600000).toISOString().slice(0,10);
-        const list=records.filter(r=>new Date(Date.parse(r.decidedAt)+3*3600000).toISOString().slice(0,10)===key);
-        const done=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
-        return {date,total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
-          correct:done.filter(r=>r.outcome==="CORRECT").length,wrong:done.filter(r=>r.outcome==="WRONG").length,
-          neutral:list.filter(r=>r.outcome==="NEUTRAL").length,unverified:list.filter(r=>r.outcome==="UNVERIFIED").length,
-          pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length,
-          accuracy:done.length?done.filter(r=>r.outcome==="CORRECT").length/done.length*100:null,
-          records:list.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes,exitPrice:r.exitPrice??null}))};
-      });
-      const closed=records.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
-      const summary=list=>{const done=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));return{
-        total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
-        btcLong:list.filter(r=>r.symbol==="BTC"&&r.decision==="LONG").length,
-        btcShort:list.filter(r=>r.symbol==="BTC"&&r.decision==="SHORT").length,
-        solLong:list.filter(r=>r.symbol==="SOL"&&r.decision==="LONG").length,
-        solShort:list.filter(r=>r.symbol==="SOL"&&r.decision==="SHORT").length,
-        correct:done.filter(r=>r.outcome==="CORRECT").length,wrong:done.filter(r=>r.outcome==="WRONG").length,
-        neutral:list.filter(r=>r.outcome==="NEUTRAL").length,
-        unverified:list.filter(r=>r.outcome==="UNVERIFIED").length,
-        pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length,
-        accuracy:done.length?done.filter(r=>r.outcome==="CORRECT").length/done.length*100:null
-      };};
-      return Response.json({days,generatedAt:new Date().toISOString(),timezone:"Europe/Moscow",
-        summary:summary(records),summary24h:summary(last24h),
-        daily,
-        records24h:last24h.map(r=>({id:r.id,symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,exitPrice:r.exitPrice??null,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes})),
-        records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes}))},
-        {headers:{"Cache-Control":"no-store"}});
-
+      try {
+        if (!env.ANALYSIS_KV) return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
+        const days=Math.max(1,Math.min(5,Number(url.searchParams.get("days"))||5));
+        const now=Date.now(), mskNow=new Date(now+3*3600000);
+        const mskMidnightUtc=Date.UTC(mskNow.getUTCFullYear(),mskNow.getUTCMonth(),mskNow.getUTCDate())-3*3600000;
+        const since=mskMidnightUtc-(days-1)*86400000;
+        const records=[];
+        let cursor;
+        do {
+          const page=await env.ANALYSIS_KV.list({prefix:"decision:",limit:1000,...(cursor?{cursor}:{})});
+          const keys=page.keys||[];
+          // Read records in small batches; metadata lets us skip expired-window keys
+          // before fetching full JSON and avoids a long serial KV read loop.
+          for(let offset=0;offset<keys.length;offset+=40) {
+            const batch=keys.slice(offset,offset+40).filter(item=>{
+              const meta=item.metadata;
+              if(!meta?.decidedAt)return true;
+              const at=Date.parse(meta.decidedAt);
+              return Number.isFinite(at)&&at>=since&&at<=now&&["LONG","SHORT"].includes(meta.decision);
+            });
+            const values=await Promise.all(batch.map(async item=>{
+              try{return await env.ANALYSIS_KV.get(item.name,"json");}
+              catch(error){console.error("Observation record read failed",{key:item.name,error:String(error)});return null;}
+            }));
+            for(const r of values) {
+              if(!r||!["LONG","SHORT"].includes(r.decision))continue;
+              const at=Date.parse(r.decidedAt||"");
+              if(Number.isFinite(at)&&at>=since&&at<=now)records.push(r);
+            }
+          }
+          cursor=page.list_complete?undefined:page.cursor;
+        } while(cursor);
+        records.sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
+        const since24h=now-86400000;
+        const last24h=records.filter(r=>Date.parse(r.decidedAt)>=since24h);
+        const summary=list=>{
+          const done=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
+          return {
+            total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
+            btcLong:list.filter(r=>r.symbol==="BTC"&&r.decision==="LONG").length,
+            btcShort:list.filter(r=>r.symbol==="BTC"&&r.decision==="SHORT").length,
+            solLong:list.filter(r=>r.symbol==="SOL"&&r.decision==="LONG").length,
+            solShort:list.filter(r=>r.symbol==="SOL"&&r.decision==="SHORT").length,
+            correct:done.filter(r=>r.outcome==="CORRECT").length,wrong:done.filter(r=>r.outcome==="WRONG").length,
+            neutral:list.filter(r=>r.outcome==="NEUTRAL").length,
+            unverified:list.filter(r=>r.outcome==="UNVERIFIED").length,
+            pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length,
+            accuracy:done.length?done.filter(r=>r.outcome==="CORRECT").length/done.length*100:null
+          };
+        };
+        const daily=Array.from({length:days},(_,i)=>{
+          const dayStart=mskMidnightUtc-(days-1-i)*86400000;
+          const key=new Date(dayStart+3*3600000).toISOString().slice(0,10);
+          const list=records.filter(r=>new Date(Date.parse(r.decidedAt)+3*3600000).toISOString().slice(0,10)===key);
+          const done=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
+          return {
+            date:key,total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
+            correct:done.filter(r=>r.outcome==="CORRECT").length,wrong:done.filter(r=>r.outcome==="WRONG").length,
+            neutral:list.filter(r=>r.outcome==="NEUTRAL").length,unverified:list.filter(r=>r.outcome==="UNVERIFIED").length,
+            pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length,
+            accuracy:done.length?done.filter(r=>r.outcome==="CORRECT").length/done.length*100:null,
+            records:list.map(r=>({id:r.id,symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes,exitPrice:r.exitPrice??null}))
+          };
+        });
+        const project=r=>({id:r.id,symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,exitPrice:r.exitPrice??null,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes});
+        return Response.json({
+          days,generatedAt:new Date().toISOString(),timezone:"Europe/Moscow",
+          summary:summary(records),summary24h:summary(last24h),daily,
+          records24h:last24h.map(project),records:records.map(project)
+        },{headers:{"Cache-Control":"no-store"}});
+      } catch(error) {
+        console.error("Observations endpoint failed",String(error),error?.stack||"");
+        return Response.json({error:"পর্যবেক্ষণের হিসাব তৈরি করা যায়নি",details:error instanceof Error?error.message:String(error)},{status:500,headers:{"Cache-Control":"no-store"}});
+      }
     }
     if (url.pathname === "/v2/status" && request.method === "GET") {
       return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented"] }, {headers:{"Cache-Control":"no-store"}});
