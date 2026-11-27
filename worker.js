@@ -1,5 +1,20 @@
 import { evaluateV2, backtestV2 } from "./trading-v2.js";
+import { onRequestGet as fetchMarketResponse } from "./functions/api/market.js";
 const PAGE_URL = "https://crypto-ai-market.pages.dev";
+
+// Fetch market data directly inside the Worker. Never call this Pages site from
+// the Worker: pages.dev is a partial-zone hostname and can fail with DNS 1016.
+async function loadMarketData(symbol) {
+  const request = new Request("https://market-worker.internal/api/market?symbol=" + encodeURIComponent(symbol), {
+    headers: { Accept: "application/json", "Cache-Control": "no-cache" }
+  });
+  const response = await fetchMarketResponse({ request });
+  const data = await response.json();
+  if (!response.ok || !data?.candles || !data?.ticker) {
+    throw new Error(data?.details || data?.error || "Market data unavailable (HTTP " + response.status + ")");
+  }
+  return data;
+}
 const b64u = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const unb64u = value => {
   value = String(value).trim().replace(/^["']|["']$/g,"").replace(/\s+/g,"");
@@ -908,11 +923,7 @@ function shouldRunAiCouncil(market) {
 
 async function runOne(env, symbol, tf, options = {}) {
   let data=options.marketData||null;
-  if(!data){
-    const marketResponse = await fetch(PAGE_URL + "/api/market?symbol=" + symbol, { headers: { "Cache-Control": "no-cache" }, signal: AbortSignal.timeout(18000) });
-    if (!marketResponse.ok) throw new Error("Market API HTTP " + marketResponse.status);
-    data = await marketResponse.json();
-  }
+  if(!data) data = await loadMarketData(symbol);
   if (!data.candles || !data.ticker) throw new Error("Market API returned incomplete data");
   const analysisData = tf === "4h"
     ? { ...data, candles: { ...data.candles, "4h": buildFourHourCandles(data) } }
@@ -1132,15 +1143,11 @@ async function evaluateMaturedDecisions(env) {
   const markets = {};
   await Promise.all(symbols.map(async symbol => {
     try {
-      const response = await fetch(PAGE_URL + "/api/market?symbol=" + encodeURIComponent(symbol), {
-        headers: { "Cache-Control": "no-cache" },
-        signal: AbortSignal.timeout(8000)
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.candles) markets[symbol] = data.candles;
-      }
-    } catch (_) {}
+      const data = await loadMarketData(symbol);
+      if (data?.candles) markets[symbol] = data.candles;
+    } catch (error) {
+      console.error("Matured decision market data unavailable", { symbol, error: String(error) });
+    }
   }));
   const intervals = {"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
   for (const item of due) {
