@@ -1340,7 +1340,9 @@ export default {
       };};
       return Response.json({days,generatedAt:new Date().toISOString(),timezone:"Europe/Moscow",
         summary:summary(records),summary24h:summary(last24h),
-        daily,records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes}))},
+        daily,
+        records24h:last24h.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes})),
+        records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,durationMinutes:r.durationMinutes}))},
         {headers:{"Cache-Control":"no-store"}});
 
     }
