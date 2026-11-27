@@ -1302,6 +1302,21 @@ export default {
       catch(error) { console.error("Push unsubscribe failed",String(error)); return Response.json({error:"Push subscription storage unavailable"},{status:503}); }
       return Response.json({ ok: true },{headers:{"Cache-Control":"no-store"}});
     }
+    if (url.pathname === "/observations" && request.method === "GET") {
+      if (!env.ANALYSIS_KV) return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
+      const days=Math.max(1,Math.min(5,Number(url.searchParams.get("days"))||5));
+      const since=Date.now()-days*86400000, keys=[]; let cursor;
+      do { const page=await env.ANALYSIS_KV.list({prefix:"decision:",limit:1000,...(cursor?{cursor}:{})}); keys.push(...(page.keys||[])); cursor=page.list_complete?undefined:page.cursor; } while(cursor);
+      const records=[];
+      for(const item of keys){let r;try{r=await env.ANALYSIS_KV.get(item.name,"json");}catch(_){continue;} if(!r)continue;const at=Date.parse(r.decidedAt||"");if(Number.isFinite(at)&&at>=since&&at<=Date.now()&&["LONG","SHORT"].includes(r.decision))records.push(r);}
+      records.sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
+      const indicators={};
+      for(const r of records){const c=r.indicatorSnapshot?.components||{};for(const [name,value] of Object.entries(c)){const n=Number(value);if(!Number.isFinite(n)||n===0)continue;const x=indicators[name]||(indicators[name]={signals:0,correct:0,wrong:0,neutral:0});x.signals++;if(["CORRECT","WRONG","NEUTRAL"].includes(r.outcome)){if(r.outcome==="CORRECT"&&Math.sign(n)===(r.decision==="LONG"?1:-1))x.correct++;else if(r.outcome==="WRONG"&&Math.sign(n)===(r.decision==="LONG"?1:-1))x.wrong++;else if(r.outcome==="NEUTRAL")x.neutral++;}}
+      }
+      const daysOut=Array.from({length:days},(_,i)=>{const d=new Date(Date.now()-(days-1-i)*86400000);const key=d.toISOString().slice(0,10);const list=records.filter(r=>(r.decidedAt||"").slice(0,10)===key);return{date:key,total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,correct:list.filter(r=>r.outcome==="CORRECT").length,wrong:list.filter(r=>r.outcome==="WRONG").length,pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length};});
+      const closed=records.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
+      return Response.json({days,generatedAt:new Date().toISOString(),summary:{total:records.length,long:records.filter(r=>r.decision==="LONG").length,short:records.filter(r=>r.decision==="SHORT").length,correct:closed.filter(r=>r.outcome==="CORRECT").length,wrong:closed.filter(r=>r.outcome==="WRONG").length,pending:records.filter(r=>r.outcome==="PENDING").length,accuracy:closed.length?closed.filter(r=>r.outcome==="CORRECT").length/closed.length*100:null},daily:daysOut,indicators:Object.entries(indicators).map(([name,x])=>({name,...x,accuracy:x.correct+x.wrong?x.correct/(x.correct+x.wrong)*100:null})).sort((a,b)=>(b.accuracy??-1)-(a.accuracy??-1)),records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,indicators:r.indicatorSnapshot||{}}))},{headers:{"Cache-Control":"no-store"}});
+    }
     if (url.pathname === "/v2/status" && request.method === "GET") {
       return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented"] }, {headers:{"Cache-Control":"no-store"}});
     }
