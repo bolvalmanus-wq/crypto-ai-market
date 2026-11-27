@@ -1310,22 +1310,58 @@ export default {
       const records=[];
       for(const item of keys){let r;try{r=await env.ANALYSIS_KV.get(item.name,"json");}catch(_){continue;} if(!r)continue;const at=Date.parse(r.decidedAt||"");if(Number.isFinite(at)&&at>=since&&at<=Date.now()&&["LONG","SHORT"].includes(r.decision))records.push(r);}
       records.sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
-      const indicators={};
-      for(const r of records){
-        const c=r.indicatorSnapshot?.components||{};
-        for(const [name,value] of Object.entries(c)){
-          const n=Number(value);
-          if(!Number.isFinite(n)||n===0||!["CORRECT","WRONG","NEUTRAL"].includes(r.outcome))continue;
-          const x=indicators[name]||(indicators[name]={signals:0,correct:0,wrong:0,neutral:0});
-          x.signals++;
-          if(r.outcome==="NEUTRAL"){x.neutral++;continue;}
-          const actualDirection=(r.decision==="LONG"?1:-1)*(r.outcome==="CORRECT"?1:-1);
-          if(Math.sign(n)===actualDirection)x.correct++;else x.wrong++;
+      const indicatorNames={
+        ichimoku:"ইচিমোকু",vwap:"VWAP",volumeProfile:"ভলিউম প্রোফাইল",fibonacci:"ফিবোনাচ্চি",
+        parabolicSar:"প্যারাবলিক SAR",cci:"CCI",williamsR:"উইলিয়ামস %R",aroon:"অরুন",
+        donchian:"ডনচিয়ান",keltner:"কেল্টনার",supertrend:"সুপারট্রেন্ড",obv:"OBV",
+        mfi:"MFI",chaikin:"চাইকিন",roc:"ROC",ultimateOscillator:"আল্টিমেট অসিলেটর",trix:"TRIX",dpo:"DPO"
+      };
+      const directionalNames=new Set(Object.keys(indicatorNames));
+      const indicatorStats=list=>{
+        const out={};
+        for(const r of list){
+          const components=r.indicatorSnapshot?.components||{};
+          for(const [name,value] of Object.entries(components)){
+            if(!directionalNames.has(name))continue;
+            const n=Number(value);
+            if(!Number.isFinite(n)||n===0||!["CORRECT","WRONG"].includes(r.outcome))continue;
+            const x=out[name]||(out[name]={signals:0,correct:0,wrong:0});
+            x.signals++;
+            const actualDirection=(r.decision==="LONG"?1:-1)*(r.outcome==="CORRECT"?1:-1);
+            if(Math.sign(n)===actualDirection)x.correct++;else x.wrong++;
+          }
         }
-      }
-      const daysOut=Array.from({length:days},(_,i)=>{const d=new Date(Date.now()-(days-1-i)*86400000);const key=d.toISOString().slice(0,10);const list=records.filter(r=>(r.decidedAt||"").slice(0,10)===key);return{date:key,total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,correct:list.filter(r=>r.outcome==="CORRECT").length,wrong:list.filter(r=>r.outcome==="WRONG").length,pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length};});
+        return Object.entries(out).map(([name,x])=>({
+          name,nameBn:indicatorNames[name],...x,
+          accuracy:x.correct+x.wrong?x.correct/(x.correct+x.wrong)*100:null
+        })).sort((a,b)=>(b.accuracy??-1)-(a.accuracy??-1));
+      };
+      const now=Date.now(),since24h=now-86400000;
+      const last24h=records.filter(r=>Date.parse(r.decidedAt)>=since24h);
+      const closed24h=last24h.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
+      const daily=Array.from({length:days},(_,i)=>{
+        const date=new Date(now-(days-1-i)*86400000);
+        const key=new Date(date.getTime()+3*3600000).toISOString().slice(0,10);
+        const list=records.filter(r=>new Date(Date.parse(r.decidedAt)+3*3600000).toISOString().slice(0,10)===key);
+        return {date:key,total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
+          correct:list.filter(r=>r.outcome==="CORRECT").length,wrong:list.filter(r=>r.outcome==="WRONG").length,
+          neutral:list.filter(r=>r.outcome==="NEUTRAL").length,pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING"),
+          accuracy:(()=>{const c=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));return c.length?c.filter(r=>r.outcome==="CORRECT").length/c.length*100:null;})(),
+          records:list.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,confidenceScore:r.confidenceScore}))};
+      });
       const closed=records.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
-      return Response.json({days,generatedAt:new Date().toISOString(),summary:{total:records.length,long:records.filter(r=>r.decision==="LONG").length,short:records.filter(r=>r.decision==="SHORT").length,correct:closed.filter(r=>r.outcome==="CORRECT").length,wrong:closed.filter(r=>r.outcome==="WRONG").length,pending:records.filter(r=>r.outcome==="PENDING").length,accuracy:closed.length?closed.filter(r=>r.outcome==="CORRECT").length/closed.length*100:null},daily:daysOut,indicators:Object.entries(indicators).map(([name,x])=>({name,...x,accuracy:x.correct+x.wrong?x.correct/(x.correct+x.wrong)*100:null})).sort((a,b)=>(b.accuracy??-1)-(a.accuracy??-1)),records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore,indicators:r.indicatorSnapshot||{}}))},{headers:{"Cache-Control":"no-store"}});
+      const summary=list=>{const done=list.filter(r=>["CORRECT","WRONG"].includes(r.outcome));return{
+        total:list.length,long:list.filter(r=>r.decision==="LONG").length,short:list.filter(r=>r.decision==="SHORT").length,
+        correct:done.filter(r=>r.outcome==="CORRECT").length,wrong:done.filter(r=>r.outcome==="WRONG").length,
+        neutral:list.filter(r=>r.outcome==="NEUTRAL").length,
+        pending:list.filter(r=>!["CORRECT","WRONG","NEUTRAL","UNVERIFIED"].includes(r.outcome)||r.outcome==="PENDING").length,
+        accuracy:done.length?done.filter(r=>r.outcome==="CORRECT").length/done.length*100:null
+      };};
+      return Response.json({days,generatedAt:new Date().toISOString(),timezone:"Europe/Moscow",
+        summary:summary(records),summary24h:summary(last24h),indicators24h:indicatorStats(last24h),
+        daily,records:records.map(r=>({symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,entryPrice:r.entryPrice,outcome:r.outcome,pnlPct:r.pnlPct??null,confidenceScore:r.confidenceScore}))},
+        {headers:{"Cache-Control":"no-store"}});
+
     }
     if (url.pathname === "/v2/status" && request.method === "GET") {
       return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented"] }, {headers:{"Cache-Control":"no-store"}});
