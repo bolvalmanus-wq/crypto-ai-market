@@ -33,7 +33,7 @@ jobs:
           project=$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects/crypto-ai-market")
           echo "$project" | jq -e '.success == true' >/dev/null
           echo "Configured service-binding names:"
-          echo "$project" | jq -r '.result.deployment_configs // {} | to_entries[] | "Environment: \\(.key)", "Service bindings: \\(((.value.services // .value.env.services // {}) | if type == "object" then keys else map(.binding // .name // "unnamed") end) | join(", "))"'
+          echo "$project" | jq '.result.deployment_configs // {} | to_entries | map({environment:.key,service_bindings:((.value.services // .value.env.services // {}) | if type == "object" then keys else map(.binding // .name // "unnamed") end)})'
           echo "Latest deployment health endpoint:"
           curl -sS -D /tmp/health_headers "https://crypto-ai-market.pages.dev/api/worker-health" -o /tmp/health_body || true
           head -n 1 /tmp/health_headers || true
