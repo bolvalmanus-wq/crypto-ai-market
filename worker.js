@@ -1402,9 +1402,7 @@ export default {
         historyError=error instanceof Error?error.message:String(error);
         // If historical pagination is unavailable, retain a clearly-labelled fallback rather than fail the report.
         try{
-          const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol,{headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(8000)});
-          if(!response.ok)throw new Error("Market API HTTP "+response.status);
-          const data=await response.json();
+          const data=await loadMarketData(symbol);
           const bars=data.candles?.[timeframe]||[];
           const report=backtestV2({candles:bars,timeframe,feeBps:6,slippageBps:3,holdBars:1,minimumTrades:500});
           report.historySource="Live market API fallback (limited history)";
@@ -1557,11 +1555,7 @@ export default {
     const marketDataBySymbol={};
     await Promise.all(["BTC","SOL"].map(async symbol=>{
       try{
-        const response=await fetch(PAGE_URL+"/api/market?symbol="+symbol,{headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(18000)});
-        if(!response.ok)throw new Error("Market API HTTP "+response.status);
-        const data=await response.json();
-        if(!data?.candles||!data?.ticker)throw new Error("Market API returned incomplete data");
-        marketDataBySymbol[symbol]=data;
+        marketDataBySymbol[symbol]=await loadMarketData(symbol);
       }catch(error){marketDataBySymbol[symbol]={__fetchError:error instanceof Error?error.message:String(error)};}
     }));
     const tasks = [];
