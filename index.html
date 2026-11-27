@@ -723,7 +723,7 @@ function showAi(symbol,tf,result){
  const durationLine=Number(a.durationMinutes)>0?'<div class="ai-risk"><b>পর্যালোচনার সময়:</b> '+Number(a.durationMinutes)+' মিনিট পরে ফলাফল যাচাই হবে</div>':'';
  const h4=debate.fourHourContext||{};
  const signalBn=x=>x==="LONG"?"বুলিশ":x==="SHORT"?"বেয়ারিশ":"নিরপেক্ষ/WAIT";
- const htfLine='<div class="ai-risk"><b>মাল্টি-টাইমফ্রেম:</b> ৪ ঘণ্টা '+(h4.available?signalBn(h4.signal):"ডেটা অপর্যাপ্ত")+(tf==="5m"?' · ১৫ মিনিট/১ ঘণ্টা প্রেক্ষাপট':tf==="15m"?' · ১ ঘণ্টা প্রেক্ষাপট':"")+' · '+(tf==="5m"?'৫ মিনিট এন্ট্রি':tf==="15m"?'১৫ মিনিট এন্ট্রি':tf==="1h"?'১ ঘণ্টা সেটআপ':'৪ ঘণ্টা প্রেক্ষাপট')+'</div>';
+ const htfLine='<div class="ai-risk"><b>মাল্টি-টাইমফ্রেম:</b> ৪ ঘণ্টা '+(h4.available?signalBn(h4.signal):"ডেটা অপর্যাপ্ত")+' · '+(tf==="30m"?'৩০ মিনিট এন্ট্রি':tf==="1h"?'১ ঘণ্টা সেটআপ':'৪ ঘণ্টা প্রেক্ষাপট')+'</div>';
  const h4Evidence=h4.available?'<div class="ai-risk">৪ঘণ্টার প্রমাণ: EMA20/50 '+(Number(h4.ema20)>=Number(h4.ema50)?"ঊর্ধ্বমুখী":"নিম্নমুখী")+' · RSI '+Number(h4.rsi).toFixed(1)+' · '+(h4.higherStructure?"HH/HL":h4.lowerStructure?"LH/LL":"স্পষ্ট swing structure নেই")+(h4.confirmedSupportBreakdown?" · নিশ্চিত support breakdown":"")+'</div>':'';
 
  const errors=(debate.councilErrors||[]).map(x=>'<div class="ai-risk">'+safeText(x.agent)+': '+safeText(x.error)+'</div>').join("");
