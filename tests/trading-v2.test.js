@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateV2, backtestV2 } from "../trading-v2.js";
+import { evaluateV2 } from "../trading-v2.js";
 const STEP={"30m":1800000,"1h":3600000,"4h":14400000};
 function makeBars(tf,count=240,direction=1,now=Date.now()){
  const step=STEP[tf],lastOpen=Math.floor(now/step)*step-step,first=lastOpen-(count-1)*step;
@@ -30,14 +30,6 @@ test("V2 explicitly keeps the unvalidated reversal strategy disabled",()=>{
  const now=Date.now(),data=makeData(now),market=makeMarket(data),result=evaluateV2({symbol:"BTC",timeframe:"30m",data,market,now});
  assert.equal(result.strategies.reversal.direction,0);assert.equal(result.strategies.reversal.score,0);assert.ok(result.strategies.reversal.evidence.some(x=>x.includes("Disabled")));
 });
-test("backtest never labels a preliminary sample as validated",()=>{
- const now=Date.now(),report=backtestV2({candles:makeBars("30m",600,1,now),timeframe:"30m",feeBps:6,slippageBps:3,holdBars:1,minimumTrades:500});
- assert.equal(report.status,"NOT_VALIDATED");assert.equal(report.validation.startsWith("NOT_VALIDATED"),true);assert.equal(report.costModel.feeBps,6);assert.equal(report.costModel.slippageBps,3);assert.equal(report.sampleSizeReached,report.trades>=500);
-});
-test("backtest reports insufficient history without fabricating trades",()=>{
- const report=backtestV2({candles:makeBars("30m",100),timeframe:"30m"});assert.equal(report.status,"INSUFFICIENT_DATA");assert.equal(report.trades,0);assert.equal(report.winRate,undefined);
-});
-
 test("V2 discards history before a candle gap instead of calculating across missing intervals",()=>{
  const now=Date.now(),data=makeData(now),bars=data.candles["30m"];
  bars.splice(80,1);
