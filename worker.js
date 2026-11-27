@@ -1483,7 +1483,7 @@ export default {
         }
         const dailyMap = {};
         for (const r of records) {
-          const dayParts = new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(r.decidedAt));
+          const dayParts = new Intl.DateTimeFormat("en-CA",{timeZone:"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(r.decidedAt));
           const dayValues = Object.fromEntries(dayParts.filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
           const day = dayValues.year+"-"+dayValues.month+"-"+dayValues.day;
           if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, records: [] };
