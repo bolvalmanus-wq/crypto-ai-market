@@ -25,7 +25,7 @@ button.refresh{display:block;margin:10px auto 0;border:0;border-radius:10px;padd
 <section class="panel"><h2>দৈনিক শিট / নির্ধারিত সময়ের ফলাফল</h2><div class="tabs" id="tabs"></div><div id="records" class="muted">রেকর্ড লোড হচ্ছে…</div><button class="refresh" id="refresh" type="button">রিপোর্ট রিফ্রেশ</button></section>
 <script>
 "use strict";
-let reportData=null,activeSheet="results",activeSymbol="BTC",activeTimeframe="1m";
+let reportData=null,v2ReportData=null,activeSheet="results",activeSymbol="BTC",activeTimeframe="1m";
 const numberValue=n=>{if(n===null||n===undefined||n==="")return null;const v=Number(n);return Number.isFinite(v)?v:null;};
 const fmt=n=>{const v=numberValue(n);return v===null?"—":v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:6});};
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -61,25 +61,36 @@ function recordCard(r,showOutcome){
 function renderDirectionCards(){
  const records=allRecords(),target=document.getElementById("directionCards");
  const selected=records.filter(r=>r.symbol===activeSymbol&&r.timeframe===activeTimeframe);
- const directions=["LONG","SHORT"];
- target.innerHTML=directions.map(direction=>{
+ const paperRecords=Array.isArray(v2ReportData?.records)?v2ReportData.records:[];
+ target.innerHTML=["LONG","SHORT"].map(direction=>{
   const rows=selected.filter(r=>r.decision===direction).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
   const settled=rows.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
   const wins=settled.filter(r=>r.outcome==="CORRECT").length;
   const rate=settled.length?(wins/settled.length*100).toFixed(1)+"%":"নমুনা অপর্যাপ্ত";
-  const latest=rows[0];
-  const field=(label,value)=>'<div>'+label+': <b>'+ (value===null||value===undefined||value===""?"ডেটা নেই":safe(value))+'</b></div>';
+  const paper=paperRecords.filter(r=>r.symbol===activeSymbol&&r.timeframe===activeTimeframe&&r.decision===direction);
+  const paperSettled=paper.filter(r=>["CORRECT","WRONG"].includes(r.outcome));
+  const paperWins=paperSettled.filter(r=>r.outcome==="CORRECT").length;
+  const paperRate=paperSettled.length?(paperWins/paperSettled.length*100).toFixed(1)+"%":"নমুনা অপর্যাপ্ত";
+  const latest=rows[0],latestPaper=paper[0];
+  const field=(label,value)=>'<div>'+label+': <b>'+(value===null||value===undefined||value===""?"ডেটা নেই":safe(value))+'</b></div>';
   const details=latest?[
-   field("সর্বশেষ এন্ট্রি",latest.entryPrice!==undefined?"$"+fmt(latest.entryPrice):null),
+   field("এন্ট্রি",latest.entryPrice!==undefined?"$"+fmt(latest.entryPrice):null),
    field("Stop Loss",latest.stopLoss!==undefined?"$"+fmt(latest.stopLoss):null),
-   field("Take Profit",latest.takeProfit??latest.takeProfit1!==undefined?"$"+fmt(latest.takeProfit??latest.takeProfit1):null),
+   field("Take Profit",latest.takeProfit!==undefined?"$"+fmt(latest.takeProfit):latest.takeProfit1!==undefined?"$"+fmt(latest.takeProfit1):null),
    field("Confidence / Score",latest.confidenceScore!==undefined?latest.confidenceScore+"%":null),
-   field("সর্বশেষ ফল",latest.outcome||"অপেক্ষমাণ"),
-   field("সর্বশেষ লাভ/ক্ষতি",latest.pnlPct!==undefined?Number(latest.pnlPct).toFixed(3)+"%":null)
-  ].join(""):'<div>এই সময়সীমায় '+direction+' সিদ্ধান্তের কোনো রেকর্ড নেই।</div>';
-  return '<div class="stat" style="grid-column:span 1"><span class="'+(direction==="LONG"?"long":"short")+'">'+direction+' সিদ্ধান্ত</span><b>'+rows.length+'</b><div class="detail">নমুনা: '+settled.length+' · Win Rate: '+rate+'</div><div class="result">'+details+'</div><div class="muted" style="margin-top:6px">যাচাইকৃত ফল: সঠিক '+wins+' · ভুল '+(settled.length-wins)+' · মোট রেকর্ড '+rows.length+'</div></div>';
+   field("ফলাফল",latest.outcome||"অপেক্ষমাণ"),
+   field("লাভ/ক্ষতি",latest.pnlPct!==undefined?Number(latest.pnlPct).toFixed(3)+"%":null)
+  ].join(""):'<div>Legacy সিদ্ধান্তের রেকর্ড নেই।</div>';
+  const paperDetails=latestPaper?[
+   field("V2 এন্ট্রি","$"+fmt(latestPaper.entryPrice)),
+   field("V2 Stop Loss","$"+fmt(latestPaper.stopLoss)),
+   field("V2 Take Profit 1 / 2","$"+fmt(latestPaper.takeProfit1)+" / $"+fmt(latestPaper.takeProfit2)),
+   field("V2 Confidence",latestPaper.confidenceScore+"%"),
+   field("V2 ফলাফল",latestPaper.outcome||"অপেক্ষমাণ")
+  ].join(""):'<div>V2 paper রেকর্ড নেই।</div>';
+  return '<div class="stat"><span class="'+(direction==="LONG"?"long":"short")+'">'+direction+' সিদ্ধান্ত</span><b>'+rows.length+'</b><div class="detail">Legacy · যাচাইকৃত নমুনা '+settled.length+' · Win Rate '+rate+'</div><div class="result">'+details+'</div><div class="detail">V2 Paper · মোট '+paper.length+' · যাচাইকৃত '+paperSettled.length+' · Win Rate '+paperRate+' · সঠিক '+paperWins+' · ভুল '+(paperSettled.length-paperWins)+'</div><div class="result">'+paperDetails+'</div></div>';
  }).join("");
- document.getElementById("directionNote").textContent=activeSymbol+"USDT · "+activeTimeframe+" · LONG ও SHORT আলাদা হিসাব। এন্ট্রি/SL/TP/স্কোর কেবল সংরক্ষিত রেকর্ডে থাকলেই দেখানো হয়; অনুপস্থিত তথ্য বানানো হয় না।";
+ document.getElementById("directionNote").textContent=activeSymbol+"USDT · "+activeTimeframe+" · LONG ও SHORT, Legacy ও V2 Paper আলাদা। অনুপস্থিত তথ্য অনুমান করা হয় না।";
  document.querySelectorAll("[data-symbol]").forEach(b=>b.classList.toggle("active",b.dataset.symbol===activeSymbol));
  document.querySelectorAll("[data-timeframe]").forEach(b=>b.classList.toggle("active",b.dataset.timeframe===activeTimeframe));
 }
@@ -129,6 +140,7 @@ async function loadV2Paper(){
  try{
   const res=await fetch("/api/v2/performance",{cache:"no-store"}),d=await res.json();
   if(!res.ok)throw new Error(d.error||"V2 রিপোর্ট পাওয়া যায়নি");
+  v2ReportData=d;renderDirectionCards();
   target.innerHTML='<div class="grid">'+[
    ["মোট V2 paper signal",d.total],["যাচাই সম্পন্ন",d.evaluated],["সঠিক",d.correct],["ভুল",d.wrong],["অপেক্ষমাণ",d.pending],["অনির্ভরযোগ্য",d.unverified],["সঠিকতার হার",d.accuracy===null?"—":Number(d.accuracy).toFixed(1)+"%"],["নেট PnL","—"],["ট্রেড রিটার্ন যোগফল",Number(d.sumTradeReturnPct||0).toFixed(3)+"%"]
   ].map(([k,v])=>'<div class="stat"><span>'+safe(k)+'</span><b>'+safe(v??0)+'</b></div>').join("")+'</div><div class="muted" style="margin-top:8px">V2 আলাদা ledger-এ চলে। ১০০টি directional paper trade না হওয়া পর্যন্ত accuracy দেখানো হয় না; account equity ও position sizing ছাড়া portfolio net PnL গণনা করা হয় না।</div>';
