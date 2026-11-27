@@ -129,7 +129,7 @@ async function sendSignalPush(env,result) {
   if(!subscriptionKeys.length)return;
   const payload={
     title:decision,
-    body:result.symbol+" · "+({"1m":"১ মিনিট","5m":"৫ মিনিট","15m":"১৫ মিনিট","30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"}[result.timeframe]||result.timeframe),
+    body:result.symbol+" · "+({"30m":"৩০ মিনিট","1h":"১ ঘণ্টা","4h":"৪ ঘণ্টা"}[result.timeframe]||result.timeframe),
     url:"/",
     tag:result.symbol+"-"+result.timeframe+"-"+decision+"-"+String(result.candleCloseTime||result.generatedAt||Date.now()),
     decision,symbol:result.symbol,timeframe:result.timeframe
@@ -874,7 +874,7 @@ async function persistLatestSnapshot(env, symbol, result) {
   catch (_) { snapshot = {}; }
   snapshot[result.timeframe] = result;
   snapshot.updatedAt = new Date().toISOString();
-  snapshot.storagePolicy = "batched-5m";
+  snapshot.storagePolicy = "batched-30m";
   await env.ANALYSIS_KV.put(key, JSON.stringify(snapshot), { expirationTtl: 60 * 60 * 24 * 90 });
 }
 
@@ -1020,7 +1020,7 @@ async function runOne(env, symbol, tf, options = {}) {
       durationMinutes: Number(result.analysis.durationMinutes) || ({"30m":30,"1h":60,"4h":240}[tf] || 30),
       candleCloseTime: result.candleCloseTime,
       // Anchor the horizon to the actual closed signal candle, not scheduler execution latency.
-      expectedEvaluationAt: new Date(Date.parse(result.candleCloseTime) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
+      expectedEvaluationAt: new Date(Date.parse(result.candleCloseTime) + (Number(result.analysis.durationMinutes) || ({"30m":30,"1h":60,"4h":240}[tf] || 30)) * 60 * 1000).toISOString(),
       outcome: "PENDING"
     };
     try{
@@ -1042,7 +1042,7 @@ async function runOne(env, symbol, tf, options = {}) {
       riskReward:Number(v2Testing.riskReward), decidedAt:result.generatedAt,
       candleCloseTime:result.candleCloseTime,
       durationMinutes:({"30m":30,"1h":60,"4h":240}[tf]||30),
-      expectedEvaluationAt:new Date(Date.parse(result.candleCloseTime)+({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15)*60000).toISOString(),
+      expectedEvaluationAt:new Date(Date.parse(result.candleCloseTime)+({"30m":30,"1h":60,"4h":240}[tf]||30)*60000).toISOString(),
       outcome:"PENDING"
     };
     try{
@@ -1326,7 +1326,7 @@ export default {
     if (url.pathname !== "/latest") return Response.json({ error: "Not found" }, { status: 404 });
     const symbol = url.searchParams.get("symbol");
     const timeframe = url.searchParams.get("timeframe");
-    if (!["BTC", "SOL"].includes(symbol) || !["1m", "5m", "15m", "30m", "1h", "4h"].includes(timeframe)) {
+    if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h", "4h"].includes(timeframe)) {
       return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
     }
     if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
@@ -1385,7 +1385,7 @@ export default {
           try { snapshot = await env.ANALYSIS_KV.get("latest:" + symbol, "json") || {}; } catch (_) {}
           for (const result of symbolResults) snapshot[result.timeframe] = result;
           snapshot.updatedAt = new Date().toISOString();
-          snapshot.storagePolicy = "batched-5m";
+          snapshot.storagePolicy = "batched-30m";
           try{await env.ANALYSIS_KV.put("latest:" + symbol,JSON.stringify(snapshot),{expirationTtl:60*60*24*90});}
           catch(error){console.error("Latest snapshot persistence failed",{symbol,error:String(error)});}
         }
