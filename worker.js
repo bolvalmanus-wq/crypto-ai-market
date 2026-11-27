@@ -1046,7 +1046,7 @@ async function runOne(env, symbol, tf, options = {}) {
     };
     try{
       const existingDecision = await env.ANALYSIS_KV.get("decision:" + decisionId, "json");
-      if (!existingDecision) await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {expirationTtl:60*60*24*11,metadata:decisionRecord});
+      if (!existingDecision) await env.ANALYSIS_KV.put("decision:" + decisionId, JSON.stringify(decisionRecord), {expirationTtl:60*60*24*11,metadata:{id:decisionRecord.id,symbol:decisionRecord.symbol,timeframe:decisionRecord.timeframe,decision:decisionRecord.decision,decidedAt:decisionRecord.decidedAt,outcome:decisionRecord.outcome}});
     }catch(error){
       result.storageWarnings=[...(result.storageWarnings||[]),"Legacy decision ledger unavailable"];
       console.error("Legacy decision ledger write failed",{decisionId,error:String(error)});
@@ -1068,7 +1068,7 @@ async function runOne(env, symbol, tf, options = {}) {
     };
     try{
       const existingV2Record = await env.ANALYSIS_KV.get("v2paper:"+v2Id,"json");
-      if (!existingV2Record) await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:v2Record});
+      if (!existingV2Record) await env.ANALYSIS_KV.put("v2paper:"+v2Id,JSON.stringify(v2Record),{expirationTtl:60*60*24*30,metadata:{id:v2Record.id,symbol:v2Record.symbol,timeframe:v2Record.timeframe,decision:v2Record.decision,decidedAt:v2Record.decidedAt,outcome:v2Record.outcome}});
     }catch(error){
       result.storageWarnings=[...(result.storageWarnings||[]),"V2 paper ledger unavailable"];
       console.error("V2 paper ledger write failed",{v2Id,error:String(error)});
@@ -1100,7 +1100,9 @@ async function evaluateMaturedDecisions(env) {
   const due = [];
   const intervalsForRecords = {"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
   for (const item of [...legacyKeys, ...v2Keys]) {
-    const r = item.metadata;
+    let r;
+    try { r = await env.ANALYSIS_KV.get(item.name, "json"); } catch (error) { console.error("Decision ledger read failed", {key:item.name,error:String(error)}); continue; }
+    if (!r) r = item.metadata;
     if (r && (r.decision === "LONG" || r.decision === "SHORT")) {
       // Repair older records whose target was anchored to scheduler runtime.
       const duration = intervalsForRecords[r.timeframe] || 60000;
@@ -1229,7 +1231,7 @@ async function evaluateMaturedDecisions(env) {
       }
     }
     try{
-      await env.ANALYSIS_KV.put(item.key,JSON.stringify(r),{expirationTtl:60*60*24*11,metadata:r});
+      await env.ANALYSIS_KV.put(item.key,JSON.stringify(r),{expirationTtl:60*60*24*11,metadata:{id:r.id,symbol:r.symbol,timeframe:r.timeframe,decision:r.decision,decidedAt:r.decidedAt,outcome:r.outcome}});
     }catch(error){
       console.error("Matured decision ledger update failed",{key:item.key,error:String(error)});
     }
@@ -1336,7 +1338,15 @@ export default {
           allKeys.push(...(page.keys||[]));
           cursor=page.list_complete?undefined:page.cursor;
         } while(cursor);
-        const records=allKeys.map(x=>x.metadata).filter(Boolean).sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
+        const records=[];
+        for(let offset=0;offset<allKeys.length;offset+=50){
+          const batch=await Promise.all(allKeys.slice(offset,offset+50).map(async item=>{
+            try{return await env.ANALYSIS_KV.get(item.name,"json")||item.metadata||null;}
+            catch(error){console.error("V2 paper record read failed",item.name,String(error));return null;}
+          }));
+          records.push(...batch.filter(Boolean));
+        }
+        records.sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
         const settled=records.filter(x=>["CORRECT","WRONG","NEUTRAL"].includes(x.outcome));
         const wins=settled.filter(x=>x.outcome==="CORRECT"),losses=settled.filter(x=>x.outcome==="WRONG");
         const directionalCount=wins.length+losses.length;
@@ -1405,10 +1415,15 @@ export default {
         let cursor;
         do {
           const listed = await env.ANALYSIS_KV.list({prefix:"decision:",limit:1000,...(cursor?{cursor}:{})});
-          for (const item of (listed?.keys || [])) {
-            const record = item.metadata;
-            if (record && (record.decision === "LONG" || record.decision === "SHORT") &&
-                Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
+          const keys = listed?.keys || [];
+          for (let offset = 0; offset < keys.length; offset += 50) {
+            const batch = await Promise.all(keys.slice(offset, offset + 50).map(async item => {
+              try { return await env.ANALYSIS_KV.get(item.name, "json") || item.metadata || null; }
+              catch (error) { console.error("Performance record read failed", item.name, String(error)); return null; }
+            }));
+            for (const record of batch) {
+              if (record && (record.decision === "LONG" || record.decision === "SHORT") && Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
+            }
           }
           cursor = listed?.list_complete ? undefined : listed?.cursor;
         } while (cursor);
