@@ -33,10 +33,15 @@ export async function fetchMarketWorker(env, path, init = {}) {
   const service = findWorkerServiceBinding(env);
   if (service) {
     try {
-      return await service.binding.fetch(request.clone());
+      const boundResponse = await service.binding.fetch(request.clone());
+      // Service bindings can fail with an HTTP error response without
+      // throwing. Treat 404 and 5xx as binding failures and retry the public
+      // Worker endpoint; otherwise a stale binding masks the healthy Worker.
+      if (boundResponse.status !== 404 && boundResponse.status < 500) {
+        return boundResponse;
+      }
+      console.error("MARKET_WORKER service binding returned HTTP " + boundResponse.status + "; trying HTTPS fallback");
     } catch (bindingError) {
-      // A stale or unavailable Pages Service Binding must not prevent the
-      // configured public Worker URL from serving the same API request.
       console.error("MARKET_WORKER service binding failed; trying HTTPS fallback", String(bindingError));
     }
   }
