@@ -55,8 +55,8 @@ jobs:
           curl -sS -D /tmp/health_headers "https://crypto-ai-market.pages.dev/api/worker-health" -o /tmp/health_body || true
           head -n 1 /tmp/health_headers || true
           cat /tmp/health_body || true
-          DEPLOY_URL=$(echo "$deployments" | jq -r '.result[0].url')
-          echo "Observations page smoke test on deployment: $DEPLOY_URL"
+          DEPLOY_URL="https://crypto-ai-market.pages.dev"
+          echo "Observations page smoke test on production domain: $DEPLOY_URL"
           curl -sS -L -A "Mozilla/5.0 (compatible; CryptoAIDashboardCheck/1.0)" -w "HTTP %{http_code} bytes %{size_download}\\n" "$DEPLOY_URL/observations.html?smoke=$(date +%s)" -o /tmp/observations_page
           wc -c /tmp/observations_page
           head -c 500 /tmp/observations_page
