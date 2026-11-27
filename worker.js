@@ -158,7 +158,7 @@ async function sendSignalPush(env,result) {
     catch(error){console.error("Push deduplication state write failed",String(error));}
   }
 }
-const INTERVALS = { "1m": 60 * 1000, "5m": 5 * 60 * 1000, "15m": 15 * 60 * 1000, "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
+const INTERVALS = { "30m": 30 * 60 * 1000, "1h": 60 * 60 * 1000, "4h": 4 * 60 * 60 * 1000 };
 
 function ema(values, period) {
   const k = 2 / (period + 1); let value = values[0];
@@ -337,7 +337,7 @@ function analyze(data, tf) {
 
 function buildIntradayMovement(data){
   const now=Date.now(),today=new Date(now),cutoff=Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate());
-  const bars=(data.candles?.["5m"]||[]).filter(c=>c&&c.confirmed&&[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.close>0&&c.time>=cutoff&&c.time<=now).sort((a,b)=>a.time-b.time);
+  const bars=(data.candles?.["30m"]||[]).filter(c=>c&&c.confirmed&&[c.time,c.open,c.high,c.low,c.close].every(Number.isFinite)&&c.close>0&&c.time>=cutoff&&c.time<=now).sort((a,b)=>a.time-b.time);
   const hours=new Map();
   for(const c of bars){
     const hourStart=Math.floor(c.time/3600000)*3600000;
@@ -350,22 +350,22 @@ function buildIntradayMovement(data){
   const segments=[];
   let segment=null,previousClose=null,previousTime=null;
   for(const c of bars){
-    if(previousTime!==null&&c.time-previousTime!==300000){if(segment)segments.push(segment);segment=null;previousClose=null;}
+    if(previousTime!==null&&c.time-previousTime!==1800000){if(segment)segments.push(segment);segment=null;previousClose=null;}
     const direction=previousClose===null?(c.close>c.open?"UP":c.close<c.open?"DOWN":"FLAT"):(c.close>previousClose?"UP":c.close<previousClose?"DOWN":"FLAT");
     if(!segment||segment.direction!==direction){
       if(segment)segments.push(segment);
-      segment={startTime:c.time,endTime:c.time+300000,startPrice:previousClose===null?c.open:previousClose,endPrice:c.close,high:c.high,low:c.low,candles:1,direction};
+      segment={startTime:c.time,endTime:c.time+1800000,startPrice:previousClose===null?c.open:previousClose,endPrice:c.close,high:c.high,low:c.low,candles:1,direction};
     }else{
-      segment.endTime=c.time+300000;segment.endPrice=c.close;segment.high=Math.max(segment.high,c.high);segment.low=Math.min(segment.low,c.low);segment.candles++;
+      segment.endTime=c.time+1800000;segment.endPrice=c.close;segment.high=Math.max(segment.high,c.high);segment.low=Math.min(segment.low,c.low);segment.candles++;
     }
     previousClose=c.close;previousTime=c.time;
   }
   if(segment)segments.push(segment);
-  const movementSegments=segments.filter(s=>s.direction!=="FLAT"&&s.candles>=2).map(s=>({startTime:new Date(s.startTime).toISOString(),endTime:new Date(s.endTime).toISOString(),startPrice:Number(s.startPrice.toFixed(8)),endPrice:Number(s.endPrice.toFixed(8)),high:Number(s.high.toFixed(8)),low:Number(s.low.toFixed(8)),durationMinutes:s.candles*5,candles:s.candles,direction:s.direction,changePct:Number(((s.endPrice/s.startPrice-1)*100).toFixed(3))}));
+  const movementSegments=segments.filter(s=>s.direction!=="FLAT"&&s.candles>=2).map(s=>({startTime:new Date(s.startTime).toISOString(),endTime:new Date(s.endTime).toISOString(),startPrice:Number(s.startPrice.toFixed(8)),endPrice:Number(s.endPrice.toFixed(8)),high:Number(s.high.toFixed(8)),low:Number(s.low.toFixed(8)),durationMinutes:s.candles*30,candles:s.candles,direction:s.direction,changePct:Number(((s.endPrice/s.startPrice-1)*100).toFixed(3))}));
   const rises=movementSegments.filter(s=>s.direction==="UP").sort((a,b)=>b.changePct-a.changePct);
   const falls=movementSegments.filter(s=>s.direction==="DOWN").sort((a,b)=>a.changePct-b.changePct);
-  const expectedCandles=Math.max(0,Math.floor((now-cutoff)/300000));
-  return {timeframe:"5m grouped by UTC hour and directional runs",windowStart:bars.length?new Date(bars[0].time).toISOString():null,windowEnd:bars.length?new Date(bars[bars.length-1].time+300000).toISOString():null,candleCount:bars.length,expectedCandles,coverageHours:Number((bars.length*5/60).toFixed(1)),completeWindow:expectedCandles>0&&bars.length>=expectedCandles*.9,hourly,segments:movementSegments,strongestRise:ranked.slice().sort((a,b)=>b.changePct-a.changePct)[0]||null,strongestFall:ranked.slice().sort((a,b)=>a.changePct-b.changePct)[0]||null,strongestRiseSegment:rises[0]||null,strongestFallSegment:falls[0]||null,topRiseSegments:rises.slice(0,3),topFallSegments:falls.slice(0,3)};
+  const expectedCandles=Math.max(0,Math.floor((now-cutoff)/1800000));
+  return {timeframe:"30m grouped by UTC hour and directional runs",windowStart:bars.length?new Date(bars[0].time).toISOString():null,windowEnd:bars.length?new Date(bars[bars.length-1].time+300000).toISOString():null,candleCount:bars.length,expectedCandles,coverageHours:Number((bars.length*30/60).toFixed(1)),completeWindow:expectedCandles>0&&bars.length>=expectedCandles*.9,hourly,segments:movementSegments,strongestRise:ranked.slice().sort((a,b)=>b.changePct-a.changePct)[0]||null,strongestFall:ranked.slice().sort((a,b)=>a.changePct-b.changePct)[0]||null,strongestRiseSegment:rises[0]||null,strongestFallSegment:falls[0]||null,topRiseSegments:rises.slice(0,3),topFallSegments:falls.slice(0,3)};
 }
 
 function calculateAgentIndicatorSets(market){
@@ -480,35 +480,12 @@ function calculateAdvancedIndicatorScore(sets, baseScore, marketIndicators = {})
 }
 
 function buildThirtyMinuteCandles(data) {
-  // Prefer the provider's native 30m history; 5m aggregation is a fallback only.
+  // Use only the native 30m candle feed; shorter intervals are not supported.
   const native = (data.candles?.["30m"] || [])
     .filter(c => c && c.confirmed === true && [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) && c.close > 0)
     .sort((a,b) => a.time - b.time);
   if (native.length >= 30) return native;
-  // Build confirmed 30m bars only from six contiguous confirmed 5m candles.
-  const source = (data.candles?.["5m"] || [])
-    .filter(c => c && c.confirmed === true && [c.time,c.open,c.high,c.low,c.close,c.volume].every(Number.isFinite) && c.close > 0)
-    .sort((a,b) => a.time - b.time);
-  const buckets = new Map();
-  for (const candle of source) {
-    const bucket = Math.floor(candle.time / (30 * 60 * 1000)) * (30 * 60 * 1000);
-    if (!buckets.has(bucket)) buckets.set(bucket, []);
-    buckets.get(bucket).push(candle);
-  }
-  const result = [];
-  for (const [time, rows] of buckets) {
-    rows.sort((a,b) => a.time - b.time);
-    if (rows.length !== 6 || rows.some((row,i) => row.time !== time + i * 5 * 60 * 1000)) continue;
-    result.push({
-      time, open: rows[0].open,
-      high: Math.max(...rows.map(x => x.high)),
-      low: Math.min(...rows.map(x => x.low)),
-      close: rows[5].close,
-      volume: rows.reduce((sum,x) => sum + x.volume, 0),
-      confirmed: true
-    });
-  }
-  return result;
+  return native;
 }
 
 function buildFourHourCandles(data) {
@@ -739,8 +716,8 @@ async function runIndependentAnalysts(env, symbol, tf, market) {
   };
 }
 function recommendedDurationMinutes(market, confidenceScore) {
-  const tf = market.timeframe || "1m";
-  const base = {"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1;
+  const tf = market.timeframe || "30m";
+  const base = {"30m":30,"1h":60,"4h":240}[tf] || 30;
   let multiplier = confidenceScore >= 88 ? 3 : confidenceScore >= 78 ? 2 : 1;
   const price = Number(market.ticker?.last);
   const atr = Number(market.indicators?.atr);
@@ -770,7 +747,7 @@ function finalDecision(market, council) {
   const ranked = ["LONG","SHORT"].sort((a,b)=>counts[b]-counts[a]);
   const candidate = ranked[0], opposing = ranked[1];
   const margin = counts[candidate] - counts[opposing];
-  // With only two independent analysts (the fast 5m/15m council), one clear
+  // With only two independent analysts, one clear
   // directional vote plus one WAIT may proceed only if technical, higher-TF,
   // market-data and hard-risk checks all independently confirm it. Opposing
   // LONG/SHORT votes still produce WAIT. Three or more reviewers need majority.
@@ -779,9 +756,9 @@ function finalDecision(market, council) {
   const score = Number(market.indicators.technicalScore) || 0;
   const technicalSupports = candidate === "LONG" ? score >= 0.18 : score <= -0.18;
   // Require directional agreement from every higher timeframe:
-  // fast entries use 15m/1h/4h context; 30m entries use 1h/4h; 1h setups use 4h trend.
+  // 30m entries use 1h/4h context; 1h setups use 4h trend.
   const higher = market.higherTimeframe || {};
-  const fastTimeframe = ["1m","5m","15m","30m"].includes(market.timeframe);
+  const fastTimeframe = market.timeframe === "30m";
   const requiredHigherSignals = higher.requiredSignals || (higher.timeframe === "1h" ? [higher.signal, higher.fourHour?.signal] : [higher.signal]);
   // WAIT/neutral on a higher timeframe is not automatically a veto; only an explicit opposite trend blocks an entry.
   const oppositeSignal = candidate === "LONG" ? "SHORT" : "LONG";
@@ -791,7 +768,7 @@ function finalDecision(market, council) {
   const strongestHigherSignal = fastTimeframe
     ? (higher.oneHourSignal || (requiredHigherSignals.length > 1 ? requiredHigherSignals[1] : higher.signal))
     : (higher.fourHour?.signal || higher.signal || (requiredHigherSignals.length ? requiredHigherSignals[requiredHigherSignals.length - 1] : "WAIT"));
-  // 15m/1h opposition is a caution for fast entries, not an automatic veto; only the 4h context can hard-veto the direction.
+  // Higher-timeframe opposition is a caution; the 4h context remains the primary risk filter.
   const higherAligned = Boolean(strongestHigherSignal) && strongestHigherSignal !== oppositeSignal;
   const lowerTimeframeConflict = requiredHigherSignals.some(signal => signal === oppositeSignal) && !higherAligned;
   // Broad 4h trend warnings are context, not automatic vetoes for intraday reversals.
@@ -935,16 +912,7 @@ async function runOne(env, symbol, tf, options = {}) {
   market.timeframe = tf;
   // Check adjacent and broader 4h market structure before accepting a direction.
   const fourHour = buildFourHourContext(data);
-  if (tf === "1m" || tf === "5m") {
-    let fifteen = "WAIT", hourly = "WAIT";
-    try { fifteen = analyze(data, "15m").indicators.technicalSignal; } catch (_) {}
-    try { hourly = analyze(data, "1h").indicators.technicalSignal; } catch (_) {}
-    market.higherTimeframe = { timeframe: "15m", signal: fifteen, requiredSignals: [fifteen, hourly, fourHour.signal], oneHourSignal: hourly, fourHour };
-  } else if (tf === "15m") {
-    let hourly = "WAIT";
-    try { hourly = analyze(data, "1h").indicators.technicalSignal; } catch (_) {}
-    market.higherTimeframe = { timeframe: "1h", signal: hourly, requiredSignals: [hourly, fourHour.signal], fourHour };
-  } else if (tf === "30m") {
+  if (tf === "30m") {
     try {
       const other = analyze(data, "1h");
       market.higherTimeframe = { timeframe: "1h", signal: other.indicators.technicalSignal, score: other.indicators.technicalScore, rsi: other.indicators.rsi, ema9: other.indicators.ema9, ema21: other.indicators.ema21, requiredSignals: [other.indicators.technicalSignal, fourHour.signal], fourHour };
@@ -980,7 +948,7 @@ async function runOne(env, symbol, tf, options = {}) {
     advanced.agreement < 3 ? "চারটি বিশ্লেষণ দলের অন্তত তিনটি একই দিকে একমত নয়; WAIT" :
     "বাজারের অবস্থা ও সম্মিলিত স্কোরে প্রবেশের যথেষ্ট সুবিধা নেই";
   const candidate=technical.technicalSignal,higher=market.higherTimeframe||{};
-  const higherSignals=(tf==="1m"||tf==="5m")?[...(higher.requiredSignals||[]),higher.oneHourSignal,higher.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT"):(tf==="15m"||tf==="30m")?[higher.signal,higher.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT"):[higher.fourHour?.signal||higher.signal].filter(x=>x==="LONG"||x==="SHORT");
+  const higherSignals=tf==="30m"?[higher.signal,higher.fourHour?.signal].filter(x=>x==="LONG"||x==="SHORT"):[higher.fourHour?.signal||higher.signal].filter(x=>x==="LONG"||x==="SHORT");
   const higherSignal=higherSignals[0]||"WAIT";
   const opposite=candidate==="LONG"?"SHORT":"LONG";
   const hardRisk=candidate==="LONG"?market.riskEngine?.confirmedSupportBreakdown===true:candidate==="SHORT"?market.riskEngine?.confirmedResistanceBreakout===true:false;
@@ -998,16 +966,16 @@ async function runOne(env, symbol, tf, options = {}) {
   if(candidate!=="WAIT"&&(!Number.isFinite(trendStrength)||trendStrength<18)){decision="WAIT";decisionReason="ADX ১৮-এর নিচে; প্রবণতার শক্তি যথেষ্ট নয়";}
   if(candidate!=="WAIT"&&decision!=="WAIT"&&!momentumConfirmed){decision="WAIT";decisionReason="MACD ও directional movement একই দিকে নিশ্চিত নয়";}
   if(candidate!=="WAIT"&&decision!=="WAIT"&&higherSignals.includes(opposite)){decision="WAIT";decisionReason="এক বা একাধিক উচ্চতর টাইমফ্রেমে বিপরীত সংকেত; তাই ঝুঁকি এড়াতে WAIT";}
-  const needsHigherAgreement=["1m","5m","15m","30m","1h"].includes(tf);
+  const needsHigherAgreement=["30m","1h"].includes(tf);
   if(candidate!=="WAIT"&&decision!=="WAIT"&&needsHigherAgreement&&!higherSignals.includes(candidate)){decision="WAIT";decisionReason="উচ্চতর টাইমফ্রেমে একই দিকের সমর্থন নেই; তাই WAIT";}
   if(candidate!=="WAIT"&&decision!=="WAIT"&&hardRisk){decision="WAIT";decisionReason="৪ ঘণ্টার কাঠামোয় বিপরীত দিকের নিশ্চিত ব্রেক; তাই WAIT";}
   const analysis={decision,direction:decision==="LONG"?"UPWARD":decision==="SHORT"?"DOWNWARD":"SIDEWAYS",directionalBias:candidate,
     confidenceScore:Math.min(95,Math.round(Math.abs(technical.technicalScore)*100)),
-    durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||5),reason:decisionReason,
+    durationMinutes:({"30m":30,"1h":60,"4h":240}[tf]||30),reason:decisionReason,
     risk:"শুধু গাণিতিক ইন্ডিকেটর-সম্মিলন; confidence হলো স্কোরের মাত্রা, লাভের সম্ভাবনা নয়। প্রবেশের আগে stop-loss ও position sizing যাচাই করুন।",dataQuality:"GOOD"};
   // Isolated V2 research path: consumes only confirmed candles and never changes legacy signals.
   // Share the same confirmed, timeframe-complete candle set with V2.
-  // In particular, 30m is aggregated from six contiguous confirmed 5m bars above.
+  // V2 receives the same native 30m/1h/4h candle set as the main engine.
   const v2Data = analysisData;
   const v2Testing = evaluateV2({ symbol, timeframe: tf, data: v2Data, market, now: Date.now(), accountEquity: null, config: { riskPct: 0.5, maxSpreadPct: 0.10, atrStopMultiple: 1.5 } });
   const result={symbol,timeframe:tf,provider:"Indicator Engine Only · AI Disabled",
@@ -1049,7 +1017,7 @@ async function runOne(env, symbol, tf, options = {}) {
       },
       entryPrice: Number(market.ticker.last),
       decidedAt: result.generatedAt,
-      durationMinutes: Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1),
+      durationMinutes: Number(result.analysis.durationMinutes) || ({"30m":30,"1h":60,"4h":240}[tf] || 30),
       candleCloseTime: result.candleCloseTime,
       // Anchor the horizon to the actual closed signal candle, not scheduler execution latency.
       expectedEvaluationAt: new Date(Date.parse(result.candleCloseTime) + (Number(result.analysis.durationMinutes) || ({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf] || 1)) * 60 * 1000).toISOString(),
@@ -1073,7 +1041,7 @@ async function runOne(env, symbol, tf, options = {}) {
       takeProfit1:Number(v2Testing.takeProfit1), takeProfit2:Number(v2Testing.takeProfit2),
       riskReward:Number(v2Testing.riskReward), decidedAt:result.generatedAt,
       candleCloseTime:result.candleCloseTime,
-      durationMinutes:({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15),
+      durationMinutes:({"30m":30,"1h":60,"4h":240}[tf]||30),
       expectedEvaluationAt:new Date(Date.parse(result.candleCloseTime)+({"1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240}[tf]||15)*60000).toISOString(),
       outcome:"PENDING"
     };
@@ -1109,14 +1077,15 @@ async function evaluateMaturedDecisions(env) {
     listAll("v2paper:")
   ]);
   const due = [];
-  const intervalsForRecords = {"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
+  const intervalsForRecords = {"30m":1800000,"1h":3600000,"4h":14400000};
   for (const item of [...legacyKeys, ...v2Keys]) {
     let r;
     try { r = await env.ANALYSIS_KV.get(item.name, "json"); } catch (error) { console.error("Decision ledger read failed", {key:item.name,error:String(error)}); continue; }
     if (!r) r = item.metadata;
     if (r && (r.decision === "LONG" || r.decision === "SHORT")) {
       // Repair older records whose target was anchored to scheduler runtime.
-      const duration = intervalsForRecords[r.timeframe] || 60000;
+      const duration = intervalsForRecords[r.timeframe];
+      if (!duration) continue;
       const tolerance = Math.max(90000, duration * 0.25);
       // Retry scheduler-late results that the report excludes as UNVERIFIED.
       // KV metadata still retains the original CORRECT/WRONG result, so detect it by delay.
@@ -1149,10 +1118,11 @@ async function evaluateMaturedDecisions(env) {
       console.error("Matured decision market data unavailable", { symbol, error: String(error) });
     }
   }));
-  const intervals = {"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000};
+  const intervals = {"30m":1800000,"1h":3600000,"4h":14400000};
   for (const item of due) {
     const r = item.record, target = Date.parse(r.expectedEvaluationAt);
-    const duration = intervals[r.timeframe] || 60000;
+    const duration = intervals[r.timeframe];
+    if (!duration) continue;
     const bars = markets[r.symbol]?.[r.timeframe] || [];
     let best = null, bestDelta = Infinity;
     for (const candle of bars) {
@@ -1165,7 +1135,7 @@ async function evaluateMaturedDecisions(env) {
     // outcomes directly from Bybit's historical kline endpoint around the exact target.
     const tolerance = Math.max(30000, Math.min(60000, duration * 0.2));
     if (!best || bestDelta > tolerance) {
-      const bybitIntervals = {"1m":"1","5m":"5","15m":"15","30m":"30","1h":"60","4h":"240"};
+      const bybitIntervals = {"30m":"30","1h":"60","4h":"240"};
       const start = target - duration;
       const end = target + 1000;
       try {
@@ -1254,10 +1224,10 @@ export default {
         service: "crypto-ai-market-worker",
         timestamp: new Date().toISOString(),
         analysisKv: !!env.ANALYSIS_KV,
-        routes: ["/latest", "/performance", "/v2/performance", "/v2/backtest"]
+        routes: ["/latest", "/analyze"]
       }, { headers: { "Cache-Control": "no-store" } });
     }
-    const protectedPostPaths = new Set(["/analyze","/v2/backtest","/push/subscribe","/push/unsubscribe","/push/test"]);
+    const protectedPostPaths = new Set(["/analyze","/push/subscribe","/push/unsubscribe","/push/test"]);
     if(request.method==="POST"&&protectedPostPaths.has(url.pathname)&&request.headers.get("Origin")!==PAGE_URL){
       return Response.json({error:"এই কাজটি শুধু অফিসিয়াল অ্যাপ থেকে করা যাবে"},{status:403,headers:{"Cache-Control":"no-store"}});
     }
@@ -1335,185 +1305,11 @@ export default {
     if (url.pathname === "/v2/status" && request.method === "GET") {
       return Response.json({ version:"V2", mode:"TESTING_ONLY", liveTrading:false, legacySystem:"UNCHANGED", modules:["market-regime","multi-timeframe","trend","breakout","range","reversal-screen","weighted-validation","risk-check","preliminary-backtest"], limitations:["V2 does not place orders or send trade notifications","Position size requires account equity input","BOS/CHoCH/liquidity-sweep strategy remains disabled until swing validation is implemented","Backtest endpoint is preliminary single-timeframe simulation, not full walk-forward validation"] }, {headers:{"Cache-Control":"no-store"}});
     }
-    if (url.pathname === "/v2/performance" && request.method === "GET") {
-      try {
-        if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
-        const allKeys=[];
-        let cursor;
-        do {
-          const page=await env.ANALYSIS_KV.list({prefix:"v2paper:",limit:1000,...(cursor?{cursor}:{})});
-          allKeys.push(...(page.keys||[]));
-          cursor=page.list_complete?undefined:page.cursor;
-        } while(cursor);
-        const records=[];
-        for(let offset=0;offset<allKeys.length;offset+=50){
-          const batch=await Promise.all(allKeys.slice(offset,offset+50).map(async item=>{
-            try{return await env.ANALYSIS_KV.get(item.name,"json")||item.metadata||null;}
-            catch(error){console.error("V2 paper record read failed",item.name,String(error));return null;}
-          }));
-          records.push(...batch.filter(Boolean));
-        }
-        records.sort((a,b)=>Date.parse(b.decidedAt)-Date.parse(a.decidedAt));
-        const settled=records.filter(x=>["CORRECT","WRONG","NEUTRAL"].includes(x.outcome));
-        const wins=settled.filter(x=>x.outcome==="CORRECT"),losses=settled.filter(x=>x.outcome==="WRONG");
-        const directionalCount=wins.length+losses.length;
-        const sumTradeReturnPct=settled.reduce((a,x)=>a+(Number.isFinite(Number(x.pnlPct))?Number(x.pnlPct):0),0);
-        return Response.json({version:"V2",mode:"PAPER_TRADING_ONLY",liveTrading:false,total:records.length,evaluated:settled.length,correct:wins.length,wrong:losses.length,neutral:settled.filter(x=>x.outcome==="NEUTRAL").length,pending:records.filter(x=>x.outcome==="PENDING").length,unverified:records.filter(x=>x.outcome==="UNVERIFIED").length,directionalTrades:directionalCount,minimumDirectionalTrades:100,accuracy:directionalCount>=100?Math.round(wins.length/directionalCount*1000)/10:null,accuracyStatus:directionalCount>=100?"SAMPLE_THRESHOLD_REACHED_NOT_VALIDATED":"INSUFFICIENT_PAPER_SAMPLE",netPnlPct:null,sumTradeReturnPct,netPnlNote:"অ্যাকাউন্ট ইকুইটি ও বাস্তব position sizing ছাড়া portfolio net PnL গণনা করা যায় না; এটি শুধু প্রতি-trade price return-এর যোগফল",records:records.slice(0,200)},{headers:{"Cache-Control":"no-store"}});
-      }catch(error){return Response.json({error:"V2 paper report failed",details:error instanceof Error?error.message:String(error)},{status:500});}
-    }
-    if (url.pathname === "/v2/backtest" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { return Response.json({error:"Invalid request"},{status:400}); }
-      const symbol=body?.symbol, timeframe=body?.timeframe||"15m";
-      if(!["BTC","SOL"].includes(symbol)||!["1m","5m","15m","30m","1h","4h"].includes(timeframe))return Response.json({error:"Unsupported symbol or timeframe"},{status:400});
-      try{
-        // Fetch a deeper, paginated Bybit history for research; keep the live market feed untouched.
-        const intervalByTf={"1m":"1","5m":"5","15m":"15","30m":"30","1h":"60","4h":"240"};
-        const intervalMs=INTERVALS[timeframe];
-        const symbolCode=symbol+"USDT";
-        const historical=[];
-        let end=Date.now(),historyError=null;
-        for(let page=0;page<10;page++){
-          const apiUrl="https://api.bybit.com/v5/market/kline?category=linear&symbol="+symbolCode+"&interval="+intervalByTf[timeframe]+"&limit=1000&end="+end;
-          const response=await fetch(apiUrl,{headers:{Accept:"application/json"},signal:AbortSignal.timeout(2500)});
-          if(!response.ok)throw new Error("Bybit history HTTP "+response.status);
-          const payload=await response.json();
-          if(payload.retCode!==0||!Array.isArray(payload.result?.list))throw new Error("Bybit history: "+(payload.retMsg||"invalid response"));
-          const rows=payload.result.list;
-          if(!rows.length)break;
-          historical.push(...rows);
-          const oldest=Math.min(...rows.map(row=>Number(row[0])).filter(Number.isFinite));
-          if(!Number.isFinite(oldest)||oldest<=0||rows.length<1000)break;
-          end=oldest-1;
-        }
-        const unique=new Map();
-        for(const row of historical){
-          const time=Number(row[0]);
-          if(!Number.isFinite(time))continue;
-          unique.set(time,{time,open:Number(row[1]),high:Number(row[2]),low:Number(row[3]),close:Number(row[4]),volume:Number(row[5]),confirmed:time+intervalMs<=Date.now()});
-        }
-        const bars=[...unique.values()].sort((a,b)=>a.time-b.time);
-        if(bars.length<220)throw new Error("Bybit historical candles insufficient: "+bars.length);
-        const report=backtestV2({candles:bars,timeframe,feeBps:6,slippageBps:3,holdBars:1,minimumTrades:500});
-        report.historySource="Bybit paginated historical candles";
-        report.historyPages=Math.ceil(bars.length/1000);
-        return Response.json({symbol,mode:"TESTING_ONLY",report},{headers:{"Cache-Control":"no-store"}});
-      }catch(error){
-        historyError=error instanceof Error?error.message:String(error);
-        // If historical pagination is unavailable, retain a clearly-labelled fallback rather than fail the report.
-        try{
-          const data=await loadMarketData(symbol);
-          const bars=data.candles?.[timeframe]||[];
-          const report=backtestV2({candles:bars,timeframe,feeBps:6,slippageBps:3,holdBars:1,minimumTrades:500});
-          report.historySource="Live market API fallback (limited history)";
-          report.historyWarning=historyError;
-          return Response.json({symbol,mode:"TESTING_ONLY",report},{headers:{"Cache-Control":"no-store"}});
-        }catch(fallbackError){throw new Error(historyError+"; fallback: "+(fallbackError instanceof Error?fallbackError.message:String(fallbackError)));}
-      }
-    }
-    if (url.pathname === "/performance" && request.method === "GET") {
-      try {
-        if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
-        const now = Date.now(), cutoff = now - 10 * 24 * 60 * 60 * 1000;
-        // Paginate the complete 10-day ledger; KV list() returns at most 1,000 keys per page.
-        const records = [];
-        let cursor;
-        do {
-          const listed = await env.ANALYSIS_KV.list({prefix:"decision:",limit:1000,...(cursor?{cursor}:{})});
-          const keys = listed?.keys || [];
-          for (let offset = 0; offset < keys.length; offset += 50) {
-            const batch = await Promise.all(keys.slice(offset, offset + 50).map(async item => {
-              try { return await env.ANALYSIS_KV.get(item.name, "json") || item.metadata || null; }
-              catch (error) { console.error("Performance record read failed", item.name, String(error)); return null; }
-            }));
-            for (const record of batch) {
-              if (record && (record.decision === "LONG" || record.decision === "SHORT") && Number.isFinite(Date.parse(record.decidedAt)) && Date.parse(record.decidedAt) >= cutoff) records.push(record);
-            }
-          }
-          cursor = listed?.list_complete ? undefined : listed?.cursor;
-        } while (cursor);
-        const intervalMs = ({"1m":60000,"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000});
-        for (const record of records) {
-          const delay = Number(record.evaluationDelayMs);
-          const tolerance = Math.max(90000, (intervalMs[record.timeframe]||60000) * 0.25);
-          if ((record.outcome === "CORRECT" || record.outcome === "WRONG") && record.pnlPct !== null && record.pnlPct !== undefined && Number.isFinite(Number(record.pnlPct)) && Math.abs(Number(record.pnlPct)) <= 0.01) {
-            record.outcome = "NEUTRAL";
-            record.evaluationNote = "দামের পরিবর্তন ০.০১%-এর মধ্যে; নিরপেক্ষ ফল, সঠিকতা গণনায় ধরা হবে না";
-          }
-          if ((record.outcome === "CORRECT" || record.outcome === "WRONG") && Number.isFinite(delay) && delay > tolerance) {
-            record.outcome = "UNVERIFIED";
-            record.evaluationNote = "পুরোনো ফল নির্ধারিত সময়ের অনেক পরে যাচাই হয়েছিল; সঠিকতার হিসাব থেকে বাদ";
-          }
-        }
-        records.sort((a,b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt));
-        const last24 = records.filter(x => Date.parse(x.decidedAt) >= now - 86400000);
-        const settled = records.filter(x => ["CORRECT","WRONG","NEUTRAL"].includes(x.outcome));
-        const correct = settled.filter(x => x.outcome === "CORRECT").length;
-        const wrong = settled.filter(x => x.outcome === "WRONG").length;
-        const neutral = settled.filter(x => x.outcome === "NEUTRAL").length;
-        const directional = correct + wrong;
-        const evaluatedLast24 = settled.filter(x => Date.parse(x.evaluatedAt || 0) >= now - 86400000);
-        const summary = {
-          total: records.length, correct, wrong, neutral,
-          evaluated: settled.length,
-          pending: records.filter(x => x.outcome === "PENDING").length,
-          unverified: records.filter(x => x.outcome === "UNVERIFIED").length,
-          accuracy: directional ? Math.round(correct / directional * 1000) / 10 : null,
-          last24: {
-            total: last24.length,
-            correct: last24.filter(x => x.outcome === "CORRECT").length,
-            wrong: last24.filter(x => x.outcome === "WRONG").length,
-            neutral: last24.filter(x => x.outcome === "NEUTRAL").length,
-            pending: last24.filter(x => x.outcome === "PENDING").length,
-            unverified: last24.filter(x => x.outcome === "UNVERIFIED").length
-          },
-          evaluatedLast24: {
-            total: evaluatedLast24.length,
-            correct: evaluatedLast24.filter(x => x.outcome === "CORRECT").length,
-            wrong: evaluatedLast24.filter(x => x.outcome === "WRONG").length,
-            neutral: evaluatedLast24.filter(x => x.outcome === "NEUTRAL").length
-          }
-        };
-        // Per-indicator directional hit-rate. Only future records carrying a
-        // timestamped indicator snapshot are included; old decisions are not guessed.
-        const indicatorKeys = ["ichimoku","vwap","volumeProfile","fibonacci","parabolicSar","cci","williamsR","aroon","donchian","keltner","supertrend","obv","mfi","chaikin","roc","ultimateOscillator","trix","dpo"];
-        const indicatorStats = {};
-        for (const key of indicatorKeys) {
-          const sample = settled.filter(r => {
-            const value = Number(r.indicatorSnapshot?.components?.[key]);
-            return Number.isFinite(value) && Math.abs(value) > 0.000001 && Number.isFinite(Number(r.marketMovePct)) && Math.abs(Number(r.marketMovePct)) > 0.01;
-          });
-          const correctCount = sample.filter(r => Math.sign(Number(r.indicatorSnapshot.components[key])) === Math.sign(Number(r.marketMovePct))).length;
-          indicatorStats[key] = { sample: sample.length, correct: correctCount, wrong: sample.length - correctCount, accuracy: sample.length ? Math.round(correctCount / sample.length * 1000) / 10 : null };
-        }
-        const dailyMap = {};
-        for (const r of records) {
-          const dayParts = new Intl.DateTimeFormat("en-CA",{timeZone:"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(r.decidedAt));
-          const dayValues = Object.fromEntries(dayParts.filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
-          const day = dayValues.year+"-"+dayValues.month+"-"+dayValues.day;
-          if (!dailyMap[day]) dailyMap[day] = { date: day, total: 0, correct: 0, wrong: 0, pending: 0, records: [] };
-          const d = dailyMap[day];
-          d.total++;
-          if (r.outcome === "CORRECT") d.correct++;
-          else if (r.outcome === "WRONG") d.wrong++;
-          else if (r.outcome === "NEUTRAL") d.neutral = (d.neutral||0) + 1;
-          else if (r.outcome === "UNVERIFIED") d.unverified = (d.unverified||0) + 1;
-          else d.pending++;
-          d.records.push(r);
-        }
-        return Response.json({ summary, indicatorStats, daily: Object.values(dailyMap).sort((a,b)=>b.date.localeCompare(a.date)), records },
-          { headers: { "Cache-Control": "no-store" } });
-      } catch (error) {
-        console.error("Performance report failed", error instanceof Error ? error.stack : String(error));
-        return Response.json({ error: "Performance report failed", details: error instanceof Error ? error.message : String(error) },
-          { status: 500, headers: { "Cache-Control": "no-store" } });
-      }
-    }
     if (url.pathname === "/analyze" && request.method === "POST") {
       let body;
       try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
       const { symbol, timeframe } = body || {};
-      if (!["BTC", "SOL"].includes(symbol) || !["1m", "5m", "15m", "30m", "1h", "4h"].includes(timeframe)) {
+      if (!["BTC", "SOL"].includes(symbol) || !["30m", "1h", "4h"].includes(timeframe)) {
         return Response.json({ error: "Unsupported symbol or timeframe" }, { status: 400 });
       }
       if (!env.ANALYSIS_KV) return Response.json({ error: "ANALYSIS_KV binding is missing" }, { status: 503 });
@@ -1560,9 +1356,6 @@ export default {
     }));
     const tasks = [];
     for (const symbol of ["BTC", "SOL"]) {
-      tasks.push({symbol,timeframe:"1m"});
-      if (minute % 5 === 0) tasks.push({symbol,timeframe:"5m"});
-      if (minute % 15 === 0) tasks.push({symbol,timeframe:"15m"});
       if (minute % 30 === 0) tasks.push({symbol,timeframe:"30m"});
       if (minute === 0) tasks.push({symbol,timeframe:"1h"});
       if (minute === 0 && scheduledDate.getUTCHours() % 4 === 0) tasks.push({symbol,timeframe:"4h"});
