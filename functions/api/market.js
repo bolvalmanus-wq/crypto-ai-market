@@ -13,9 +13,6 @@ export async function onRequestGet({ request }) {
   const hosts = ["https://www.okx.com", "https://openapi.okx.com", "https://eea.okx.com"];
   const paths = [
     `/api/v5/market/ticker?instId=${instId}`,
-    `/api/v5/market/candles?instId=${instId}&bar=1m&limit=300`,
-    `/api/v5/market/candles?instId=${instId}&bar=5m&limit=300`,
-    `/api/v5/market/candles?instId=${instId}&bar=15m&limit=300`,
     `/api/v5/market/candles?instId=${instId}&bar=30m&limit=300`,
     `/api/v5/market/candles?instId=${instId}&bar=1H&limit=300`,
     `/api/v5/market/candles?instId=${instId}&bar=4H&limit=300`,
@@ -48,11 +45,8 @@ export async function onRequestGet({ request }) {
       return { ...payload.result, _serverTime: Number(payload.time) };
     };
     const symbolCode = symbol + "USDT";
-    const [tickerResult, k1, k5, k15, k30, k60, k240, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
+    const [tickerResult, k30, k60, k240, oi30, oi60, ratio30, ratio60, orderbook, funding] = await Promise.all([
       bybitGet("/v5/market/tickers?category=linear&symbol=" + symbolCode),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=1&limit=1000"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=5&limit=1000"),
-      bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=15&limit=1000"),
       bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=30&limit=1000"),
       bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=60&limit=1000"),
       bybitGet("/v5/market/kline?category=linear&symbol=" + symbolCode + "&interval=240&limit=1000"),
@@ -76,7 +70,7 @@ export async function onRequestGet({ request }) {
       }
       return [...unique.values()].sort((a,b)=>a.time-b.time);
     };
-    const candles={"1m":mapBars(k1.list,60000),"5m":mapBars(k5.list,300000),"15m":mapBars(k15.list,900000),"30m":mapBars(k30.list,1800000),"1h":mapBars(k60.list,3600000),"4h":mapBars(k240.list,14400000)};
+    const candles={"30m":mapBars(k30.list,1800000),"1h":mapBars(k60.list,3600000),"4h":mapBars(k240.list,14400000)};
     if(!Number.isFinite(timestamp)||timestamp<=0||timestamp>Date.now()+10000||ageSeconds>180||!ticker||!Number.isFinite(Number(ticker.lastPrice))||Number(ticker.lastPrice)<=0||!Number.isFinite(Number(ticker.prevPrice24h))||Number(ticker.prevPrice24h)<=0||!Number.isFinite(Number(ticker.bid1Price))||!Number.isFinite(Number(ticker.ask1Price))||Number(ticker.bid1Price)<=0||Number(ticker.ask1Price)<=0||Number(ticker.ask1Price)<Number(ticker.bid1Price)||Object.values(candles).some(rows=>rows.length<30))throw new Error("Bybit returned invalid or incomplete market data");
     const prev = Number(ticker.prevPrice24h);
     return Response.json({
@@ -102,14 +96,11 @@ export async function onRequestGet({ request }) {
       const payloads = await Promise.all(paths.map(path => requestJson(host, path)));
 
       const ticker = payloads[0].data[0];
-      const candles1m = payloads[1].data;
-      const candles5m = payloads[2].data;
-      const candles15m = payloads[3].data;
-      const candles30m = payloads[4].data;
-      const candles1h = payloads[5].data;
-      const candles4h = payloads[6].data;
-      if (!ticker || candles1m.length < 30 || candles5m.length < 30 || candles15m.length < 30 || candles30m.length < 30 || candles1h.length < 30 || candles4h.length < 30) {
-        lastError = `${new URL(host).hostname}: insufficient candle history (5m=${candles5m.length}, 15m=${candles15m.length}, 1h=${candles1h.length})`;
+      const candles30m = payloads[1].data;
+      const candles1h = payloads[2].data;
+      const candles4h = payloads[3].data;
+      if (!ticker || candles30m.length < 30 || candles1h.length < 30 || candles4h.length < 30) {
+        lastError = `${new URL(host).hostname}: insufficient candle history (30m=${candles30m.length}, 1h=${candles1h.length}, 4h=${candles4h.length})`;
         continue;
       }
 
@@ -126,8 +117,7 @@ export async function onRequestGet({ request }) {
         return [...unique.values()].sort((a,b)=>a.time-b.time);
       };
       const okxCandles={
-        "1m":mapOkxBars(candles1m,60000),"5m":mapOkxBars(candles5m,300000),
-        "15m":mapOkxBars(candles15m,900000),"30m":mapOkxBars(candles30m,1800000),
+        "30m":mapOkxBars(candles30m,1800000),
         "1h":mapOkxBars(candles1h,3600000),"4h":mapOkxBars(candles4h,14400000)
       };
       if(!Number.isFinite(timestamp)||timestamp<=0||timestamp>Date.now()+10000||ageSeconds>180||!Number.isFinite(Number(ticker.last))||Number(ticker.last)<=0||!Number.isFinite(Number(ticker.open24h))||Number(ticker.open24h)<=0||!Number.isFinite(Number(ticker.bidPx))||!Number.isFinite(Number(ticker.askPx))||Number(ticker.bidPx)<=0||Number(ticker.askPx)<=0||Number(ticker.askPx)<Number(ticker.bidPx)||Object.values(okxCandles).some(rows=>rows.length<30)){
