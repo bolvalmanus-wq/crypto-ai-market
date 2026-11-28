@@ -1484,9 +1484,14 @@ export default {
   async scheduled(controller, env, ctx) {
     const scheduledDate = new Date(controller.scheduledTime);
     const minute = scheduledDate.getUTCMinutes();
-    if(minute===17&&scheduledDate.getUTCHours()===2){
-      try{await trainV2Brain(env);}
-      catch(error){console.error("V2 shadow brain training failed",String(error));}
+    if(minute===17){
+      let brainStatus=null;
+      try{brainStatus=await env.ANALYSIS_KV.get("brain:status:v1","json");}catch(_){}
+      // Bootstrap as soon as the new ledger is deployed, then refresh every six hours.
+      if(!brainStatus||scheduledDate.getUTCHours()%6===0){
+        try{await trainV2Brain(env);}
+        catch(error){console.error("V2 shadow brain training failed",String(error));}
+      }
     }
     // Evaluate matured decisions every ten minutes. The dashboard cache is invalidated
     // whenever a result changes; this keeps the KV list quota within its daily budget.
