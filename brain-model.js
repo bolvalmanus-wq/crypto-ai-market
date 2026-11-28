@@ -48,7 +48,7 @@ export function brainFeatures(record){
 }
 
 function sigmoid(z){if(z>30)return 1;if(z< -30)return 0;return 1/(1+Math.exp(-z));}
-function fit(rows,labels,iterations=600){
+function fit(rows,labels,iterations=250){
   const n=rows.length,p=rows[0].length;
   const means=Array(p).fill(0),scales=Array(p).fill(0);
   for(const row of rows)for(let j=0;j<p;j++)means[j]+=row[j]/n;
@@ -98,7 +98,7 @@ export function trainBrainModel(records,now=Date.now()){
     rows.push({features,label:r.outcome==="CORRECT"?1:0,time:Date.parse(r.decidedAt||"")||0});
   }
   rows.sort((a,b)=>a.time-b.time);
-  const usable=rows.slice(-3000);
+  const usable=rows.slice(-1200);
   const positives=usable.filter(x=>x.label===1).length,negatives=usable.length-positives;
   const base={schema:FEATURE_SCHEMA,trainedAt:new Date(now).toISOString(),samples:usable.length,positive:positives,negative:negatives};
   if(usable.length<200||positives<60||negatives<60){
