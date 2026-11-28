@@ -15,7 +15,7 @@ export function brainFeatures(record){
     record.symbol==="SOL"?1:0,
     record.timeframe==="1h"?1:0,
     record.timeframe==="4h"?1:0,
-    record.strategy==="TREND"?1:0,
+    ["TREND","MOMENTUM"].includes(record.strategy)?1:0,
     record.strategy==="BREAKOUT"?1:0,
     record.strategy==="RANGE"?1:0,
     record.strategy==="REVERSAL"?1:0,
