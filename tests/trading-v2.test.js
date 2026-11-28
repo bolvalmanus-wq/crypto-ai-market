@@ -12,6 +12,18 @@ function makeBars(tf,count=240,direction=1,now=Date.now()){
 function makeData(now=Date.now(),fourHourDirection=1){return {candles:{"4h":makeBars("4h",240,fourHourDirection,now),"1h":makeBars("1h",240,1,now),"30m":makeBars("30m",240,1,now)}};}
 function makeMarket(data){const last=data.candles["30m"].at(-1).close;return {ticker:{last,bid:last-.01,ask:last+.01}};}
 
+test("V2 emits a compact immutable feature snapshot for later model calibration",()=>{
+ const now=Date.now(),data=makeData(now),market=makeMarket(data);
+ const result=evaluateV2({symbol:"BTC",timeframe:"30m",data,market,now});
+ assert.equal(result.featureSnapshot.schema,"v2-shadow-features-1");
+ assert.equal(result.featureSnapshot.candidateDirection,"LONG");
+ for(const tf of ["4h","1h","30m","entry"]){
+  assert.equal(result.featureSnapshot.frames[tf].valid,true);
+  assert.ok(Number.isFinite(result.featureSnapshot.frames[tf].rsi));
+  assert.ok(Number.isFinite(result.featureSnapshot.frames[tf].adx));
+ }
+ assert.equal(result.confidenceMeaning,"Rule-based score; not a calibrated win probability");
+});
 test("V2 remains paper-only and does not trade with missing timeframe data",()=>{
  const now=Date.now(),result=evaluateV2({symbol:"BTC",timeframe:"30m",data:{candles:{}},market:{ticker:{last:100,bid:99.99,ask:100.01}},now});
  assert.equal(result.liveTrading,false);assert.equal(result.mode,"TESTING_ONLY");assert.equal(result.decision,"NO TRADE");assert.equal(result.entryPrice,null);assert.ok(result.contradictingEvidence.length>0);
