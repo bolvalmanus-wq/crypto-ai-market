@@ -1,5 +1,6 @@
 // Trading Analysis Software V2 — isolated research engine.
 // This module never places orders and never changes the legacy decision.
+import { predictBrainModel } from "./brain-model.js";
 const FRAMES = { "30m":1800000,"1h":3600000,"4h":14400000 };
 const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x));
 const finite=x=>x!==null&&x!==undefined&&x!==""&&Number.isFinite(Number(x));
@@ -139,7 +140,7 @@ function featureRow(x){
     donchianHigh:x.donchianHigh,donchianLow:x.donchianLow,bull:x.bull,bear:x.bear
   };
 }
-function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=null,config={}}){
+function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=null,config={},brainModel=null}){
   const frames=data?.candles||{};
   const four=confirmed(frames["4h"],"4h",now);
   const one=confirmed(frames["1h"],"1h",now);
@@ -204,6 +205,23 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
   const riskFraction=clamp(Number(config.riskPct??0.5),0.01,1)/100;
   const riskAmount=finite(equity)&&equity>0?equity*riskFraction:null;
   const positionSize=riskAmount!==null&&stopDistance>0?riskAmount/stopDistance:null;
+  const featureSnapshot={
+    schema:"v2-shadow-features-1",
+    capturedAt:new Date(now).toISOString(),
+    regime,
+    regimeByTimeframe:{"4h":regimes[0],"1h":regimes[1],"30m":regimes[2]},
+    selectedStrategy:selected?selected[0]:"NONE",
+    candidateDirection:directionName,
+    scoreBreakdown:scoreParts,
+    spreadPct,
+    frames:{
+      "4h":featureRow(s4),
+      "1h":featureRow(s1),
+      "30m":featureRow(s30),
+      entry:featureRow(se)
+    }
+  };
+  const brainPrediction=predictBrainModel(brainModel,{symbol,timeframe,strategy:selected?selected[0].toUpperCase():"NONE",featureSnapshot});
   return {
     version:"V2",mode:"TESTING_ONLY",liveTrading:false,symbol,timeframe,
     marketRegime:regime,regimeByTimeframe:{ "4h":regimes[0],"1h":regimes[1],"30m":regimes[2]},
@@ -221,22 +239,8 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
     dataQuality:{ "4h":{valid:s4.valid,count:s4.count},"1h":{valid:s1.valid,count:s1.count},"30m":{valid:s30.valid,count:s30.count},entry:{valid:se.valid,count:se.count}},
     // Immutable, compact feature vector for later supervised calibration.
     // These are raw observations, not probabilities or learned weights.
-    featureSnapshot:{
-      schema:"v2-shadow-features-1",
-      capturedAt:new Date(now).toISOString(),
-      regime,
-      regimeByTimeframe:{"4h":regimes[0],"1h":regimes[1],"30m":regimes[2]},
-      selectedStrategy:selected?selected[0]:"NONE",
-      candidateDirection:directionName,
-      scoreBreakdown:scoreParts,
-      spreadPct,
-      frames:{
-        "4h":featureRow(s4),
-        "1h":featureRow(s1),
-        "30m":featureRow(s30),
-        entry:featureRow(se)
-      }
-    },
+    featureSnapshot,
+    brainPrediction,
     createdAt:new Date(now).toISOString()
   };
 }
