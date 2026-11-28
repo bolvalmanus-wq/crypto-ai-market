@@ -51,6 +51,16 @@ jobs:
           curl -sS -D /tmp/worker_headers "https://crypto-ai-market-worker.bolvalmanus.workers.dev/health" -o /tmp/worker_body || true
           head -n 1 /tmp/worker_headers || true
           cat /tmp/worker_body || true
+          echo
+          echo "V2 brain data-collection endpoint:"
+          brain_code=$(curl -sS -w "%{http_code}" "https://crypto-ai-market-worker.bolvalmanus.workers.dev/brain/status?diagnostic=$(date +%s)" -o /tmp/brain_status || true)
+          echo "Brain status HTTP: $brain_code"
+          cat /tmp/brain_status || true
+          echo
+          if [ "$brain_code" != "200" ]; then echo "::error::V2 brain status endpoint failed"; exit 1; fi
+          jq -e '.ledger.scans != null and .ledger.directionalCandidates != null and .ledger.noTradeScans != null and .ledger.total != null' /tmp/brain_status >/dev/null
+          jq '{status:.status.status,recordsScanned:.status.recordsScanned,modelAvailable,ledger}' /tmp/brain_status
+          echo "V2 brain status endpoint: PASS"
           echo "Pages Worker health endpoint:"
           curl -sS -D /tmp/health_headers "https://crypto-ai-market.pages.dev/api/worker-health" -o /tmp/health_body || true
           head -n 1 /tmp/health_headers || true
