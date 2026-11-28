@@ -1039,10 +1039,18 @@ async function runOne(env, symbol, tf, options = {}) {
     }
   }
   // Separate V2 paper-trade ledger. It never sends alerts or affects legacy decisions.
-  if ((v2Testing.decision === "LONG" || v2Testing.decision === "SHORT") && Number.isFinite(Number(v2Testing.entryPrice)) && Number(v2Testing.entryPrice) > 0) {
+  const candidateDecision=v2Testing.featureSnapshot?.candidateDirection;
+  const candidateEntry=Number(market.ticker.last);
+  if (["LONG","SHORT"].includes(candidateDecision) && Number.isFinite(candidateEntry) && candidateEntry>0) {
     const v2Id = symbol + ":" + tf + ":" + Date.parse(result.candleCloseTime);
+    const candidateDirection=candidateDecision==="LONG"?1:-1;
+    const candidateAtr=Number(v2Testing.featureSnapshot?.frames?.entry?.atr)||0;
+    const candidateStopDistance=Math.max(candidateAtr*1.5,candidateEntry*0.001);
+    const candidateStop=candidateDirection>0?candidateEntry-candidateStopDistance:candidateEntry+candidateStopDistance;
+    const candidateTarget=candidateDirection>0?candidateEntry+2*candidateStopDistance:candidateEntry-2*candidateStopDistance;
     const v2Record = {
-      id:v2Id, system:"V2", symbol, timeframe:tf, decision:v2Testing.decision,
+      id:v2Id, system:"V2", paperMode:"CANDIDATE_SHADOW", approvedByV2:v2Testing.decision===candidateDecision,
+      decision:candidateDecision, symbol, timeframe,
       strategy:v2Testing.selectedStrategy, confidenceScore:v2Testing.confidenceScore,
       confidenceMeaning:v2Testing.confidenceMeaning,
       modelVersion:"v2-shadow-features-1",
@@ -1054,9 +1062,9 @@ async function runOne(env, symbol, tf, options = {}) {
       brainPrediction:v2Testing.brainPrediction,
       evidence:v2Testing.evidence,
       contradictingEvidence:v2Testing.contradictingEvidence,
-      entryPrice:Number(v2Testing.entryPrice), stopLoss:Number(v2Testing.stopLoss),
-      takeProfit1:Number(v2Testing.takeProfit1), takeProfit2:Number(v2Testing.takeProfit2),
-      riskReward:Number(v2Testing.riskReward), decidedAt:result.generatedAt,
+      entryPrice:candidateEntry, stopLoss:candidateStop,
+      takeProfit1:candidateTarget, takeProfit2:candidateDirection>0?candidateEntry+3*candidateStopDistance:candidateEntry-3*candidateStopDistance,
+      riskReward:2, decidedAt:result.generatedAt,
       candleCloseTime:result.candleCloseTime,
       durationMinutes:({"30m":30,"1h":60,"4h":240}[tf]||30),
       expectedEvaluationAt:new Date(Date.parse(result.candleCloseTime)+({"30m":30,"1h":60,"4h":240}[tf]||30)*60000).toISOString(),
