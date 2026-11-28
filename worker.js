@@ -1068,7 +1068,7 @@ async function runOne(env, symbol, tf, options = {}) {
     const candidateTarget=candidateDirection>0?candidateEntry+2*candidateStopDistance:candidateEntry-2*candidateStopDistance;
     const v2Record = {
       id:v2Id, system:"V2", paperMode:"CANDIDATE_SHADOW", approvedByV2:v2Testing.decision===candidateDecision,
-      decision:candidateDecision, symbol, timeframe,
+      decision:candidateDecision, symbol, timeframe:tf,
       strategy:v2Testing.selectedStrategy, confidenceScore:v2Testing.confidenceScore,
       confidenceMeaning:v2Testing.confidenceMeaning,
       modelVersion:"v2-shadow-features-1",
