@@ -1050,7 +1050,7 @@ async function runOne(env, symbol, tf, options = {}) {
       featureSnapshot:v2Testing.featureSnapshot,
       scannedAt:result.generatedAt,candleCloseTime:result.candleCloseTime
     }),{expirationTtl:60*60*24*30,metadata:{
-      id:v2ScanId,symbol,timeframe:tf,candidateDirection,
+      id:v2ScanId,symbol,timeframe:tf,candidateDirection:candidateDecision,
       selectedStrategy:v2Testing.selectedStrategy,scannedAt:result.generatedAt
     }});
   }catch(error){
