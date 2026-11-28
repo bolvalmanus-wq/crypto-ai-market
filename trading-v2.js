@@ -126,6 +126,19 @@ function strategyScores(x, regime){
     reversal:{direction:reversal,score:0,evidence:["Disabled pending independent swing-point and CHoCH validation"]}
   };
 }
+function featureRow(x){
+  if(!x?.valid)return {valid:false,count:Number(x?.count)||0};
+  return {
+    valid:true,count:x.count,
+    price:x.price,ema20:x.ema20,ema50:x.ema50,ema200:x.ema200,emaSlope:x.emaSlope,
+    adx:x.adx,plusDI:x.plusDI,minusDI:x.minusDI,choppiness:x.choppiness,
+    atr:x.atr,atrPct:x.atrPct,atrPercentile:x.atrPercentile,rsi:x.rsi,cci:x.cci,
+    relativeVolume:x.relativeVolume,vwap:x.vwap,vwapDistancePct:x.vwap?(x.price/x.vwap-1)*100:null,
+    keltnerUpper:x.keltnerUpper,keltnerLower:x.keltnerLower,
+    ichimokuBull:x.ichimokuBull,ichimokuBear:x.ichimokuBear,supertrend:x.supertrend,
+    donchianHigh:x.donchianHigh,donchianLow:x.donchianLow,bull:x.bull,bear:x.bear
+  };
+}
 function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=null,config={}}){
   const frames=data?.candles||{};
   const four=confirmed(frames["4h"],"4h",now);
@@ -206,6 +219,24 @@ function evaluateV2({symbol,timeframe,data,market,now=Date.now(),accountEquity=n
     evidence:selected?.[1].evidence||[],contradictingEvidence:reasons,
     invalidation:decision==="LONG"?"Entry timeframe close below stop-loss / confirmed structure break":decision==="SHORT"?"Entry timeframe close above stop-loss / confirmed structure break":"No valid entry; remain flat",
     dataQuality:{ "4h":{valid:s4.valid,count:s4.count},"1h":{valid:s1.valid,count:s1.count},"30m":{valid:s30.valid,count:s30.count},entry:{valid:se.valid,count:se.count}},
+    // Immutable, compact feature vector for later supervised calibration.
+    // These are raw observations, not probabilities or learned weights.
+    featureSnapshot:{
+      schema:"v2-shadow-features-1",
+      capturedAt:new Date(now).toISOString(),
+      regime,
+      regimeByTimeframe:{"4h":regimes[0],"1h":regimes[1],"30m":regimes[2]},
+      selectedStrategy:selected?selected[0]:"NONE",
+      candidateDirection:directionName,
+      scoreBreakdown:scoreParts,
+      spreadPct,
+      frames:{
+        "4h":featureRow(s4),
+        "1h":featureRow(s1),
+        "30m":featureRow(s30),
+        entry:featureRow(se)
+      }
+    },
     createdAt:new Date(now).toISOString()
   };
 }
