@@ -47,6 +47,17 @@ jobs:
             if [ "$stage_status" = "success" ] || [ "$stage_status" = "failure" ]; then break; fi
             sleep 5
           done
+          echo "Waiting for the deployed Worker version to expose the brain diagnostics route:"
+          for attempt in $(seq 1 36); do
+            curl -fsS "https://crypto-ai-market-worker.bolvalmanus.workers.dev/health" -o /tmp/worker_body || true
+            if jq -e '.routes | index("/brain/status")' /tmp/worker_body >/dev/null 2>&1; then
+              echo "Worker brain route is deployed (attempt $attempt)"
+              break
+            fi
+            echo "Worker deployment not propagated yet (attempt $attempt)"
+            sleep 5
+          done
+          jq -e '.routes | index("/brain/status")' /tmp/worker_body >/dev/null || { echo "::error::Worker brain route did not become available"; cat /tmp/worker_body; exit 1; }
           echo "Direct Worker health endpoint:"
           curl -sS -D /tmp/worker_headers "https://crypto-ai-market-worker.bolvalmanus.workers.dev/health" -o /tmp/worker_body || true
           head -n 1 /tmp/worker_headers || true
