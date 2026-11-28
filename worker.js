@@ -1306,7 +1306,7 @@ export default {
             const result=await runScheduledOne(env,symbol,"30m",marketData);
             const v2=result?.testing?.v2||{};
             const entry=v2.featureSnapshot?.frames?.entry||{};
-            return {symbol,ok:true,candidateDirection:v2.featureSnapshot?.candidateDirection||"UNKNOWN",
+            return {symbol,ok:true,analysisVersion:"v2-momentum-candidate-1",candidateDirection:v2.featureSnapshot?.candidateDirection||"UNKNOWN",
               selectedStrategy:v2.selectedStrategy||"UNKNOWN",marketRegime:v2.marketRegime||null,
               regimeByTimeframe:v2.regimeByTimeframe||null,
               strategyDirections:Object.fromEntries(Object.entries(v2.strategies||{}).map(([k,v])=>[k,{direction:v.direction,score:v.score}])),
