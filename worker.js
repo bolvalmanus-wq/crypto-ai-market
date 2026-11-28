@@ -1319,8 +1319,9 @@ export default {
               frameCounts:v2.dataQuality||null,candleCloseTime:result?.candleCloseTime||null,generatedAt:result?.generatedAt||null};
           }catch(error){
             const detail=String(error?.message||error);
-            console.error("On-demand V2 diagnostic scan failed",{symbol,error:detail});
-            return {symbol,ok:false,error:detail};
+            const stack=String(error?.stack||"");
+            console.error("On-demand V2 diagnostic scan failed",{symbol,error:detail,stack});
+            return {symbol,ok:false,error:detail,stack};
           }
         }));
         scanDiagnostics.results=outcomes;
