@@ -1271,9 +1271,28 @@ export default {
     const url = new URL(request.url);
     if(request.method==="GET"&&url.pathname==="/brain/status"){
       if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
-      const status=await env.ANALYSIS_KV.get("brain:status:v1","json");
+      let status=await env.ANALYSIS_KV.get("brain:status:v1","json");
+      // A status-page visit bootstraps the first training scan immediately;
+      // users should not have to wait for the next scheduled cron minute.
+      if(!status){
+        try{status=await trainV2Brain(env);}
+        catch(error){console.error("On-demand first brain training scan failed",String(error));status={status:"TRAINING_ERROR",message:"প্রথম প্রশিক্ষণ পরীক্ষা ব্যর্থ হয়েছে",error:String(error)};}
+      }
       const model=await env.ANALYSIS_KV.get("brain:model:v1","json");
-      return Response.json({status:status||{status:"COLLECTING_DATA",message:"প্রথম প্রশিক্ষণ চক্র এখনো সম্পন্ন হয়নি"},modelAvailable:!!model,modelTrainedAt:model?.trainedAt||null,modelSamples:model?.samples||0,mode:"SHADOW_ONLY",liveDecisionImpact:false},{headers:{"Cache-Control":"no-store"}});
+      let ledger={total:0,matured:0,pending:0,correct:0,wrong:0,neutral:0,missingFeatures:0};
+      try{
+        let cursor;
+        do{
+          const page=await env.ANALYSIS_KV.list({prefix:"v2paper:",limit:1000,...(cursor?{cursor}:{})});
+          ledger.total+=page.keys.length;
+          for(let offset=0;offset<page.keys.length;offset+=50){
+            const batch=await Promise.all(page.keys.slice(offset,offset+50).map(x=>env.ANALYSIS_KV.get(x.name,"json")));
+            for(const r of batch){if(!r)continue;if(["CORRECT","WRONG","NEUTRAL"].includes(r.outcome))ledger.matured++;if(r.outcome==="PENDING")ledger.pending++;if(r.outcome==="CORRECT")ledger.correct++;if(r.outcome==="WRONG")ledger.wrong++;if(r.outcome==="NEUTRAL")ledger.neutral++;if(!r.featureSnapshot||r.featureSnapshot.schema!=="v2-shadow-features-1")ledger.missingFeatures++;}
+          }
+          cursor=page.list_complete?undefined:page.cursor;
+        }while(cursor);
+      }catch(error){ledger.error=String(error);}
+      return Response.json({status,modelAvailable:!!model,modelTrainedAt:model?.trainedAt||null,modelSamples:model?.samples||0,mode:"SHADOW_ONLY",liveDecisionImpact:false,ledger},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "GET" && url.pathname === "/health") {
       return Response.json({
