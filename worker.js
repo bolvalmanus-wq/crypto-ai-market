@@ -1,4 +1,5 @@
 import { evaluateV2 } from "./trading-v2.js";
+import { trainBrainModel } from "./brain-model.js";
 import { onRequestGet as fetchMarketResponse } from "./functions/api/market.js";
 const PAGE_URL = "https://crypto-ai-market.pages.dev";
 
@@ -977,7 +978,10 @@ async function runOne(env, symbol, tf, options = {}) {
   // Share the same confirmed, timeframe-complete candle set with V2.
   // V2 receives the same native 30m/1h/4h candle set as the main engine.
   const v2Data = analysisData;
-  const v2Testing = evaluateV2({ symbol, timeframe: tf, data: v2Data, market, now: Date.now(), accountEquity: null, config: { riskPct: 0.5, maxSpreadPct: 0.10, atrStopMultiple: 1.5 } });
+  let brainModel=null;
+  try{brainModel=await env.ANALYSIS_KV.get("brain:model:v1","json");}
+  catch(error){console.warn("Shadow brain model unavailable",String(error));}
+  const v2Testing = evaluateV2({ symbol, timeframe: tf, data: v2Data, market, now: Date.now(), accountEquity: null, config: { riskPct: 0.5, maxSpreadPct: 0.10, atrStopMultiple: 1.5 }, brainModel });
   const result={symbol,timeframe:tf,provider:"Indicator Engine Only · AI Disabled",
     model:"EMA/RSI/MACD/ADX + Ichimoku/SAR/Supertrend/Donchian/OBV/MFI/ROC",analysis,
     debate:{status:"INDICATOR_ONLY",screening:{reviewed:true,reason:"AI সম্পূর্ণ বন্ধ; সব সিদ্ধান্ত গাণিতিক ইন্ডিকেটর থেকে"},
@@ -1047,6 +1051,7 @@ async function runOne(env, symbol, tf, options = {}) {
       timeframeAgreement:v2Testing.timeframeAgreement,
       scoreBreakdown:v2Testing.scoreBreakdown,
       featureSnapshot:v2Testing.featureSnapshot,
+      brainPrediction:v2Testing.brainPrediction,
       evidence:v2Testing.evidence,
       contradictingEvidence:v2Testing.contradictingEvidence,
       entryPrice:Number(v2Testing.entryPrice), stopLoss:Number(v2Testing.stopLoss),
@@ -1228,9 +1233,40 @@ async function evaluateMaturedDecisions(env) {
   }
 }
 
+async function trainV2Brain(env){
+  if(!env.ANALYSIS_KV)return;
+  const keys=[];let cursor;
+  do{
+    const page=await env.ANALYSIS_KV.list({prefix:"v2paper:",limit:1000,...(cursor?{cursor}:{})});
+    keys.push(...(page.keys||[]));
+    cursor=page.list_complete?undefined:page.cursor;
+  }while(cursor);
+  keys.sort((a,b)=>(Date.parse(b.metadata?.decidedAt||"")||0)-(Date.parse(a.metadata?.decidedAt||"")||0));
+  const selected=keys.slice(0,1200),records=[];
+  for(let offset=0;offset<selected.length;offset+=50){
+    const batch=await Promise.all(selected.slice(offset,offset+50).map(async item=>{
+      try{return await env.ANALYSIS_KV.get(item.name,"json");}catch(error){console.warn("Brain training record read failed",item.name,String(error));return null;}
+    }));
+    records.push(...batch.filter(Boolean));
+  }
+  const trained=trainBrainModel(records,Date.now());
+  const previous=await env.ANALYSIS_KV.get("brain:model:v1","json");
+  const status={...trained.status,activeModelAvailable:!!(trained.model||previous),activeModelTrainedAt:trained.model?.trainedAt||previous?.trainedAt||null,recordsScanned:selected.length};
+  if(trained.model)await env.ANALYSIS_KV.put("brain:model:v1",JSON.stringify(trained.model),{expirationTtl:60*60*24*60});
+  await env.ANALYSIS_KV.put("brain:status:v1",JSON.stringify(status),{expirationTtl:60*60*24*60});
+  console.log("V2 shadow brain training",status);
+  return status;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if(request.method==="GET"&&url.pathname==="/brain/status"){
+      if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
+      const status=await env.ANALYSIS_KV.get("brain:status:v1","json");
+      const model=await env.ANALYSIS_KV.get("brain:model:v1","json");
+      return Response.json({status:status||{status:"COLLECTING_DATA",message:"প্রথম প্রশিক্ষণ চক্র এখনো সম্পন্ন হয়নি"},modelAvailable:!!model,modelTrainedAt:model?.trainedAt||null,modelSamples:model?.samples||0,mode:"SHADOW_ONLY",liveDecisionImpact:false},{headers:{"Cache-Control":"no-store"}});
+    }
     if (request.method === "GET" && url.pathname === "/health") {
       return Response.json({
         ok: true,
@@ -1440,6 +1476,10 @@ export default {
   async scheduled(controller, env, ctx) {
     const scheduledDate = new Date(controller.scheduledTime);
     const minute = scheduledDate.getUTCMinutes();
+    if(minute===17&&scheduledDate.getUTCHours()===2){
+      try{await trainV2Brain(env);}
+      catch(error){console.error("V2 shadow brain training failed",String(error));}
+    }
     // Evaluate matured decisions every ten minutes. The dashboard cache is invalidated
     // whenever a result changes; this keeps the KV list quota within its daily budget.
     if(minute%10===0) {
