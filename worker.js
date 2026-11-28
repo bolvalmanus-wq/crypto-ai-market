@@ -1305,9 +1305,16 @@ export default {
             const marketData=await loadMarketData(symbol);
             const result=await runScheduledOne(env,symbol,"30m",marketData);
             const v2=result?.testing?.v2||{};
+            const entry=v2.featureSnapshot?.frames?.entry||{};
             return {symbol,ok:true,candidateDirection:v2.featureSnapshot?.candidateDirection||"UNKNOWN",
               selectedStrategy:v2.selectedStrategy||"UNKNOWN",marketRegime:v2.marketRegime||null,
+              regimeByTimeframe:v2.regimeByTimeframe||null,
               strategyDirections:Object.fromEntries(Object.entries(v2.strategies||{}).map(([k,v])=>[k,{direction:v.direction,score:v.score}])),
+              entryIndicators:{rsi:entry.rsi,cci:entry.cci,adx:entry.adx,relativeVolume:entry.relativeVolume,
+                atrPct:entry.atrPct,atrPercentile:entry.atrPercentile,emaSlope:entry.emaSlope,
+                vwapDistancePct:entry.vwapDistancePct,supertrend:entry.supertrend,
+                ichimokuBull:entry.ichimokuBull,ichimokuBear:entry.ichimokuBear,
+                bull:entry.bull,bear:entry.bear},
               dataQuality:v2.dataQuality||null,blockingReasons:v2.contradictingEvidence||[],
               frameCounts:v2.dataQuality||null,candleCloseTime:result?.candleCloseTime||null,generatedAt:result?.generatedAt||null};
           }catch(error){
