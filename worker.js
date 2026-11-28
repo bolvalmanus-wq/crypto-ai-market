@@ -1289,13 +1289,36 @@ export default {
     const url = new URL(request.url);
     if(request.method==="GET"&&url.pathname==="/brain/status"){
       if(!env.ANALYSIS_KV)return Response.json({error:"ANALYSIS_KV binding is missing"},{status:503});
-      let status=await env.ANALYSIS_KV.get("brain:status:v1","json");
-      // A status-page visit bootstraps the first training scan immediately;
-      // users should not have to wait for the next scheduled cron minute.
-      if(!status){
-        try{status=await trainV2Brain(env);}
-        catch(error){console.error("On-demand first brain training scan failed",String(error));status={status:"TRAINING_ERROR",message:"প্রথম প্রশিক্ষণ পরীক্ষা ব্যর্থ হয়েছে",error:String(error)};}
+      let scanDiagnostics={attempted:false,results:[],errors:[]};
+      // If the scheduled 30-minute scan has not populated the ledger yet,
+      // actively run one V2 scan for each supported symbol from this endpoint.
+      // A short KV lease prevents repeated browser refreshes from fan-out scanning.
+      const lastScan=await env.ANALYSIS_KV.get("brain:last-diagnostic-scan","json");
+      const shouldBootstrap=!lastScan||Date.now()-Number(lastScan.startedAt||0)>20*60*1000;
+      if(shouldBootstrap){
+        const lease={startedAt:Date.now(),source:"brain-status-bootstrap"};
+        await env.ANALYSIS_KV.put("brain:last-diagnostic-scan",JSON.stringify(lease),{expirationTtl:60*60});
+        scanDiagnostics.attempted=true;
+        const outcomes=await Promise.all(["BTC","SOL"].map(async symbol=>{
+          try{
+            const marketData=await loadMarketData(symbol);
+            const result=await runScheduledOne(env,symbol,"30m",marketData);
+            return {symbol,ok:true,candidateDirection:result?.testing?.v2?.featureSnapshot?.candidateDirection||"UNKNOWN",
+              candleCloseTime:result?.candleCloseTime||null,generatedAt:result?.generatedAt||null};
+          }catch(error){
+            const detail=String(error?.message||error);
+            console.error("On-demand V2 diagnostic scan failed",{symbol,error:detail});
+            return {symbol,ok:false,error:detail};
+          }
+        }));
+        scanDiagnostics.results=outcomes;
+        scanDiagnostics.errors=outcomes.filter(x=>!x.ok);
+        await env.ANALYSIS_KV.put("brain:last-diagnostic-scan",JSON.stringify({...lease,finishedAt:Date.now(),results:outcomes}),{expirationTtl:60*60});
       }
+      let status=null;
+      try{status=await trainV2Brain(env);}
+      catch(error){console.error("On-demand brain training scan failed",String(error));status={status:"TRAINING_ERROR",message:"প্রশিক্ষণের ডেটা পরীক্ষা ব্যর্থ হয়েছে",error:String(error)};}
+      if(!status)status=await env.ANALYSIS_KV.get("brain:status:v1","json");
       const model=await env.ANALYSIS_KV.get("brain:model:v1","json");
       let ledger={total:0,matured:0,pending:0,correct:0,wrong:0,neutral:0,missingFeatures:0,
         scans:0,directionalCandidates:0,noTradeScans:0,scanErrors:0};
@@ -1322,7 +1345,9 @@ export default {
           cursor=page.list_complete?undefined:page.cursor;
         }while(cursor);
       }catch(error){ledger.error=String(error);}
-      return Response.json({status,modelAvailable:!!model,modelTrainedAt:model?.trainedAt||null,modelSamples:model?.samples||0,mode:"SHADOW_ONLY",liveDecisionImpact:false,ledger},{headers:{"Cache-Control":"no-store"}});
+      const latestDiagnostic=await env.ANALYSIS_KV.get("brain:last-diagnostic-scan","json");
+      if(!scanDiagnostics.attempted&&latestDiagnostic?.results)scanDiagnostics={attempted:false,results:latestDiagnostic.results,errors:latestDiagnostic.results.filter(x=>!x.ok),lastAttemptAt:latestDiagnostic.startedAt};
+      return Response.json({status,modelAvailable:!!model,modelTrainedAt:model?.trainedAt||null,modelSamples:model?.samples||0,mode:"SHADOW_ONLY",liveDecisionImpact:false,scanDiagnostics,ledger},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "GET" && url.pathname === "/health") {
       return Response.json({
