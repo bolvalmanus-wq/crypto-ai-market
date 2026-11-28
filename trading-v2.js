@@ -108,12 +108,16 @@ function strategyScores(x, regime){
     trend:{direction:0,score:0,evidence:[]},
     breakout:{direction:0,score:0,evidence:[]},
     range:{direction:0,score:0,evidence:[]},
-    reversal:{direction:0,score:0,evidence:[]}
+    reversal:{direction:0,score:0,evidence:[]},
+    momentum:{direction:0,score:0,evidence:[]}
   };
   const c=x.last,range=Math.max(1e-12,c.high-c.low),closePos=(2*c.close-c.high-c.low)/range;
   const trend=x.bull?1:x.bear?-1:0;
   const pullback=Math.abs(c.close-x.ema20)<=x.atr*1.25;
   const trendScore=trend&&sign(x.rsi-50)===trend&&sign(c.close-x.vwap)===trend&&pullback&&sign(closePos)===trend?trend:0;
+  const momentumBull=x.adx>=25&&x.relativeVolume>=0.7&&x.emaSlope>=0.15&&x.supertrend==="UP"&&x.ichimokuBull&&x.rsi>=55&&x.rsi<=78&&c.close>x.vwap;
+  const momentumBear=x.adx>=25&&x.relativeVolume>=0.7&&x.emaSlope<=-0.15&&x.supertrend==="DOWN"&&x.ichimokuBear&&x.rsi>=22&&x.rsi<=45&&c.close<x.vwap;
+  const momentum=momentumBull?1:momentumBear?-1:0;
   const breakout=c.close>x.donchianHigh&&x.relativeVolume>=1.3?1:c.close<x.donchianLow&&x.relativeVolume>=1.3?-1:0;
   const nearLow=c.close<=x.low20+x.atr*.35,nearHigh=c.close>=x.high20-x.atr*.35;
   const rangeScore=regime==="SIDEWAYS"?(nearLow&&x.rsi<38&&x.cci<-80&&c.close>x.keltnerLower&&closePos>0.25?1:nearHigh&&x.rsi>62&&x.cci>80&&c.close<x.keltnerUpper&&closePos<-.25?-1:0):0;
@@ -124,7 +128,8 @@ function strategyScores(x, regime){
     trend:{direction:trendScore,score:trendScore?78:0,evidence:["EMA20/50/200 alignment","EMA slope","RSI and VWAP confirmation"]},
     breakout:{direction:breakout,score:breakout?82:0,evidence:["Close beyond previous 20-candle Donchian level","Relative volume >= 1.3"]},
     range:{direction:rangeScore,score:rangeScore?76:0,evidence:["Sideways regime","Support/resistance proximity","RSI rejection and candle close position"]},
-    reversal:{direction:reversal,score:0,evidence:["Disabled pending independent swing-point and CHoCH validation"]}
+    reversal:{direction:reversal,score:0,evidence:["Disabled pending independent swing-point and CHoCH validation"]},
+    momentum:{direction:momentum,score:momentum?80:0,evidence:["ADX >= 25","EMA slope confirms direction","Supertrend and Ichimoku agree","RSI and VWAP confirm continuation","Relative volume >= 0.7"]}
   };
 }
 function featureRow(x){
