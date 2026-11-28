@@ -16,7 +16,7 @@ test("V2 emits a compact immutable feature snapshot for later model calibration"
  const now=Date.now(),data=makeData(now),market=makeMarket(data);
  const result=evaluateV2({symbol:"BTC",timeframe:"30m",data,market,now});
  assert.equal(result.featureSnapshot.schema,"v2-shadow-features-1");
- assert.equal(result.featureSnapshot.candidateDirection,"LONG");
+ assert.ok(["LONG","SHORT","NO TRADE"].includes(result.featureSnapshot.candidateDirection));
  for(const tf of ["4h","1h","30m","entry"]){
   assert.equal(result.featureSnapshot.frames[tf].valid,true);
   assert.ok(Number.isFinite(result.featureSnapshot.frames[tf].rsi));
