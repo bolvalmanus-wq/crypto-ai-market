@@ -1294,7 +1294,8 @@ export default {
       // actively run one V2 scan for each supported symbol from this endpoint.
       // A short KV lease prevents repeated browser refreshes from fan-out scanning.
       const lastScan=await env.ANALYSIS_KV.get("brain:last-diagnostic-scan","json");
-      const shouldBootstrap=!lastScan||Date.now()-Number(lastScan.startedAt||0)>20*60*1000;
+      const forceRescan=url.searchParams.get("rescan")==="1";
+      const shouldBootstrap=forceRescan||!lastScan||Date.now()-Number(lastScan.startedAt||0)>20*60*1000;
       if(shouldBootstrap){
         const lease={startedAt:Date.now(),source:"brain-status-bootstrap"};
         await env.ANALYSIS_KV.put("brain:last-diagnostic-scan",JSON.stringify(lease),{expirationTtl:60*60});
@@ -1303,8 +1304,12 @@ export default {
           try{
             const marketData=await loadMarketData(symbol);
             const result=await runScheduledOne(env,symbol,"30m",marketData);
-            return {symbol,ok:true,candidateDirection:result?.testing?.v2?.featureSnapshot?.candidateDirection||"UNKNOWN",
-              candleCloseTime:result?.candleCloseTime||null,generatedAt:result?.generatedAt||null};
+            const v2=result?.testing?.v2||{};
+            return {symbol,ok:true,candidateDirection:v2.featureSnapshot?.candidateDirection||"UNKNOWN",
+              selectedStrategy:v2.selectedStrategy||"UNKNOWN",marketRegime:v2.marketRegime||null,
+              strategyDirections:Object.fromEntries(Object.entries(v2.strategies||{}).map(([k,v])=>[k,{direction:v.direction,score:v.score}])),
+              dataQuality:v2.dataQuality||null,blockingReasons:v2.contradictingEvidence||[],
+              frameCounts:v2.dataQuality||null,candleCloseTime:result?.candleCloseTime||null,generatedAt:result?.generatedAt||null};
           }catch(error){
             const detail=String(error?.message||error);
             console.error("On-demand V2 diagnostic scan failed",{symbol,error:detail});
