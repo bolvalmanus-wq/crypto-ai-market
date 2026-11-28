@@ -64,7 +64,7 @@ jobs:
           cat /tmp/worker_body || true
           echo
           echo "V2 brain data-collection endpoint (post-deploy bootstrap verification):"
-          brain_code=$(curl -sS -w "%{http_code}" "https://crypto-ai-market-worker.bolvalmanus.workers.dev/brain/status?diagnostic=$(date +%s)" -o /tmp/brain_status || true)
+          brain_code=$(curl -sS -w "%{http_code}" "https://crypto-ai-market-worker.bolvalmanus.workers.dev/brain/status?diagnostic=$(date +%s)&rescan=1" -o /tmp/brain_status || true)
           echo "Brain status HTTP: $brain_code"
           cat /tmp/brain_status || true
           echo
