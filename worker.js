@@ -1038,8 +1038,26 @@ async function runOne(env, symbol, tf, options = {}) {
       console.error("Legacy decision ledger write failed",{decisionId,error:String(error)});
     }
   }
+  // Record every V2 evaluation, including NO TRADE, so we can distinguish
+  // "scheduler is not running" from "strategies have not produced candidates".
+  // Scan records are diagnostics only and are never used as supervised labels.
+  const candidateDecision=v2Testing.featureSnapshot?.candidateDirection||"NO TRADE";
+  const v2ScanId=symbol+":"+tf+":"+Date.parse(result.candleCloseTime);
+  try{
+    await env.ANALYSIS_KV.put("v2scan:"+v2ScanId,JSON.stringify({
+      id:v2ScanId,symbol,timeframe:tf,candidateDirection:candidateDecision,
+      selectedStrategy:v2Testing.selectedStrategy,
+      featureSnapshot:v2Testing.featureSnapshot,
+      scannedAt:result.generatedAt,candleCloseTime:result.candleCloseTime
+    }),{expirationTtl:60*60*24*30,metadata:{
+      id:v2ScanId,symbol,timeframe:tf,candidateDirection,
+      selectedStrategy:v2Testing.selectedStrategy,scannedAt:result.generatedAt
+    }});
+  }catch(error){
+    result.storageWarnings=[...(result.storageWarnings||[]),"V2 scan diagnostics unavailable"];
+    console.error("V2 scan diagnostic write failed",{v2ScanId,error:String(error)});
+  }
   // Separate V2 paper-trade ledger. It never sends alerts or affects legacy decisions.
-  const candidateDecision=v2Testing.featureSnapshot?.candidateDirection;
   const candidateEntry=Number(market.ticker.last);
   if (["LONG","SHORT"].includes(candidateDecision) && Number.isFinite(candidateEntry) && candidateEntry>0) {
     const v2Id = symbol + ":" + tf + ":" + Date.parse(result.candleCloseTime);
@@ -1279,8 +1297,20 @@ export default {
         catch(error){console.error("On-demand first brain training scan failed",String(error));status={status:"TRAINING_ERROR",message:"প্রথম প্রশিক্ষণ পরীক্ষা ব্যর্থ হয়েছে",error:String(error)};}
       }
       const model=await env.ANALYSIS_KV.get("brain:model:v1","json");
-      let ledger={total:0,matured:0,pending:0,correct:0,wrong:0,neutral:0,missingFeatures:0};
+      let ledger={total:0,matured:0,pending:0,correct:0,wrong:0,neutral:0,missingFeatures:0,
+        scans:0,directionalCandidates:0,noTradeScans:0,scanErrors:0};
       try{
+        let scanCursor;
+        do{
+          const scanPage=await env.ANALYSIS_KV.list({prefix:"v2scan:",limit:1000,...(scanCursor?{cursor:scanCursor}:{})});
+          ledger.scans+=scanPage.keys.length;
+          for(const item of scanPage.keys){
+            const direction=item.metadata?.candidateDirection;
+            if(direction==="LONG"||direction==="SHORT")ledger.directionalCandidates++;
+            else ledger.noTradeScans++;
+          }
+          scanCursor=scanPage.list_complete?undefined:scanPage.cursor;
+        }while(scanCursor);
         let cursor;
         do{
           const page=await env.ANALYSIS_KV.list({prefix:"v2paper:",limit:1000,...(cursor?{cursor}:{})});
