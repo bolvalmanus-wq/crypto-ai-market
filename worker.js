@@ -1330,7 +1330,7 @@ export default {
         service: "crypto-ai-market-worker",
         timestamp: new Date().toISOString(),
         analysisKv: !!env.ANALYSIS_KV,
-        routes: ["/latest", "/analyze"]
+        routes: ["/latest", "/analyze", "/brain/status"]
       }, { headers: { "Cache-Control": "no-store" } });
     }
     const protectedPostPaths = new Set(["/analyze","/push/subscribe","/push/unsubscribe","/push/test"]);
